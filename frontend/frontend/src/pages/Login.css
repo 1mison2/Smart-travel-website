@@ -1,0 +1,67 @@
+/* src/pages/Login.css - light travel sign-in style */
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600;700&display=swap');
+:root{
+  --bg: #fbf7ec; /* cream */
+  --bar: #f8efe3; /* top bar */
+  --card-bg: #fff;
+  --accent: #8b3bff; /* purple */
+  --accent-2: #5a1bff;
+  --muted: #7b7b7b;
+  --input-bg: #e9e9e9;
+}
+
+body{ background: var(--bg); }
+
+.page-wrap{ min-height:100vh; display:flex; flex-direction:column; font-family: 'Inter', system-ui, -apple-system, 'Segoe UI', Roboto, Arial; }
+.topbar{ position:sticky; top:0; left:0; width:100%; height:66px; display:flex; align-items:center; justify-content:center; background:var(--bar); border-bottom: 1px solid rgba(0,0,0,0.06); box-shadow: 0 2px 0 rgba(0,0,0,0.04) inset; z-index:50; }
+.topbar-inner{ width:100%; max-width:1280px; padding:0 1.25rem; display:flex; align-items:center; justify-content:flex-end; }
+.topbar .get-started{ background:transparent; color:var(--accent); border:1px solid var(--accent); padding:6px 10px; border-radius:12px; font-weight:600; cursor:pointer; }
+.topbar .get-started:hover{ background: linear-gradient(90deg,var(--accent),var(--accent-2)); color:#fff; }
+
+.center-area{ flex:1; display:flex; align-items:center; justify-content:center; padding:2rem; }
+
+.card-wrap{ position:relative; width:760px; max-width:95%; display:flex; align-items:flex-start; justify-content:center; }
+
+.auth-card{ width:380px; padding:2rem; border-radius:28px; background:var(--card-bg); position:relative; box-shadow: 0 18px 40px rgba(139,59,255,0.08), 0 6px 18px rgba(0,0,0,0.08); border:1px solid rgba(10,10,10,0.03); }
+
+/* refined purple accent ribbon and softer bottom glow */
+.auth-card::before{
+  content:''; position:absolute; left:-26px; top:26px; width:18px; height:calc(100% - 52px); border-radius:999px; background: linear-gradient(180deg,var(--accent),var(--accent-2)); box-shadow: 0 12px 34px rgba(139,59,255,0.22); transform: translateX(0); }
+.auth-card::after{
+  content:''; position:absolute; left:8px; bottom:-26px; width:calc(100% - 16px); height:34px; border-radius:20px; background: linear-gradient(90deg, rgba(139,59,255,0.18), rgba(90,27,255,0.06)); filter: blur(12px); opacity:0.95; }
+
+.card-close{ position:absolute; right:14px; top:12px; width:34px; height:34px; border-radius:50%; background:linear-gradient(90deg,var(--accent),var(--accent-2)); border:3px solid rgba(255,255,255,0.9); color:#fff; font-weight:700; display:flex; align-items:center; justify-content:center; cursor:pointer; box-shadow:0 10px 24px rgba(139,59,255,0.18); }
+
+.title{ margin:0 0 1rem 0; font-size:1.6rem; text-align:center; font-weight:700; color:#111; }
+
+.input{ display:block; width:100%; background:var(--input-bg); padding:10px 12px; border-radius:6px; border:none; margin-bottom:0.8rem; color:#222; }
+.input::placeholder{ color:#9b9b9b; }
+
+.row{ display:flex; align-items:center; justify-content:space-between; font-size:0.85rem; color:var(--muted); margin-top:6px; }
+.remember{ display:flex; align-items:center; gap:0.5rem; }
+.remember input[type="checkbox"]{ width:16px; height:16px; accent-color: var(--accent); border-radius:3px; }
+.small-link{ color:var(--accent); text-decoration:none; font-weight:600; font-size:0.85rem; }
+
+.btn-small{ display:inline-block; margin-top:0.85rem; background:linear-gradient(90deg,var(--accent),var(--accent-2)); color:#fff; padding:8px 14px; border-radius:16px; border:none; cursor:pointer; font-weight:700; font-size:0.9rem; }
+
+.alt{ margin-top:1rem; text-align:center; font-size:0.86rem; color:var(--muted); }
+.alt a{ color:var(--accent); font-weight:600; text-decoration:none; }
+
+/* Signup specifics */
+.checkbox-row{ display:flex; align-items:center; gap:0.6rem; margin-top:8px; color:var(--muted); }
+.checkbox-row input{ width:16px; height:16px; accent-color: var(--accent); }
+
+/* interaction and focus improvements */
+.input:focus{ box-shadow: 0 6px 18px rgba(139,59,255,0.06); outline: none; }
+.btn-small{ transition: transform .12s ease, box-shadow .12s ease; }
+.btn-small:hover{ transform: translateY(-3px); box-shadow: 0 8px 26px rgba(139,59,255,0.12); }
+.card-close:hover{ transform: scale(1.05); }
+
+/* Responsive */
+@media (max-width:520px){
+  .auth-card{ width:92%; padding:1.4rem; border-radius:18px; }
+  .card-wrap{ width:100%; }
+  .topbar{ padding:0 10px; }
+}
+
+
