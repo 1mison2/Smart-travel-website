@@ -2,8 +2,7 @@ import React, { useState } from "react";
 import api from "../utils/api";
 import { useNavigate, Link } from "react-router-dom";
 import { useAuth } from "../context/AuthContext";
-import "./Login.css";
-import plane from "../assets/plane.svg";
+import "./Login.css"; 
 
 export default function Login() {
   const [form, setForm] = useState({ email: "", password: "" });
@@ -33,7 +32,6 @@ export default function Login() {
 
       <main className="center-area">
         <div className="card-wrap">
-          <img src={plane} alt="plane" aria-hidden className="plane-float" />
 
           <div className="auth-card">
             <button className="card-close" aria-label="Close">×</button>
