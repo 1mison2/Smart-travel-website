@@ -1,31 +1,22 @@
 import React, { useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
-import { Eye, EyeOff, Mail, Lock, ArrowRight, Sparkles, Globe, MapPin } from "lucide-react";
-import { useAuth } from "../context/AuthContext";
+import { Mail, ArrowLeft, ArrowRight } from "lucide-react";
 import api from "../utils/api";
 
-export default function Login() {
-  const [form, setForm] = useState({ 
-    email: "", 
-    password: ""
-  });
+export default function ForgotPassword() {
+  const [email, setEmail] = useState("");
   const [errors, setErrors] = useState({});
-  const [showPassword, setShowPassword] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
+  const [isSubmitted, setIsSubmitted] = useState(false);
   const navigate = useNavigate();
-  const { login } = useAuth();
 
   const validateForm = () => {
     const newErrors = {};
     
-    if (!form.email.trim()) {
+    if (!email.trim()) {
       newErrors.email = "Email is required";
-    } else if (!/\S+@\S+\.\S+/.test(form.email)) {
+    } else if (!/\S+@\S+\.\S+/.test(email)) {
       newErrors.email = "Email is invalid";
-    }
-    
-    if (!form.password) {
-      newErrors.password = "Password is required";
     }
     
     return newErrors;
@@ -44,26 +35,160 @@ export default function Login() {
     setErrors({});
     
     try {
-      const res = await api.post("/api/auth/login", form);
-      login(res.data);
-      navigate("/dashboard");
+      const response = await api.post("/api/auth/forgot-password", { email });
+      console.log("Forgot password response:", response.data);
+      setIsSubmitted(true);
     } catch (error) {
+      console.error("Forgot password error:", error);
       setErrors({ 
-        general: error?.response?.data?.message || "Invalid email or password. Please try again." 
+        general: error?.response?.data?.message || "Failed to send reset email. Please try again." 
       });
     } finally {
       setIsLoading(false);
     }
   };
 
+  if (isSubmitted) {
+    return (
+      <div className="forgot-password-container" style={{
+        height: '100vh', 
+        background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        padding: '1rem',
+        position: 'relative',
+        overflow: 'hidden'
+      }}>
+        {/* Background Pattern */}
+        <div style={{
+          position: 'absolute',
+          inset: 0,
+          backgroundImage: `url("data:image/svg+xml,%3Csvg width='60' height='60' viewBox='0 0 60 60' xmlns='http://www.w3.org/2000/svg'%3E%3Cg fill='none' fill-rule='evenodd'%3E%3Cg fill='%23ffffff' fill-opacity='0.05'%3E%3Cpath d='M36 34v-4h-2v4h-4v2h4v4h2v-4h4v-2h-4zm0-30V0h-2v4h-4v2h4v4h2V6h4V4h-4zM6 34v-4H4v4H0v2h4v4h2v-4h4v-2H6zM6 4V0H4v4H0v2h4v4h2V6h4V4H6z'/%3E%3C/g%3E%3C/g%3E%3C/svg%3E")`,
+          opacity: 0.3
+        }} />
+
+        {/* Success Card */}
+        <div style={{
+          background: 'rgba(255, 255, 255, 0.95)',
+          backdropFilter: 'blur(10px)',
+          borderRadius: '20px',
+          padding: '2rem',
+          width: '100%',
+          maxWidth: '450px',
+          boxShadow: '0 20px 40px rgba(0, 0, 0, 0.1)',
+          position: 'relative',
+          zIndex: 1,
+          textAlign: 'center'
+        }}>
+          {/* Success Icon */}
+          <div style={{
+            width: '80px',
+            height: '80px',
+            background: 'linear-gradient(135deg, #10b981 0%, #059669 100%)',
+            borderRadius: '50%',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            margin: '0 auto 1.5rem',
+            boxShadow: '0 15px 35px rgba(16, 185, 129, 0.3)'
+          }}>
+            <svg width="40" height="40" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+              <path d="M20 6L9 17l-5-5" stroke="white" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+            </svg>
+          </div>
+
+          <h1 style={{
+            fontSize: '2rem',
+            fontWeight: '700',
+            color: '#2d3748',
+            marginBottom: '1rem'
+          }}>Check Your Email!</h1>
+          
+          <p style={{
+            color: '#718096',
+            fontSize: '1rem',
+            marginBottom: '2rem',
+            lineHeight: '1.6'
+          }}>
+            We've sent a password reset link to<br />
+            <strong style={{color: '#667eea'}}>{email}</strong><br />
+            Please check your inbox and follow the instructions.
+          </p>
+
+          <div style={{
+            background: '#f0f9ff',
+            border: '1px solid #bae6fd',
+            borderRadius: '12px',
+            padding: '1rem',
+            marginBottom: '2rem'
+          }}>
+            <p style={{
+              color: '#0369a1',
+              fontSize: '0.875rem',
+              margin: '0',
+              fontWeight: '500'
+            }}>
+              💡 <strong>Tip:</strong> Check your spam folder if you don't see the email within a few minutes.
+            </p>
+          </div>
+
+          <div style={{display: 'flex', gap: '1rem'}}>
+            <button
+              onClick={() => navigate('/login')}
+              style={{
+                flex: 1,
+                padding: '14px',
+                background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
+                color: 'white',
+                border: 'none',
+                borderRadius: '12px',
+                fontSize: '1rem',
+                fontWeight: '600',
+                cursor: 'pointer',
+                transition: 'all 0.3s ease',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                gap: '8px'
+              }}
+              onMouseEnter={(e) => {
+                e.target.style.transform = 'translateY(-2px)';
+                e.target.style.boxShadow = '0 10px 25px rgba(102, 126, 234, 0.3)';
+              }}
+              onMouseLeave={(e) => {
+                e.target.style.transform = 'translateY(0)';
+                e.target.style.boxShadow = 'none';
+              }}
+            >
+              <ArrowLeft style={{width: '20px', height: '20px'}} />
+              Back to Login
+            </button>
+          </div>
+        </div>
+
+        {/* Add CSS for no scroll */}
+        <style>{`
+          body {
+            overflow: hidden;
+            margin: 0;
+            padding: 0;
+          }
+          .forgot-password-container {
+            overflow: hidden !important;
+          }
+        `}</style>
+      </div>
+    );
+  }
+
   return (
-    <div className="login-container" style={{
+    <div className="forgot-password-container" style={{
       height: '100vh', 
       background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
       display: 'flex',
-      flexDirection: 'column',
       alignItems: 'center',
-      justifyContent: 'space-between',
+      justifyContent: 'center',
       padding: '1rem',
       position: 'relative',
       overflow: 'hidden'
@@ -76,28 +201,7 @@ export default function Login() {
         opacity: 0.3
       }} />
 
-      {/* Header */}
-      <header style={{
-        width: '100%',
-        maxWidth: '1100px',
-        zIndex: 2,
-        display: 'flex',
-        alignItems: 'center',
-        justifyContent: 'space-between',
-        padding: '0.75rem 0',
-        color: 'white'
-      }}>
-        <div style={{display: 'flex', alignItems: 'center', gap: '0.5rem'}}>
-          <Globe style={{width: '24px', height: '24px'}} />
-          <span style={{fontWeight: 700, fontSize: '1.1rem'}}>Smart Travel Nepal</span>
-        </div>
-        <div style={{display: 'flex', alignItems: 'center', gap: '0.75rem'}}>
-          <MapPin style={{width: '18px', height: '18px'}} />
-          <span style={{fontSize: '0.95rem', opacity: 0.9}}>Discover Nepal with AI</span>
-        </div>
-      </header>
-
-      {/* Login Card */}
+      {/* Forgot Password Card */}
       <div style={{
         background: 'rgba(255, 255, 255, 0.95)',
         backdropFilter: 'blur(10px)',
@@ -107,9 +211,7 @@ export default function Login() {
         maxWidth: '450px',
         boxShadow: '0 20px 40px rgba(0, 0, 0, 0.1)',
         position: 'relative',
-        zIndex: 1,
-        maxHeight: '90vh',
-        overflowY: 'auto'
+        zIndex: 1
       }}>
         {/* Header */}
         <div style={{textAlign: 'center', marginBottom: '2rem'}}>
@@ -118,12 +220,12 @@ export default function Login() {
             fontWeight: '700',
             color: '#2d3748',
             marginBottom: '0.5rem'
-          }}>Welcome Back</h1>
+          }}>Forgot Password?</h1>
           <p style={{
             color: '#718096',
             fontSize: '1rem',
             margin: 0
-          }}>Sign in to continue to Smart Travel</p>
+          }}>Enter your email to receive reset instructions</p>
         </div>
 
         {/* Form */}
@@ -142,7 +244,7 @@ export default function Login() {
             </div>
           )}
 
-                {/* Email Field */}
+          {/* Email Field */}
           <div>
             <label style={{
               display: 'block',
@@ -164,8 +266,8 @@ export default function Login() {
               }} />
               <input
                 type="email"
-                value={form.email}
-                onChange={(e) => setForm({ ...form, email: e.target.value })}
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
                 style={{
                   width: '100%',
                   padding: '12px 16px 12px 48px',
@@ -202,104 +304,7 @@ export default function Login() {
             )}
           </div>
 
-                {/* Password Field */}
-          <div>
-            <div style={{
-              display: 'flex',
-              justifyContent: 'space-between',
-              alignItems: 'center',
-              marginBottom: '0.5rem'
-            }}>
-              <label style={{
-                color: '#4a5568',
-                fontSize: '0.875rem',
-                fontWeight: '500'
-              }}>Password</label>
-              <Link 
-                to="/forgot-password" 
-                style={{
-                  color: '#667eea',
-                  fontSize: '0.875rem',
-                  fontWeight: '500',
-                  textDecoration: 'none'
-                }}
-              >
-                Forgot password?
-              </Link>
-            </div>
-            <div style={{position: 'relative', overflow: 'hidden'}}>
-              <Lock style={{
-                position: 'absolute',
-                left: '16px',
-                top: '50%',
-                transform: 'translateY(-50%)',
-                width: '20px',
-                height: '20px',
-                color: '#a0aec0',
-                zIndex: 1
-              }} />
-              <input
-                type={showPassword ? "text" : "password"}
-                value={form.password}
-                onChange={(e) => setForm({ ...form, password: e.target.value })}
-                style={{
-                  width: '100%',
-                  padding: '12px 48px 12px 48px',
-                  border: errors.password ? '2px solid #e53e3e' : '2px solid #e2e8f0',
-                  borderRadius: '12px',
-                  fontSize: '1rem',
-                  outline: 'none',
-                  transition: 'all 0.3s ease',
-                  background: '#f7fafc',
-                  color: '#2d3748',
-                  boxSizing: 'border-box',
-                  overflow: 'hidden',
-                  textOverflow: 'ellipsis',
-                  whiteSpace: 'nowrap'
-                }}
-                placeholder="Enter your password"
-                disabled={isLoading}
-                onFocus={(e) => {
-                  e.target.style.borderColor = '#667eea';
-                  e.target.style.boxShadow = '0 0 0 3px rgba(102, 126, 234, 0.1)';
-                }}
-                onBlur={(e) => {
-                  e.target.style.borderColor = errors.password ? '#e53e3e' : '#e2e8f0';
-                  e.target.style.boxShadow = 'none';
-                }}
-              />
-              <button
-                type="button"
-                onClick={() => setShowPassword(!showPassword)}
-                style={{
-                  position: 'absolute',
-                  right: '16px',
-                  top: '50%',
-                  transform: 'translateY(-50%)',
-                  background: 'none',
-                  border: 'none',
-                  cursor: 'pointer',
-                  padding: '4px',
-                  zIndex: 2
-                }}
-              >
-                {showPassword ? (
-                  <EyeOff style={{width: '20px', height: '20px', color: '#a0aec0'}} />
-                ) : (
-                  <Eye style={{width: '20px', height: '20px', color: '#a0aec0'}} />
-                )}
-              </button>
-            </div>
-            {errors.password && (
-              <p style={{
-                color: '#e53e3e', 
-                fontSize: '0.875rem', 
-                marginTop: '0.25rem'
-              }}>{errors.password}</p>
-            )}
-          </div>
-
-                {/* Submit Button */}
+          {/* Submit Button */}
           <button
             type="submit"
             disabled={isLoading}
@@ -347,7 +352,7 @@ export default function Login() {
                   borderRadius: '50%',
                   animation: 'spin 1s linear infinite'
                 }}></div>
-                Signing in...
+                Sending...
               </div>
             ) : (
               <div style={{
@@ -356,7 +361,7 @@ export default function Login() {
                 justifyContent: 'center',
                 gap: '8px'
               }}>
-                Sign in
+                Send Reset Link
                 <ArrowRight style={{
                   width: '20px', 
                   height: '20px',
@@ -380,43 +385,22 @@ export default function Login() {
             fontSize: '0.875rem',
             margin: '0 0 1rem 0'
           }}>
-            Don't have an account?{' '}
+            Remember your password?{' '}
             <Link 
-              to="/signup" 
+              to="/login" 
               style={{
                 color: '#667eea',
                 fontWeight: '600',
                 textDecoration: 'none'
               }}
             >
-              Sign up
+              Sign in
             </Link>
           </p>
         </div>
       </div>
 
-      {/* Footer */}
-      <footer style={{
-        width: '100%',
-        maxWidth: '1100px',
-        zIndex: 2,
-        display: 'flex',
-        alignItems: 'center',
-        justifyContent: 'space-between',
-        padding: '0.75rem 0',
-        color: 'white',
-        fontSize: '0.9rem',
-        opacity: 0.9
-      }}>
-        <span>© 2026 Smart Travel Nepal</span>
-        <div style={{display: 'flex', gap: '1rem'}}>
-          <span>Privacy</span>
-          <span>Support</span>
-          <span>Terms</span>
-        </div>
-      </footer>
-
-      {/* Add CSS for no scroll */}
+      {/* Add CSS for animations and no scroll */}
       <style>{`
         @keyframes spin {
           from { transform: rotate(0deg); }
@@ -427,7 +411,7 @@ export default function Login() {
           margin: 0;
           padding: 0;
         }
-        .login-container {
+        .forgot-password-container {
           overflow: hidden !important;
         }
       `}</style>
