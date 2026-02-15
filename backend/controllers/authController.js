@@ -4,6 +4,8 @@ const jwt = require("jsonwebtoken");
 const crypto = require("crypto");
 const { sendPasswordResetEmail } = require("../utils/emailService");
 
+const normalizedRole = (role) => (role === "admin" ? "admin" : "user");
+
 // Generate reset token
 const generateResetToken = () => {
   const resetToken = crypto.randomBytes(32).toString("hex");
@@ -107,7 +109,9 @@ exports.resetPassword = async (req, res) => {
       user: {
         id: user._id,
         name: user.name,
-        email: user.email
+        email: user.email,
+        role: normalizedRole(user.role),
+        isBlocked: user.isBlocked
       }
     });
   } catch (err) {
@@ -135,7 +139,8 @@ exports.register = async (req, res) => {
     const user = await User.create({
       name,
       email,
-      password: hashedPassword
+      password: hashedPassword,
+      role: "user"
     });
 
     const token = jwt.sign(
@@ -149,7 +154,9 @@ exports.register = async (req, res) => {
       user: {
         id: user._id,
         name: user.name,
-        email: user.email
+        email: user.email,
+        role: normalizedRole(user.role),
+        isBlocked: user.isBlocked
       }
     });
   } catch (err) {
@@ -175,6 +182,9 @@ exports.login = async (req, res) => {
     if (!isMatch) {
       return res.status(400).json({ message: "Invalid credentials" });
     }
+    if (user.isBlocked) {
+      return res.status(403).json({ message: "Account is blocked. Contact admin." });
+    }
 
     const token = jwt.sign(
       { id: user._id, role: user.role },
@@ -187,7 +197,9 @@ exports.login = async (req, res) => {
       user: {
         id: user._id,
         name: user.name,
-        email: user.email
+        email: user.email,
+        role: normalizedRole(user.role),
+        isBlocked: user.isBlocked
       }
     });
   } catch (err) {

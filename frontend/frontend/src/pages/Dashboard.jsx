@@ -1,7 +1,8 @@
-import React, { useState } from "react";
+import React, { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { MapPin, Calendar, Users, Mountain, Sparkles, Compass, Clock, Search, Bell, User, LogOut, Settings, UserCircle } from "lucide-react";
 import { useAuth } from "../context/AuthContext";
+import api from "../utils/api";
 
 export default function Dashboard() {
   const { user, logout } = useAuth();
@@ -23,7 +24,7 @@ export default function Dashboard() {
     { day: "Day 3", title: "Peace Pagoda + local food tour", location: "Pokhara" },
   ];
 
-  const popularDestinations = [
+  const staticDestinations = [
     {
       id: 1,
       name: "Kathmandu",
@@ -67,6 +68,46 @@ export default function Dashboard() {
         "https://images.unsplash.com/photo-1500530855697-b586d89ba3ee?auto=format&fit=crop&w=1200&q=80",
     },
   ];
+  const [liveDestinations, setLiveDestinations] = useState([]);
+  const [destinationsLoading, setDestinationsLoading] = useState(true);
+
+  useEffect(() => {
+    let isMounted = true;
+
+    const loadDestinations = async () => {
+      try {
+        setDestinationsLoading(true);
+        const { data } = await api.get("/api/locations");
+        if (!isMounted) return;
+
+        const mapped = (Array.isArray(data) ? data : []).map((location, index) => ({
+          id: location._id || `${location.name}-${index}`,
+          name: location.name || "Destination",
+          tag:
+            [location.district, location.province, location.category].filter(Boolean).join(" - ") ||
+            "Travel Spot",
+          image:
+            location.image ||
+            "https://images.unsplash.com/photo-1489515217757-5fd1be406fef?auto=format&fit=crop&w=1200&q=80",
+        }));
+
+        setLiveDestinations(mapped);
+      } catch (_err) {
+        if (!isMounted) return;
+        setLiveDestinations([]);
+      } finally {
+        if (isMounted) setDestinationsLoading(false);
+      }
+    };
+
+    loadDestinations();
+
+    return () => {
+      isMounted = false;
+    };
+  }, []);
+
+  const popularDestinations = liveDestinations.length > 0 ? liveDestinations : staticDestinations;
 
   const tripHistory = [
     { id: 1, destination: "Kathmandu", date: "Nov 2025" },
@@ -82,7 +123,7 @@ export default function Dashboard() {
 
   const handleLogout = () => {
     logout();
-    navigate("/login");
+    navigate("/");
   };
 
   return (
@@ -98,7 +139,6 @@ export default function Dashboard() {
 
           <nav className="topbar__menu" aria-label="Primary">
             <button type="button" className="topbar__link">Dashboard</button>
-            <button type="button" className="topbar__link">Destinations</button>
             <button type="button" className="topbar__link">My Trips</button>
             <button type="button" className="topbar__link">Community</button>
           </nav>
@@ -247,10 +287,11 @@ export default function Dashboard() {
               <div className="card__header">
                 <div className="card__title">
                   <Compass size={20} />
-                  <h2>Popular Destinations in Nepal</h2>
+                  <h2>Popular & Community Destinations</h2>
                 </div>
                 <span className="card__pill card__pill--soft">Explore</span>
               </div>
+              {destinationsLoading && <p className="dashboard__hint">Loading latest destinations...</p>}
 
               <div className="destinations">
                 {popularDestinations.map((destination) => (
@@ -786,6 +827,12 @@ export default function Dashboard() {
           margin: 4px 0 0;
           font-size: 0.8rem;
           color: var(--muted);
+        }
+
+        .dashboard__hint {
+          margin: 0 0 10px;
+          color: var(--muted);
+          font-size: 0.85rem;
         }
 
         .history {

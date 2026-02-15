@@ -16,8 +16,12 @@ const UserSchema = new mongoose.Schema({
   },
   role: {
     type: String,
-    enum: ["traveler", "admin"],
-    default: "traveler"
+    enum: ["user", "admin", "traveler"],
+    default: "user"
+  },
+  isBlocked: {
+    type: Boolean,
+    default: false
   },
   resetPasswordToken: {
     type: String,

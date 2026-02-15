@@ -46,7 +46,7 @@ export default function Login() {
     try {
       const res = await api.post("/api/auth/login", form);
       login(res.data);
-      navigate("/dashboard");
+      navigate(res?.data?.user?.role === "admin" ? "/admin" : "/dashboard");
     } catch (error) {
       setErrors({ 
         general: error?.response?.data?.message || "Invalid email or password. Please try again." 

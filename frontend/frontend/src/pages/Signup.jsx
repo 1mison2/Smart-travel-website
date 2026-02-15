@@ -66,7 +66,7 @@ export default function Signup() {
         password: form.password
       });
       login(res.data);
-      navigate("/dashboard");
+      navigate(res?.data?.user?.role === "admin" ? "/admin" : "/dashboard");
     } catch (error) {
       setErrors({ 
         general: error?.response?.data?.message || "Registration failed. Please try again." 
