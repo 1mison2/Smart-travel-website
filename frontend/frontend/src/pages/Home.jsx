@@ -50,7 +50,6 @@ export default function Home() {
       <section className="home__section">
         <div className="home__section-title">
           <h2>Features</h2>
-          <p>Built for final-year projects with real product polish.</p>
         </div>
         <div className="home__grid">
           {features.map((feature) => (

@@ -13,6 +13,21 @@ const emptyForm = {
   longitude: "",
 };
 
+const getApiErrorMessage = (err, fallback) => {
+  const status = err?.response?.status;
+  const dataMessage = err?.response?.data?.message;
+
+  if (dataMessage) return status ? `${dataMessage} (HTTP ${status})` : dataMessage;
+
+  if (status === 413) {
+    return "Request payload is too large. Please upload a smaller image.";
+  }
+
+  if (status) return `${fallback} (HTTP ${status})`;
+
+  return err?.message || fallback;
+};
+
 export default function AdminLocations() {
   const [locations, setLocations] = useState([]);
   const [form, setForm] = useState(emptyForm);
@@ -28,7 +43,7 @@ export default function AdminLocations() {
       setLocations(data);
       setError("");
     } catch (err) {
-      setError(err?.response?.data?.message || "Failed to load locations");
+      setError(getApiErrorMessage(err, "Failed to load locations"));
     } finally {
       setLoading(false);
     }
@@ -74,7 +89,7 @@ export default function AdminLocations() {
       setForm(emptyForm);
       setEditingId("");
     } catch (err) {
-      setError(err?.response?.data?.message || "Failed to save location");
+      setError(getApiErrorMessage(err, "Failed to save location"));
     } finally {
       setSaving(false);
     }
@@ -104,7 +119,7 @@ export default function AdminLocations() {
         setForm(emptyForm);
       }
     } catch (err) {
-      setError(err?.response?.data?.message || "Failed to delete location");
+      setError(getApiErrorMessage(err, "Failed to delete location"));
     }
   };
 

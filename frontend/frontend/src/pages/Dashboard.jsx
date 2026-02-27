@@ -1,8 +1,21 @@
-import React, { useEffect, useState } from "react";
+import React, { useCallback, useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { MapPin, Calendar, Users, Mountain, Sparkles, Compass, Clock, Search, Bell, User, LogOut, Settings, UserCircle } from "lucide-react";
 import { useAuth } from "../context/AuthContext";
 import api from "../utils/api";
+
+const DESTINATIONS_CACHE_KEY = "st_dashboard_destinations";
+
+const readCachedDestinations = () => {
+  try {
+    const raw = sessionStorage.getItem(DESTINATIONS_CACHE_KEY);
+    if (!raw) return [];
+    const parsed = JSON.parse(raw);
+    return Array.isArray(parsed) ? parsed : [];
+  } catch {
+    return [];
+  }
+};
 
 export default function Dashboard() {
   const { user, logout } = useAuth();
@@ -10,110 +23,75 @@ export default function Dashboard() {
   const [showProfileMenu, setShowProfileMenu] = useState(false);
   const displayName = user?.name || user?.fullName || "Traveler";
 
-  const upcomingTrip = {
-    destination: "Pokhara",
-    dates: "Mar 12 - Mar 17, 2026",
-    travelType: "Friends",
-    image:
-      "https://images.unsplash.com/photo-1500530855697-b586d89ba3ee?auto=format&fit=crop&w=1200&q=80",
-  };
-
   const itineraryDays = [
     { day: "Day 1", title: "Lakeside stroll + Phewa Tal boating", location: "Pokhara" },
     { day: "Day 2", title: "Sarangkot sunrise + paragliding", location: "Pokhara" },
     { day: "Day 3", title: "Peace Pagoda + local food tour", location: "Pokhara" },
   ];
-
-  const staticDestinations = [
-    {
-      id: 1,
-      name: "Kathmandu",
-      tag: "Culture & Heritage",
-      image:
-        "https://images.unsplash.com/photo-1565771085512-35b4f0c5f3f8?auto=format&fit=crop&w=1200&q=80",
-    },
-    {
-      id: 2,
-      name: "Pokhara",
-      tag: "Lakes & Adventure",
-      image:
-        "https://images.unsplash.com/photo-1489515217757-5fd1be406fef?auto=format&fit=crop&w=1200&q=80",
-    },
-    {
-      id: 3,
-      name: "Chitwan",
-      tag: "Wildlife Safari",
-      image:
-        "https://images.unsplash.com/photo-1518791841217-8f162f1e1131?auto=format&fit=crop&w=1200&q=80",
-    },
-    {
-      id: 4,
-      name: "Lumbini",
-      tag: "Spiritual Journey",
-      image:
-        "https://images.unsplash.com/photo-1452626038306-9aae5e071dd3?auto=format&fit=crop&w=1200&q=80",
-    },
-    {
-      id: 5,
-      name: "Everest Region",
-      tag: "Trekking",
-      image:
-        "https://images.unsplash.com/photo-1501785888041-af3ef285b470?auto=format&fit=crop&w=1200&q=80",
-    },
-    {
-      id: 6,
-      name: "Mustang",
-      tag: "Culture & Landscape",
-      image:
-        "https://images.unsplash.com/photo-1500530855697-b586d89ba3ee?auto=format&fit=crop&w=1200&q=80",
-    },
-  ];
-  const [liveDestinations, setLiveDestinations] = useState([]);
+  const [liveDestinations, setLiveDestinations] = useState(() => readCachedDestinations());
   const [destinationsLoading, setDestinationsLoading] = useState(true);
+  const [destinationsError, setDestinationsError] = useState("");
+  const [trips, setTrips] = useState([]);
+  const [tripsLoading, setTripsLoading] = useState(true);
+  const [tripsError, setTripsError] = useState("");
 
-  useEffect(() => {
-    let isMounted = true;
+  const loadDestinations = useCallback(async () => {
+    try {
+      setDestinationsLoading(true);
+      setDestinationsError("");
+      const { data } = await api.get("/api/locations");
 
-    const loadDestinations = async () => {
-      try {
-        setDestinationsLoading(true);
-        const { data } = await api.get("/api/locations");
-        if (!isMounted) return;
+      const mapped = (Array.isArray(data) ? data : []).map((location, index) => ({
+        id: location._id || `${location.name}-${index}`,
+        locationId: location._id || "",
+        name: location.name || "Destination",
+        tag:
+          [location.district, location.province, location.category].filter(Boolean).join(" - ") ||
+          "Travel Spot",
+        image:
+          location.image ||
+          "https://images.unsplash.com/photo-1489515217757-5fd1be406fef?auto=format&fit=crop&w=1200&q=80",
+      }));
 
-        const mapped = (Array.isArray(data) ? data : []).map((location, index) => ({
-          id: location._id || `${location.name}-${index}`,
-          name: location.name || "Destination",
-          tag:
-            [location.district, location.province, location.category].filter(Boolean).join(" - ") ||
-            "Travel Spot",
-          image:
-            location.image ||
-            "https://images.unsplash.com/photo-1489515217757-5fd1be406fef?auto=format&fit=crop&w=1200&q=80",
-        }));
-
-        setLiveDestinations(mapped);
-      } catch (_err) {
-        if (!isMounted) return;
-        setLiveDestinations([]);
-      } finally {
-        if (isMounted) setDestinationsLoading(false);
-      }
-    };
-
-    loadDestinations();
-
-    return () => {
-      isMounted = false;
-    };
+      setLiveDestinations(mapped);
+      sessionStorage.setItem(DESTINATIONS_CACHE_KEY, JSON.stringify(mapped));
+    } catch (err) {
+      setDestinationsError(err?.response?.data?.message || "Unable to refresh destinations right now.");
+    } finally {
+      setDestinationsLoading(false);
+    }
   }, []);
 
-  const popularDestinations = liveDestinations.length > 0 ? liveDestinations : staticDestinations;
+  useEffect(() => {
+    loadDestinations();
+  }, [loadDestinations]);
 
-  const tripHistory = [
-    { id: 1, destination: "Kathmandu", date: "Nov 2025" },
-    { id: 2, destination: "Chitwan", date: "Sep 2025" },
-    { id: 3, destination: "Lumbini", date: "Jun 2025" },
-  ];
+  const loadTrips = useCallback(async () => {
+    try {
+      setTripsLoading(true);
+      setTripsError("");
+      const { data } = await api.get("/api/user/recent-trips");
+      setTrips(Array.isArray(data?.trips) ? data.trips : []);
+    } catch (err) {
+      setTripsError(err?.response?.data?.message || "Unable to load your trips right now.");
+      setTrips([]);
+    } finally {
+      setTripsLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    loadTrips();
+  }, [loadTrips]);
+
+  const popularDestinations = liveDestinations;
+  const now = new Date();
+  const sortedTrips = [...trips].sort((a, b) => new Date(a.startDate) - new Date(b.startDate));
+  const upcomingTrip = sortedTrips.find((trip) => new Date(trip.startDate) >= now) || sortedTrips[0] || null;
+  const daysUntilNextTrip = upcomingTrip ? daysBetween(now, new Date(upcomingTrip.startDate)) : null;
+  const tripHistory = [...trips]
+    .sort((a, b) => new Date(b.startDate) - new Date(a.startDate))
+    .slice(0, 6);
 
   const travelBuddies = [
     { id: 1, name: "Aarav", destination: "Everest Region", dates: "Apr 10 - Apr 18" },
@@ -124,6 +102,14 @@ export default function Dashboard() {
   const handleLogout = () => {
     logout();
     navigate("/");
+  };
+
+  const goToTripPlanner = (locationId) => {
+    if (locationId) {
+      navigate(`/plan-trip?locationId=${locationId}`);
+      return;
+    }
+    navigate("/plan-trip");
   };
 
   return (
@@ -138,9 +124,9 @@ export default function Dashboard() {
           </div>
 
           <nav className="topbar__menu" aria-label="Primary">
-            <button type="button" className="topbar__link">Dashboard</button>
-            <button type="button" className="topbar__link">My Trips</button>
-            <button type="button" className="topbar__link">Community</button>
+            <button type="button" className="topbar__link" onClick={() => navigate("/dashboard")}>Dashboard</button>
+            <button type="button" className="topbar__link" onClick={() => navigate("/my-trips")}>My Trips</button>
+            <button type="button" className="topbar__link" onClick={() => navigate("/explore")}>Explore</button>
           </nav>
 
           <div className="topbar__search">
@@ -207,12 +193,12 @@ export default function Dashboard() {
             <div className="dashboard__badge">
               <Clock size={16} />
               <span>Next Trip In</span>
-              <strong>12 days</strong>
+              <strong>{daysUntilNextTrip === null ? "-" : `${daysUntilNextTrip} days`}</strong>
             </div>
             <div className="dashboard__badge">
               <Compass size={16} />
               <span>Trips Planned</span>
-              <strong>4</strong>
+              <strong>{trips.length}</strong>
             </div>
           </div>
         </header>
@@ -228,22 +214,28 @@ export default function Dashboard() {
                 <span className="card__pill">Primary Focus</span>
               </div>
 
-              {upcomingTrip ? (
+              {tripsLoading ? (
+                <p className="dashboard__hint">Loading your latest trip...</p>
+              ) : upcomingTrip ? (
                 <div className="trip">
                   <div className="trip__image">
-                    <img src={upcomingTrip.image} alt={upcomingTrip.destination} />
+                    <img
+                      src="https://images.unsplash.com/photo-1500530855697-b586d89ba3ee?auto=format&fit=crop&w=1200&q=80"
+                      alt={upcomingTrip.title}
+                    />
                   </div>
                   <div className="trip__info">
-                    <h3>{upcomingTrip.destination}</h3>
+                    <h3>{upcomingTrip.title}</h3>
                     <p>
-                      <Calendar size={16} /> {upcomingTrip.dates}
+                      <Calendar size={16} /> {formatDate(upcomingTrip.startDate)} - {formatDate(upcomingTrip.endDate)}
                     </p>
                     <p>
-                      <Users size={16} /> {upcomingTrip.travelType}
+                      <Users size={16} /> Budget: ${upcomingTrip.price || 0}
                     </p>
+                    {upcomingTrip.summary && <p className="trip__summary">{upcomingTrip.summary}</p>}
                     <div className="trip__actions">
-                      <button className="btn btn--primary">View Itinerary</button>
-                      <button className="btn btn--ghost">Edit Trip</button>
+                      <button className="btn btn--primary" onClick={() => navigate("/my-trips")}>View Itinerary</button>
+                      <button className="btn btn--ghost" onClick={() => goToTripPlanner()}>Edit Trip</button>
                     </div>
                   </div>
                 </div>
@@ -252,6 +244,7 @@ export default function Dashboard() {
                   No upcoming trips — start planning your Nepal adventure <span aria-hidden>🇳🇵</span>
                 </div>
               )}
+              {!tripsLoading && tripsError && <p className="dashboard__error">{tripsError}</p>}
             </section>
 
             <section className="card">
@@ -278,7 +271,7 @@ export default function Dashboard() {
               </div>
 
               <div className="card__actions">
-                <button className="btn btn--primary">View Full Itinerary</button>
+                <button className="btn btn--primary" onClick={() => navigate("/my-trips")}>View Full Itinerary</button>
                 <button className="btn btn--ghost">Regenerate with AI</button>
               </div>
             </section>
@@ -289,9 +282,14 @@ export default function Dashboard() {
                   <Compass size={20} />
                   <h2>Popular & Community Destinations</h2>
                 </div>
-                <span className="card__pill card__pill--soft">Explore</span>
+                <button type="button" className="card__pill card__pill--soft card__pill--button" onClick={() => navigate("/explore")}>
+                  Explore
+                </button>
               </div>
               {destinationsLoading && <p className="dashboard__hint">Loading latest destinations...</p>}
+              {!destinationsLoading && destinationsError && (
+                <p className="dashboard__error">{destinationsError}</p>
+              )}
 
               <div className="destinations">
                 {popularDestinations.map((destination) => (
@@ -304,11 +302,21 @@ export default function Dashboard() {
                         <h3>{destination.name}</h3>
                         <p>{destination.tag}</p>
                       </div>
-                      <button className="btn btn--ghost">Plan Trip</button>
+                      <button className="btn btn--ghost" onClick={() => goToTripPlanner(destination.locationId)}>
+                        Plan Trip
+                      </button>
                     </div>
                   </article>
                 ))}
               </div>
+              {!destinationsLoading && liveDestinations.length === 0 && (
+                <div className="empty">
+                  No live destinations found. Please try again.
+                  <div className="card__actions">
+                    <button className="btn btn--ghost" onClick={loadDestinations}>Retry</button>
+                  </div>
+                </div>
+              )}
             </section>
           </main>
 
@@ -322,16 +330,19 @@ export default function Dashboard() {
               </div>
               <div className="history">
                 {tripHistory.map((trip) => (
-                  <div key={trip.id} className="history__item">
+                  <div key={trip._id} className="history__item">
                     <div>
-                      <p className="history__name">{trip.destination}</p>
-                      <p className="history__date">{trip.date}</p>
+                      <p className="history__name">{trip.title}</p>
+                      <p className="history__date">{formatDate(trip.startDate)}</p>
                     </div>
-                    <span className="history__tag">Completed</span>
+                    <span className="history__tag">{new Date(trip.endDate) < now ? "Completed" : "Upcoming"}</span>
                   </div>
                 ))}
+                {!tripsLoading && tripHistory.length === 0 && (
+                  <div className="empty">No saved trips yet.</div>
+                )}
               </div>
-              <button className="btn btn--ghost btn--full">View Full History</button>
+              <button className="btn btn--ghost btn--full" onClick={() => navigate("/my-trips")}>View Full History</button>
             </section>
 
             <section className="card">
@@ -694,6 +705,11 @@ export default function Dashboard() {
           color: var(--sky-deep);
         }
 
+        .card__pill--button {
+          border: none;
+          cursor: pointer;
+        }
+
         .trip {
           display: grid;
           grid-template-columns: 1.2fr 1.4fr;
@@ -730,6 +746,12 @@ export default function Dashboard() {
           align-items: center;
           gap: 8px;
           font-size: 0.95rem;
+        }
+
+        .trip__summary {
+          margin: 0 0 8px;
+          color: #475569;
+          line-height: 1.5;
         }
 
         .trip__actions {
@@ -832,6 +854,12 @@ export default function Dashboard() {
         .dashboard__hint {
           margin: 0 0 10px;
           color: var(--muted);
+          font-size: 0.85rem;
+        }
+
+        .dashboard__error {
+          margin: 0 0 10px;
+          color: #b91c1c;
           font-size: 0.85rem;
         }
 
@@ -998,4 +1026,19 @@ export default function Dashboard() {
       `}</style>
     </div>
   );
+}
+
+function formatDate(value) {
+  if (!value) return "-";
+  const parsed = new Date(value);
+  if (Number.isNaN(parsed.getTime())) return "-";
+  return parsed.toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" });
+}
+
+function daysBetween(start, end) {
+  const startDate = new Date(start);
+  const endDate = new Date(end);
+  if (Number.isNaN(startDate.getTime()) || Number.isNaN(endDate.getTime())) return 0;
+  const ms = endDate.setHours(0, 0, 0, 0) - startDate.setHours(0, 0, 0, 0);
+  return Math.max(0, Math.ceil(ms / (1000 * 60 * 60 * 24)));
 }

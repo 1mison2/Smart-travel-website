@@ -6,6 +6,10 @@ import Login from "./pages/Login";
 import ForgotPassword from "./pages/ForgotPassword";
 import ResetPassword from "./pages/ResetPassword";
 import Dashboard from "./pages/Dashboard";
+import ExploreLocations from "./pages/ExploreLocations";
+import LocationDetails from "./pages/LocationDetails";
+import PlanTrip from "./pages/PlanTrip";
+import MyTrips from "./pages/MyTrips";
 import AdminLayout from "./pages/admin/AdminLayout";
 import AdminDashboard from "./pages/admin/Dashboard";
 import AdminUsers from "./pages/admin/Users";
@@ -40,6 +44,10 @@ export default function App() {
       <Route path="/forgot-password" element={<PublicOnly><ForgotPassword /></PublicOnly>} />
       <Route path="/reset-password" element={<PublicOnly><ResetPassword /></PublicOnly>} />
       <Route path="/dashboard" element={<Protected><Dashboard /></Protected>} />
+      <Route path="/explore" element={<Protected><ExploreLocations /></Protected>} />
+      <Route path="/locations/:id" element={<Protected><LocationDetails /></Protected>} />
+      <Route path="/plan-trip" element={<Protected><PlanTrip /></Protected>} />
+      <Route path="/my-trips" element={<Protected><MyTrips /></Protected>} />
       <Route
         path="/admin"
         element={
