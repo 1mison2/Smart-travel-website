@@ -3,6 +3,7 @@ import { Link, useNavigate } from "react-router-dom";
 import { Eye, EyeOff, Mail, User, Lock, ArrowRight } from "lucide-react";
 import { useAuth } from "../context/AuthContext";
 import api from "../utils/api";
+import GoogleSignInButton from "../components/auth/GoogleSignInButton";
 
 export default function Signup() {
   const [form, setForm] = useState({ 
@@ -70,6 +71,22 @@ export default function Signup() {
     } catch (error) {
       setErrors({ 
         general: error?.response?.data?.message || "Registration failed. Please try again." 
+      });
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const onGoogleCredential = async (idToken) => {
+    setIsLoading(true);
+    setErrors({});
+    try {
+      const res = await api.post("/api/auth/google", { idToken });
+      login(res.data);
+      navigate(res?.data?.user?.role === "admin" ? "/admin" : "/dashboard");
+    } catch (error) {
+      setErrors({
+        general: error?.response?.data?.message || "Google sign-up failed. Please try again.",
       });
     } finally {
       setIsLoading(false);
@@ -509,6 +526,19 @@ export default function Signup() {
               </div>
             )}
           </button>
+
+          <div style={{ display: "flex", alignItems: "center", gap: "0.75rem" }}>
+            <div style={{ flex: 1, height: "1px", background: "#e2e8f0" }} />
+            <span style={{ color: "#718096", fontSize: "0.85rem" }}>or</span>
+            <div style={{ flex: 1, height: "1px", background: "#e2e8f0" }} />
+          </div>
+
+          <GoogleSignInButton
+            onCredential={onGoogleCredential}
+            onError={(message) => setErrors({ general: message })}
+            disabled={isLoading}
+            text="signup_with"
+          />
         </form>
 
         {/* Footer */}

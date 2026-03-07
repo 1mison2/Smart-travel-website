@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from "react";
-import api from "../../utils/api";
+import api, { resolveImageUrl } from "../../utils/api";
 
 const emptyForm = {
   name: "",
@@ -8,7 +8,7 @@ const emptyForm = {
   description: "",
   category: "",
   averageCost: "",
-  image: "",
+  image: null,
   latitude: "",
   longitude: "",
 };
@@ -35,6 +35,7 @@ export default function AdminLocations() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [saving, setSaving] = useState(false);
+  const [currentImage, setCurrentImage] = useState("");
 
   const loadLocations = async () => {
     try {
@@ -60,10 +61,11 @@ export default function AdminLocations() {
 
   const onImageChange = (e) => {
     const file = e.target.files?.[0];
-    if (!file) return;
-    const reader = new FileReader();
-    reader.onload = () => setForm((prev) => ({ ...prev, image: reader.result }));
-    reader.readAsDataURL(file);
+    if (!file) {
+      setForm((prev) => ({ ...prev, image: null }));
+      return;
+    }
+    setForm((prev) => ({ ...prev, image: file }));
   };
 
   const onSubmit = async (e) => {
@@ -71,12 +73,16 @@ export default function AdminLocations() {
     try {
       setSaving(true);
       setError("");
-      const payload = {
-        ...form,
-        averageCost: Number(form.averageCost),
-        latitude: Number(form.latitude),
-        longitude: Number(form.longitude),
-      };
+      const payload = new FormData();
+      payload.append("name", form.name);
+      payload.append("province", form.province);
+      payload.append("district", form.district);
+      payload.append("description", form.description);
+      payload.append("category", form.category);
+      payload.append("averageCost", form.averageCost);
+      payload.append("latitude", form.latitude);
+      payload.append("longitude", form.longitude);
+      if (form.image) payload.append("image", form.image);
 
       if (editingId) {
         const { data } = await api.put(`/api/admin/locations/${editingId}`, payload);
@@ -88,6 +94,7 @@ export default function AdminLocations() {
 
       setForm(emptyForm);
       setEditingId("");
+      setCurrentImage("");
     } catch (err) {
       setError(getApiErrorMessage(err, "Failed to save location"));
     } finally {
@@ -104,10 +111,11 @@ export default function AdminLocations() {
       description: location.description || "",
       category: location.category || "",
       averageCost: location.averageCost || 0,
-      image: location.image || "",
+      image: null,
       latitude: location.latitude || 0,
       longitude: location.longitude || 0,
     });
+    setCurrentImage(location.image || "");
   };
 
   const onDelete = async (id) => {
@@ -117,6 +125,7 @@ export default function AdminLocations() {
       if (editingId === id) {
         setEditingId("");
         setForm(emptyForm);
+        setCurrentImage("");
       }
     } catch (err) {
       setError(getApiErrorMessage(err, "Failed to delete location"));
@@ -143,6 +152,11 @@ export default function AdminLocations() {
         <div>
           <label className="admin-page__subtitle">Upload Image</label>
           <input className="admin-file" type="file" accept="image/*" onChange={onImageChange} />
+          {currentImage && !form.image && (
+            <p className="admin-page__subtitle">
+              Current image kept unless you choose a new one.
+            </p>
+          )}
         </div>
         <div className="admin-actions">
           <button type="submit" disabled={saving} className="admin-btn admin-btn--primary">
@@ -154,6 +168,7 @@ export default function AdminLocations() {
               onClick={() => {
                 setEditingId("");
                 setForm(emptyForm);
+                setCurrentImage("");
               }}
               className="admin-btn admin-btn--muted"
             >
@@ -176,6 +191,7 @@ export default function AdminLocations() {
                 <th>Category</th>
                 <th>Avg. Cost</th>
                 <th>Coordinates</th>
+                <th>Image</th>
                 <th>Actions</th>
               </tr>
             </thead>
@@ -188,6 +204,15 @@ export default function AdminLocations() {
                   <td>{location.category}</td>
                   <td>${location.averageCost}</td>
                   <td>{location.latitude}, {location.longitude}</td>
+                  <td>
+                    {location.image ? (
+                      <img
+                        src={resolveImageUrl(location.image)}
+                        alt={location.name}
+                        style={{ width: "56px", height: "42px", objectFit: "cover", borderRadius: "6px" }}
+                      />
+                    ) : "-"}
+                  </td>
                   <td>
                     <div className="admin-actions">
                     <button type="button" onClick={() => onEdit(location)} className="admin-btn admin-btn--primary">

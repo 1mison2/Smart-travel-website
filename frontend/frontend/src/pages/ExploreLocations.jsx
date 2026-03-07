@@ -1,6 +1,6 @@
 import React, { useEffect, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
-import api from "../utils/api";
+import api, { resolveImageUrl } from "../utils/api";
 
 export default function ExploreLocations() {
   const [locations, setLocations] = useState([]);
@@ -75,7 +75,7 @@ export default function ExploreLocations() {
           <article key={location._id} className="explore-card">
             <div className="explore-card__image">
               {location.image ? (
-                <img src={location.image} alt={location.name} />
+                <img src={resolveImageUrl(location.image)} alt={location.name} />
               ) : (
                 <div className="explore-card__placeholder">{location.name?.slice(0, 1) || "L"}</div>
               )}

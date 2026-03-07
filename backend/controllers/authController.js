@@ -2,9 +2,25 @@ const User = require("../models/User");
 const bcrypt = require("bcryptjs");
 const jwt = require("jsonwebtoken");
 const crypto = require("crypto");
+const { OAuth2Client } = require("google-auth-library");
 const { sendPasswordResetEmail } = require("../utils/emailService");
 
 const normalizedRole = (role) => (role === "admin" ? "admin" : "user");
+const googleClient = new OAuth2Client(process.env.GOOGLE_CLIENT_ID);
+
+const createJwt = (user) =>
+  jwt.sign({ id: user._id, role: user.role }, process.env.JWT_SECRET, { expiresIn: "1d" });
+
+const buildAuthResponse = (user, token) => ({
+  token,
+  user: {
+    id: user._id,
+    name: user.name,
+    email: user.email,
+    role: normalizedRole(user.role),
+    isBlocked: user.isBlocked,
+  },
+});
 
 // Generate reset token
 const generateResetToken = () => {
@@ -97,23 +113,8 @@ exports.resetPassword = async (req, res) => {
     await user.save();
 
     // Generate new JWT token
-    const jwtToken = jwt.sign(
-      { id: user._id, role: user.role },
-      process.env.JWT_SECRET,
-      { expiresIn: "1d" }
-    );
-
-    res.json({
-      message: "Password reset successful",
-      token: jwtToken,
-      user: {
-        id: user._id,
-        name: user.name,
-        email: user.email,
-        role: normalizedRole(user.role),
-        isBlocked: user.isBlocked
-      }
-    });
+    const jwtToken = createJwt(user);
+    res.json({ message: "Password reset successful", ...buildAuthResponse(user, jwtToken) });
   } catch (err) {
     console.error(err);
     res.status(500).json({ message: "Server error" });
@@ -140,25 +141,12 @@ exports.register = async (req, res) => {
       name,
       email,
       password: hashedPassword,
-      role: "user"
+      authProvider: "local",
+      role: "user",
     });
 
-    const token = jwt.sign(
-      { id: user._id, role: user.role },
-      process.env.JWT_SECRET,
-      { expiresIn: "1d" }
-    );
-
-    res.status(201).json({
-      token,
-      user: {
-        id: user._id,
-        name: user.name,
-        email: user.email,
-        role: normalizedRole(user.role),
-        isBlocked: user.isBlocked
-      }
-    });
+    const token = createJwt(user);
+    res.status(201).json(buildAuthResponse(user, token));
   } catch (err) {
     console.error(err);
     res.status(500).json({ message: "Server error" });
@@ -178,6 +166,12 @@ exports.login = async (req, res) => {
       return res.status(400).json({ message: "Invalid credentials" });
     }
 
+    if (!user.password) {
+      return res
+        .status(400)
+        .json({ message: "This account uses Google sign-in. Please continue with Google." });
+    }
+
     const isMatch = await bcrypt.compare(password, user.password);
     if (!isMatch) {
       return res.status(400).json({ message: "Invalid credentials" });
@@ -186,24 +180,62 @@ exports.login = async (req, res) => {
       return res.status(403).json({ message: "Account is blocked. Contact admin." });
     }
 
-    const token = jwt.sign(
-      { id: user._id, role: user.role },
-      process.env.JWT_SECRET,
-      { expiresIn: "1d" }
-    );
-
-    res.json({
-      token,
-      user: {
-        id: user._id,
-        name: user.name,
-        email: user.email,
-        role: normalizedRole(user.role),
-        isBlocked: user.isBlocked
-      }
-    });
+    const token = createJwt(user);
+    res.json(buildAuthResponse(user, token));
   } catch (err) {
     console.error(err);
     res.status(500).json({ message: "Server error" });
+  }
+};
+
+exports.googleAuth = async (req, res) => {
+  try {
+    const { idToken } = req.body;
+    if (!idToken) {
+      return res.status(400).json({ message: "Google token is required" });
+    }
+    if (!process.env.GOOGLE_CLIENT_ID) {
+      return res.status(500).json({ message: "Google auth is not configured on server" });
+    }
+
+    const ticket = await googleClient.verifyIdToken({
+      idToken,
+      audience: process.env.GOOGLE_CLIENT_ID,
+    });
+
+    const payload = ticket.getPayload();
+    if (!payload?.email || !payload?.sub) {
+      return res.status(400).json({ message: "Invalid Google profile data" });
+    }
+    if (!payload.email_verified) {
+      return res.status(400).json({ message: "Google email is not verified" });
+    }
+
+    const email = payload.email.toLowerCase();
+    let user = await User.findOne({ email });
+
+    if (!user) {
+      user = await User.create({
+        name: payload.name || payload.given_name || email.split("@")[0],
+        email,
+        authProvider: "google",
+        googleId: payload.sub,
+        role: "user",
+      });
+    } else {
+      if (!user.googleId) user.googleId = payload.sub;
+      if (!user.authProvider || user.authProvider === "local") user.authProvider = "google";
+      await user.save();
+    }
+
+    if (user.isBlocked) {
+      return res.status(403).json({ message: "Account is blocked. Contact admin." });
+    }
+
+    const token = createJwt(user);
+    return res.json(buildAuthResponse(user, token));
+  } catch (err) {
+    console.error(err);
+    return res.status(401).json({ message: "Google authentication failed" });
   }
 };

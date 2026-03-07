@@ -376,19 +376,22 @@ export default function Dashboard() {
 
       <style>{`
         :root {
-          --sky: #8ec5ff;
-          --sky-deep: #5aa7ff;
-          --forest: #1f6f5b;
-          --snow: #f6f8fb;
-          --ink: #1f2937;
-          --muted: #6b7280;
-          --card: #ffffff;
-          --shadow: 0 18px 40px rgba(15, 23, 42, 0.08);
+          --primary: #2f6b4f;
+          --primary-dark: #24543e;
+          --sky: #dce9e2;
+          --sky-deep: #2f6b4f;
+          --forest: #2f6b4f;
+          --snow: #f6f4ee;
+          --ink: #24313d;
+          --muted: #667085;
+          --card: #fffefb;
+          --border: #e3e7eb;
+          --shadow: 0 3px 12px rgba(15, 23, 42, 0.06);
         }
 
         .dashboard {
           min-height: 100vh;
-          background: radial-gradient(circle at top left, #e8f3ff 0%, #f7fafc 45%, #eef7f2 100%);
+          background: #f5f7fa;
           font-family: "Plus Jakarta Sans", "Sora", "DM Sans", system-ui, sans-serif;
           color: var(--ink);
           position: relative;
@@ -399,9 +402,8 @@ export default function Dashboard() {
           position: absolute;
           inset: 0;
           background:
-            radial-gradient(circle at 20% 10%, rgba(142, 197, 255, 0.35), transparent 45%),
-            radial-gradient(circle at 80% 0%, rgba(31, 111, 91, 0.2), transparent 40%),
-            linear-gradient(180deg, rgba(255, 255, 255, 0.8), rgba(255, 255, 255, 0.3));
+            radial-gradient(circle at 20% 10%, rgba(47, 107, 79, 0.1), transparent 44%),
+            linear-gradient(180deg, rgba(255, 255, 255, 0.6), rgba(255, 255, 255, 0.45));
           pointer-events: none;
         }
 
@@ -421,12 +423,12 @@ export default function Dashboard() {
           align-items: center;
           gap: 18px;
           padding: 14px 18px;
-          border-radius: 999px;
-          background: rgba(255, 255, 255, 0.9);
+          border-radius: 16px;
+          background: rgba(255, 255, 255, 0.96);
           box-shadow: var(--shadow);
-          border: 1px solid rgba(148, 163, 184, 0.2);
+          border: 1px solid var(--border);
           margin-bottom: 28px;
-          backdrop-filter: blur(12px);
+          backdrop-filter: blur(4px);
         }
 
         .topbar__brand {
@@ -453,13 +455,13 @@ export default function Dashboard() {
           font-size: 0.9rem;
           cursor: pointer;
           padding: 6px 10px;
-          border-radius: 999px;
+          border-radius: 10px;
           transition: background 0.2s ease, color 0.2s ease;
         }
 
         .topbar__link:hover {
-          background: rgba(90, 167, 255, 0.15);
-          color: var(--sky-deep);
+          background: rgba(47, 107, 79, 0.12);
+          color: var(--primary);
         }
 
         .topbar__search {
@@ -468,8 +470,8 @@ export default function Dashboard() {
           gap: 8px;
           padding: 8px 12px;
           background: var(--snow);
-          border-radius: 999px;
-          border: 1px solid rgba(148, 163, 184, 0.2);
+          border-radius: 12px;
+          border: 1px solid var(--border);
         }
 
         .topbar__search input {
@@ -497,9 +499,9 @@ export default function Dashboard() {
           top: 48px;
           width: 240px;
           background: white;
-          border-radius: 18px;
+          border-radius: 14px;
           box-shadow: var(--shadow);
-          border: 1px solid rgba(148, 163, 184, 0.2);
+          border: 1px solid var(--border);
           padding: 14px;
           display: grid;
           gap: 10px;
@@ -511,7 +513,7 @@ export default function Dashboard() {
           gap: 10px;
           align-items: center;
           padding-bottom: 10px;
-          border-bottom: 1px solid rgba(148, 163, 184, 0.2);
+          border-bottom: 1px solid var(--border);
         }
 
         .profile__avatar {
@@ -551,7 +553,7 @@ export default function Dashboard() {
         }
 
         .profile__item:hover {
-          background: rgba(90, 167, 255, 0.15);
+          background: rgba(47, 107, 79, 0.1);
           transform: translateY(-1px);
         }
 
@@ -573,7 +575,7 @@ export default function Dashboard() {
           background: var(--snow);
           width: 38px;
           height: 38px;
-          border-radius: 50%;
+          border-radius: 10px;
           display: grid;
           place-items: center;
           cursor: pointer;
@@ -583,7 +585,7 @@ export default function Dashboard() {
 
         .icon-btn:hover {
           transform: translateY(-2px);
-          background: rgba(90, 167, 255, 0.18);
+          background: rgba(47, 107, 79, 0.12);
         }
 
         .dashboard__header {
@@ -607,6 +609,7 @@ export default function Dashboard() {
           font-size: clamp(2rem, 3vw, 2.75rem);
           margin: 0 0 6px;
           font-weight: 700;
+          letter-spacing: -0.02em;
         }
 
         .dashboard__subtitle {
@@ -622,7 +625,7 @@ export default function Dashboard() {
         }
 
         .dashboard__badge {
-          background: rgba(255, 255, 255, 0.9);
+          background: rgba(255, 255, 255, 0.95);
           border-radius: 16px;
           padding: 12px 14px;
           display: grid;
@@ -630,7 +633,7 @@ export default function Dashboard() {
           gap: 10px;
           align-items: center;
           box-shadow: var(--shadow);
-          border: 1px solid rgba(148, 163, 184, 0.2);
+          border: 1px solid var(--border);
         }
 
         .dashboard__badge span {
@@ -661,15 +664,15 @@ export default function Dashboard() {
 
         .card {
           background: var(--card);
-          border-radius: 24px;
+          border-radius: 16px;
           padding: 24px;
           box-shadow: var(--shadow);
-          border: 1px solid rgba(226, 232, 240, 0.8);
+          border: 1px solid var(--border);
         }
 
         .card--featured {
-          border: 1px solid rgba(90, 167, 255, 0.4);
-          box-shadow: 0 22px 50px rgba(90, 167, 255, 0.2);
+          border: 1px solid #cfe3d9;
+          box-shadow: 0 4px 14px rgba(47, 107, 79, 0.12);
         }
 
         .card__header {
@@ -689,20 +692,22 @@ export default function Dashboard() {
         .card__title h2 {
           margin: 0;
           font-size: 1.15rem;
+          font-weight: 700;
+          letter-spacing: -0.01em;
         }
 
         .card__pill {
-          background: rgba(31, 111, 91, 0.12);
+          background: rgba(47, 107, 79, 0.12);
           color: var(--forest);
           font-size: 0.75rem;
           padding: 6px 12px;
-          border-radius: 999px;
+          border-radius: 10px;
           font-weight: 600;
         }
 
         .card__pill--soft {
-          background: rgba(90, 167, 255, 0.12);
-          color: var(--sky-deep);
+          background: rgba(47, 107, 79, 0.12);
+          color: var(--primary);
         }
 
         .card__pill--button {
@@ -718,7 +723,7 @@ export default function Dashboard() {
         }
 
         .trip__image {
-          border-radius: 20px;
+          border-radius: 14px;
           overflow: hidden;
           height: 190px;
         }
@@ -737,6 +742,8 @@ export default function Dashboard() {
         .trip__info h3 {
           margin: 0 0 10px;
           font-size: 1.4rem;
+          font-weight: 600;
+          letter-spacing: -0.01em;
         }
 
         .trip__info p {
@@ -771,16 +778,17 @@ export default function Dashboard() {
           grid-template-columns: auto 1fr;
           gap: 12px;
           padding: 12px;
-          border-radius: 16px;
+          border-radius: 14px;
           background: var(--snow);
+          border: 1px solid var(--border);
         }
 
         .itinerary__badge {
-          background: rgba(90, 167, 255, 0.15);
-          color: var(--sky-deep);
+          background: rgba(47, 107, 79, 0.14);
+          color: var(--primary);
           font-weight: 600;
           padding: 6px 10px;
-          border-radius: 999px;
+          border-radius: 10px;
           font-size: 0.8rem;
           height: fit-content;
         }
@@ -814,16 +822,17 @@ export default function Dashboard() {
 
         .destination {
           background: var(--snow);
-          border-radius: 18px;
+          border-radius: 14px;
           overflow: hidden;
           display: grid;
           grid-template-rows: 120px 1fr;
+          border: 1px solid var(--border);
           transition: transform 0.25s ease, box-shadow 0.25s ease;
         }
 
         .destination:hover {
           transform: translateY(-4px);
-          box-shadow: 0 16px 30px rgba(15, 23, 42, 0.12);
+          box-shadow: 0 6px 18px rgba(15, 23, 42, 0.1);
         }
 
         .destination__image img {
@@ -860,6 +869,10 @@ export default function Dashboard() {
         .dashboard__error {
           margin: 0 0 10px;
           color: #b91c1c;
+          background: #fef2f2;
+          border: 1px solid #fecaca;
+          padding: 10px 12px;
+          border-radius: 10px;
           font-size: 0.85rem;
         }
 
@@ -874,7 +887,8 @@ export default function Dashboard() {
           align-items: center;
           padding: 12px;
           background: var(--snow);
-          border-radius: 14px;
+          border-radius: 12px;
+          border: 1px solid var(--border);
         }
 
         .history__name {
@@ -889,11 +903,11 @@ export default function Dashboard() {
         }
 
         .history__tag {
-          background: rgba(31, 111, 91, 0.15);
+          background: rgba(47, 107, 79, 0.15);
           color: var(--forest);
           font-size: 0.75rem;
           padding: 6px 10px;
-          border-radius: 999px;
+          border-radius: 10px;
           font-weight: 600;
         }
 
@@ -908,15 +922,16 @@ export default function Dashboard() {
           align-items: center;
           gap: 12px;
           background: var(--snow);
-          border-radius: 14px;
+          border-radius: 12px;
           padding: 10px 12px;
+          border: 1px solid var(--border);
         }
 
         .buddy__avatar {
           width: 36px;
           height: 36px;
-          border-radius: 50%;
-          background: linear-gradient(135deg, var(--sky) 0%, var(--forest) 100%);
+          border-radius: 10px;
+          background: #cbd5e1;
         }
 
         .buddy__name {
@@ -932,33 +947,33 @@ export default function Dashboard() {
 
         .btn {
           border: none;
-          border-radius: 999px;
+          border-radius: 11px;
           padding: 10px 16px;
           font-weight: 600;
           cursor: pointer;
           font-size: 0.9rem;
-          transition: transform 0.2s ease, box-shadow 0.2s ease, background 0.2s ease;
+          transition: transform 0.2s ease, background 0.2s ease, border-color 0.2s ease;
         }
 
         .btn--primary {
-          background: linear-gradient(135deg, var(--sky-deep), var(--forest));
+          background: var(--primary);
           color: white;
-          box-shadow: 0 12px 20px rgba(31, 111, 91, 0.2);
+          box-shadow: none;
         }
 
         .btn--primary:hover {
-          transform: translateY(-2px);
-          box-shadow: 0 16px 25px rgba(31, 111, 91, 0.25);
+          transform: translateY(-1px);
+          background: var(--primary-dark);
         }
 
         .btn--ghost {
           background: white;
-          color: var(--forest);
-          border: 1px solid rgba(31, 111, 91, 0.2);
+          color: var(--primary);
+          border: 1px solid #cfe3d9;
         }
 
         .btn--ghost:hover {
-          background: rgba(31, 111, 91, 0.08);
+          background: #edf6f1;
         }
 
         .btn--full {
@@ -975,10 +990,11 @@ export default function Dashboard() {
 
         .empty {
           padding: 18px;
-          border-radius: 16px;
+          border-radius: 12px;
           background: var(--snow);
           color: var(--muted);
           font-weight: 500;
+          border: 1px solid var(--border);
         }
 
         @media (max-width: 1024px) {

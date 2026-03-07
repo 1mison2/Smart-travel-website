@@ -5,6 +5,8 @@ const Booking = require("../models/Booking");
 const Post = require("../models/Post");
 
 const isValidObjectId = (id) => mongoose.Types.ObjectId.isValid(id);
+const buildImageUrl = (req, filename) =>
+  `${req.protocol}://${req.get("host")}/uploads/${filename}`;
 
 const normalizeUser = (user) => ({
   ...user,
@@ -96,16 +98,25 @@ exports.createLocation = async (req, res) => {
       description,
       category,
       averageCost,
-      image,
       latitude,
       longitude,
     } = req.body;
 
-    if (!name || !province || !district || !description || !category) {
+    if (!name || !province || !district || !description || !category || averageCost === undefined || latitude === undefined || longitude === undefined) {
       return res
         .status(400)
-        .json({ message: "Name, province, district, description, and category are required" });
+        .json({ message: "All fields are required" });
     }
+
+    const numericCost = Number(averageCost);
+    const numericLatitude = Number(latitude);
+    const numericLongitude = Number(longitude);
+
+    if (Number.isNaN(numericCost) || Number.isNaN(numericLatitude) || Number.isNaN(numericLongitude)) {
+      return res.status(400).json({ message: "Average cost, latitude, and longitude must be valid numbers" });
+    }
+
+    const imageUrl = req.file ? buildImageUrl(req, req.file.filename) : "";
 
     const location = await Location.create({
       name: name.trim(),
@@ -113,10 +124,10 @@ exports.createLocation = async (req, res) => {
       district: district.trim(),
       description: description.trim(),
       category: category.trim(),
-      averageCost: Number(averageCost) || 0,
-      image: image || "",
-      latitude: Number(latitude),
-      longitude: Number(longitude),
+      averageCost: numericCost,
+      image: imageUrl,
+      latitude: numericLatitude,
+      longitude: numericLongitude,
     });
 
     res.status(201).json(location);
@@ -150,6 +161,14 @@ exports.updateLocation = async (req, res) => {
     if (payload.averageCost !== undefined) payload.averageCost = Number(payload.averageCost);
     if (payload.latitude !== undefined) payload.latitude = Number(payload.latitude);
     if (payload.longitude !== undefined) payload.longitude = Number(payload.longitude);
+    if (
+      (payload.averageCost !== undefined && Number.isNaN(payload.averageCost)) ||
+      (payload.latitude !== undefined && Number.isNaN(payload.latitude)) ||
+      (payload.longitude !== undefined && Number.isNaN(payload.longitude))
+    ) {
+      return res.status(400).json({ message: "Average cost, latitude, and longitude must be valid numbers" });
+    }
+    if (req.file) payload.image = buildImageUrl(req, req.file.filename);
 
     const updated = await Location.findByIdAndUpdate(id, payload, { new: true, runValidators: true });
     if (!updated) return res.status(404).json({ message: "Location not found" });

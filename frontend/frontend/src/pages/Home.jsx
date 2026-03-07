@@ -101,20 +101,18 @@ export default function Home() {
       </footer>
 
       <style>{`
-        :root {
-          --sky: #8fc9ff;
-          --sky-deep: #3b82f6;
-          --forest: #1f6f5b;
-          --snow: #f6f8fb;
-          --ink: #0f172a;
-          --muted: #64748b;
-          --card: #ffffff;
-          --shadow: 0 20px 45px rgba(15, 23, 42, 0.12);
-        }
-
         .home {
+          --sky: #dce9e2;
+          --sky-deep: #2f6b4f;
+          --forest: #2f6b4f;
+          --snow: #f6f4ee;
+          --ink: #24313d;
+          --muted: #667085;
+          --card: #fffefb;
+          --sun: #c58b3b;
+          --shadow: 0 20px 45px rgba(31, 41, 51, 0.12);
           min-height: 100vh;
-          background: radial-gradient(circle at 10% 10%, #e2f1ff 0%, #f8fbff 45%, #eff7f2 100%);
+          background: linear-gradient(165deg, #eaf3ed 0%, #f8f5ee 45%, #e4efe8 100%);
           font-family: "Sora", "Plus Jakarta Sans", "DM Sans", system-ui, sans-serif;
           color: var(--ink);
           position: relative;
@@ -125,8 +123,9 @@ export default function Home() {
           position: absolute;
           inset: 0;
           background:
-            radial-gradient(circle at 85% 0%, rgba(31, 111, 91, 0.18), transparent 35%),
-            radial-gradient(circle at 0% 70%, rgba(143, 201, 255, 0.25), transparent 40%);
+            radial-gradient(circle at 85% 0%, rgba(47, 107, 79, 0.18), transparent 35%),
+            radial-gradient(circle at 0% 70%, rgba(47, 107, 79, 0.14), transparent 40%),
+            linear-gradient(0deg, rgba(255, 255, 255, 0.35), rgba(255, 255, 255, 0.35));
           pointer-events: none;
         }
 
@@ -138,9 +137,10 @@ export default function Home() {
           justify-content: space-between;
           align-items: center;
           padding: 18px 6vw;
-          background: rgba(255, 255, 255, 0.8);
+          background: rgba(255, 254, 251, 0.9);
           backdrop-filter: blur(12px);
           border-bottom: 1px solid rgba(148, 163, 184, 0.2);
+          animation: slideDown 0.55s ease;
         }
 
         .home__brand {
@@ -156,7 +156,7 @@ export default function Home() {
           width: 38px;
           height: 38px;
           border-radius: 12px;
-          background: linear-gradient(135deg, var(--sky), var(--forest));
+          background: linear-gradient(135deg, #5e8572, var(--forest));
           color: white;
           display: grid;
           place-items: center;
@@ -182,6 +182,7 @@ export default function Home() {
           border-radius: 999px;
           text-decoration: none;
           font-weight: 600;
+          box-shadow: 0 12px 24px rgba(47, 107, 79, 0.22);
         }
 
         .home__hero {
@@ -198,6 +199,8 @@ export default function Home() {
           max-width: 900px;
           width: 100%;
           text-align: center;
+          border: 1px solid rgba(148, 163, 184, 0.2);
+          animation: floatIn 0.7s ease;
         }
 
         .home__eyebrow {
@@ -229,6 +232,7 @@ export default function Home() {
           padding: 8px 10px;
           border: 1px solid rgba(148, 163, 184, 0.25);
           margin-bottom: 18px;
+          box-shadow: inset 0 1px 2px rgba(15, 23, 42, 0.06);
         }
 
         .home__search input {
@@ -241,12 +245,18 @@ export default function Home() {
 
         .home__search button {
           border: none;
-          background: var(--sky-deep);
+          background: var(--forest);
           color: white;
           padding: 10px 18px;
           border-radius: 999px;
           font-weight: 600;
           cursor: pointer;
+          transition: transform 0.2s ease, box-shadow 0.2s ease;
+        }
+
+        .home__search button:hover {
+          transform: translateY(-1px);
+          box-shadow: 0 10px 20px rgba(47, 93, 80, 0.28);
         }
 
         .home__hero-actions {
@@ -311,6 +321,13 @@ export default function Home() {
           padding: 24px;
           border-radius: 20px;
           box-shadow: var(--shadow);
+          border: 1px solid rgba(148, 163, 184, 0.18);
+          transition: transform 0.25s ease, box-shadow 0.25s ease;
+        }
+
+        .home__card:hover {
+          transform: translateY(-4px);
+          box-shadow: 0 24px 48px rgba(15, 23, 42, 0.16);
         }
 
         .home__card h3 {
@@ -334,11 +351,20 @@ export default function Home() {
           overflow: hidden;
           box-shadow: var(--shadow);
           display: grid;
+          border: 1px solid rgba(148, 163, 184, 0.18);
+          transition: transform 0.25s ease, box-shadow 0.25s ease;
+        }
+
+        .home__destination:hover {
+          transform: translateY(-5px);
+          box-shadow: 0 24px 48px rgba(15, 23, 42, 0.16);
         }
 
         .home__destination-image {
           height: 160px;
-          background: linear-gradient(135deg, #cbe5ff, #b8e6d3);
+          background:
+            radial-gradient(circle at 78% 16%, rgba(197, 139, 59, 0.28), transparent 22%),
+            linear-gradient(135deg, #dfe9f2, #dfeadf);
         }
 
         .home__destination-body {
@@ -356,12 +382,17 @@ export default function Home() {
         .home__destination-body button {
           justify-self: flex-start;
           border: none;
-          background: rgba(59, 130, 246, 0.12);
-          color: var(--sky-deep);
+          background: rgba(47, 93, 80, 0.12);
+          color: var(--forest);
           padding: 6px 14px;
           border-radius: 999px;
           font-weight: 600;
           cursor: pointer;
+          transition: background 0.2s ease;
+        }
+
+        .home__destination-body button:hover {
+          background: rgba(47, 93, 80, 0.2);
         }
 
         .home__community {
@@ -394,6 +425,28 @@ export default function Home() {
           gap: 16px;
           font-weight: 600;
           color: var(--ink);
+        }
+
+        @keyframes floatIn {
+          from {
+            opacity: 0;
+            transform: translateY(24px);
+          }
+          to {
+            opacity: 1;
+            transform: translateY(0);
+          }
+        }
+
+        @keyframes slideDown {
+          from {
+            opacity: 0;
+            transform: translateY(-12px);
+          }
+          to {
+            opacity: 1;
+            transform: translateY(0);
+          }
         }
 
         @media (max-width: 900px) {

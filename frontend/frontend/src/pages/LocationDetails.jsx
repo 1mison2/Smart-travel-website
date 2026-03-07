@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from "react";
 import { Link, useParams } from "react-router-dom";
-import api from "../utils/api";
+import api, { resolveImageUrl } from "../utils/api";
 
 export default function LocationDetails() {
   const { id } = useParams();
@@ -51,7 +51,7 @@ export default function LocationDetails() {
       <article className="location-card">
         <div className="location-card__image">
           {location.image ? (
-            <img src={location.image} alt={location.name} />
+            <img src={resolveImageUrl(location.image)} alt={location.name} />
           ) : (
             <div className="location-card__placeholder">{location.name?.slice(0, 1) || "L"}</div>
           )}

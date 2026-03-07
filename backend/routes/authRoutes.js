@@ -1,5 +1,11 @@
 const express = require("express");
-const { register, login, forgotPassword, resetPassword } = require("../controllers/authController");
+const {
+  register,
+  login,
+  forgotPassword,
+  resetPassword,
+  googleAuth,
+} = require("../controllers/authController");
 const { protect } = require("../middleware/authMiddleware");
 
 const router = express.Router();
@@ -8,6 +14,7 @@ const router = express.Router();
 router.post("/signup", register);
 router.post("/register", register);
 router.post("/login", login);
+router.post("/google", googleAuth);
 
 // forgot password and reset password endpoints
 router.post("/forgot-password", forgotPassword);

@@ -15,6 +15,7 @@ const {
   deletePost,
 } = require("../controllers/adminController");
 const { verifyToken, isAdmin } = require("../middleware/authMiddleware");
+const upload = require("../middleware/uploadMiddleware");
 
 const router = express.Router();
 
@@ -26,9 +27,9 @@ router.get("/users", getAllUsers);
 router.put("/users/:id/block", toggleBlockUser);
 router.delete("/users/:id", deleteUser);
 
-router.post("/locations", createLocation);
+router.post("/locations", upload.single("image"), createLocation);
 router.get("/locations", getAllLocations);
-router.put("/locations/:id", updateLocation);
+router.put("/locations/:id", upload.single("image"), updateLocation);
 router.delete("/locations/:id", deleteLocation);
 
 router.get("/bookings", getAllBookings);
