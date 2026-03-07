@@ -1,12 +1,14 @@
 import React from "react";
 import { NavLink } from "react-router-dom";
-import { LayoutDashboard, Users, MapPinned, BookOpenCheck, MessageSquare } from "lucide-react";
+import { LayoutDashboard, Users, MapPinned, BookOpenCheck, MessageSquare, CreditCard, Building2 } from "lucide-react";
 
 const links = [
   { to: "/admin", label: "Dashboard", icon: LayoutDashboard, end: true },
   { to: "/admin/users", label: "Users", icon: Users },
   { to: "/admin/locations", label: "Locations", icon: MapPinned },
+  { to: "/admin/listings", label: "Listings", icon: Building2 },
   { to: "/admin/bookings", label: "Bookings", icon: BookOpenCheck },
+  { to: "/admin/payments", label: "Payments", icon: CreditCard },
   { to: "/admin/posts", label: "Posts", icon: MessageSquare },
 ];
 

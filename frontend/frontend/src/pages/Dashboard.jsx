@@ -104,12 +104,12 @@ export default function Dashboard() {
     navigate("/");
   };
 
-  const goToTripPlanner = (locationId) => {
+  const goToDestinationHub = (locationId) => {
     if (locationId) {
-      navigate(`/plan-trip?locationId=${locationId}`);
+      navigate(`/locations/${locationId}`);
       return;
     }
-    navigate("/plan-trip");
+    navigate("/destination-search");
   };
 
   return (
@@ -127,6 +127,11 @@ export default function Dashboard() {
             <button type="button" className="topbar__link" onClick={() => navigate("/dashboard")}>Dashboard</button>
             <button type="button" className="topbar__link" onClick={() => navigate("/my-trips")}>My Trips</button>
             <button type="button" className="topbar__link" onClick={() => navigate("/explore")}>Explore</button>
+            <button type="button" className="topbar__link" onClick={() => navigate("/bookings")}>Bookings</button>
+            <button type="button" className="topbar__link" onClick={() => navigate("/destination-search")}>Find Stays</button>
+            <button type="button" className="topbar__link" onClick={() => navigate("/itinerary-planner")}>Itinerary</button>
+            <button type="button" className="topbar__link" onClick={() => navigate("/map-explorer")}>Map Explorer</button>
+            <button type="button" className="topbar__link" onClick={() => navigate("/buddy-finder")}>Buddy Chat</button>
           </nav>
 
           <div className="topbar__search">
@@ -135,7 +140,7 @@ export default function Dashboard() {
           </div>
 
           <div className="topbar__actions">
-            <button type="button" className="icon-btn" aria-label="Notifications">
+            <button type="button" className="icon-btn" aria-label="Notifications" onClick={() => navigate("/notifications")}>
               <Bell size={18} />
             </button>
             <div className="profile">
@@ -235,7 +240,7 @@ export default function Dashboard() {
                     {upcomingTrip.summary && <p className="trip__summary">{upcomingTrip.summary}</p>}
                     <div className="trip__actions">
                       <button className="btn btn--primary" onClick={() => navigate("/my-trips")}>View Itinerary</button>
-                      <button className="btn btn--ghost" onClick={() => goToTripPlanner()}>Edit Trip</button>
+                      <button className="btn btn--ghost" onClick={() => goToDestinationHub()}>Explore & Plan</button>
                     </div>
                   </div>
                 </div>
@@ -302,8 +307,8 @@ export default function Dashboard() {
                         <h3>{destination.name}</h3>
                         <p>{destination.tag}</p>
                       </div>
-                      <button className="btn btn--ghost" onClick={() => goToTripPlanner(destination.locationId)}>
-                        Plan Trip
+                      <button className="btn btn--ghost" onClick={() => goToDestinationHub(destination.locationId)}>
+                        Open Destination
                       </button>
                     </div>
                   </article>

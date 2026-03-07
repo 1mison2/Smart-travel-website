@@ -9,6 +9,7 @@ const emptyForm = {
   category: "",
   averageCost: "",
   image: null,
+  images: [],
   latitude: "",
   longitude: "",
 };
@@ -36,6 +37,7 @@ export default function AdminLocations() {
   const [error, setError] = useState("");
   const [saving, setSaving] = useState(false);
   const [currentImage, setCurrentImage] = useState("");
+  const [currentImages, setCurrentImages] = useState([]);
 
   const loadLocations = async () => {
     try {
@@ -68,6 +70,11 @@ export default function AdminLocations() {
     setForm((prev) => ({ ...prev, image: file }));
   };
 
+  const onImagesChange = (e) => {
+    const files = Array.from(e.target.files || []);
+    setForm((prev) => ({ ...prev, images: files }));
+  };
+
   const onSubmit = async (e) => {
     e.preventDefault();
     try {
@@ -83,6 +90,7 @@ export default function AdminLocations() {
       payload.append("latitude", form.latitude);
       payload.append("longitude", form.longitude);
       if (form.image) payload.append("image", form.image);
+      form.images.forEach((file) => payload.append("images", file));
 
       if (editingId) {
         const { data } = await api.put(`/api/admin/locations/${editingId}`, payload);
@@ -95,6 +103,7 @@ export default function AdminLocations() {
       setForm(emptyForm);
       setEditingId("");
       setCurrentImage("");
+      setCurrentImages([]);
     } catch (err) {
       setError(getApiErrorMessage(err, "Failed to save location"));
     } finally {
@@ -112,10 +121,12 @@ export default function AdminLocations() {
       category: location.category || "",
       averageCost: location.averageCost || 0,
       image: null,
+      images: [],
       latitude: location.latitude || 0,
       longitude: location.longitude || 0,
     });
     setCurrentImage(location.image || "");
+    setCurrentImages(Array.isArray(location.images) ? location.images : []);
   };
 
   const onDelete = async (id) => {
@@ -126,6 +137,7 @@ export default function AdminLocations() {
         setEditingId("");
         setForm(emptyForm);
         setCurrentImage("");
+        setCurrentImages([]);
       }
     } catch (err) {
       setError(getApiErrorMessage(err, "Failed to delete location"));
@@ -150,12 +162,20 @@ export default function AdminLocations() {
         </div>
         <textarea className="admin-textarea" name="description" placeholder="Description" value={form.description} onChange={onChange} rows={3} required />
         <div>
-          <label className="admin-page__subtitle">Upload Image</label>
+          <label className="admin-page__subtitle">Cover Image</label>
           <input className="admin-file" type="file" accept="image/*" onChange={onImageChange} />
           {currentImage && !form.image && (
             <p className="admin-page__subtitle">
               Current image kept unless you choose a new one.
             </p>
+          )}
+          <label className="admin-page__subtitle" style={{ marginTop: "8px" }}>Gallery Images (multiple)</label>
+          <input className="admin-file" type="file" accept="image/*" multiple onChange={onImagesChange} />
+          {form.images.length > 0 && (
+            <p className="admin-page__subtitle">{form.images.length} gallery image(s) selected.</p>
+          )}
+          {currentImages.length > 0 && (
+            <p className="admin-page__subtitle">Existing gallery images: {currentImages.length}</p>
           )}
         </div>
         <div className="admin-actions">
@@ -169,6 +189,7 @@ export default function AdminLocations() {
                 setEditingId("");
                 setForm(emptyForm);
                 setCurrentImage("");
+                setCurrentImages([]);
               }}
               className="admin-btn admin-btn--muted"
             >
@@ -205,9 +226,9 @@ export default function AdminLocations() {
                   <td>${location.averageCost}</td>
                   <td>{location.latitude}, {location.longitude}</td>
                   <td>
-                    {location.image ? (
+                    {(location.image || location.images?.[0]) ? (
                       <img
-                        src={resolveImageUrl(location.image)}
+                        src={resolveImageUrl(location.image || location.images?.[0])}
                         alt={location.name}
                         style={{ width: "56px", height: "42px", objectFit: "cover", borderRadius: "6px" }}
                       />

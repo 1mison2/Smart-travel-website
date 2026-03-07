@@ -9,6 +9,7 @@ const LocationSchema = new mongoose.Schema(
     category: { type: String, required: true, trim: true },
     averageCost: { type: Number, required: true, min: 0 },
     image: { type: String, default: "" },
+    images: [{ type: String, trim: true }],
     latitude: { type: Number, required: true },
     longitude: { type: Number, required: true },
   },

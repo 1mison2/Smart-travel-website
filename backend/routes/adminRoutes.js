@@ -9,6 +9,7 @@ const {
   updateLocation,
   deleteLocation,
   getAllBookings,
+  updateBookingStatus,
   deleteBooking,
   getAllPosts,
   approvePost,
@@ -27,12 +28,27 @@ router.get("/users", getAllUsers);
 router.put("/users/:id/block", toggleBlockUser);
 router.delete("/users/:id", deleteUser);
 
-router.post("/locations", upload.single("image"), createLocation);
+router.post(
+  "/locations",
+  upload.fields([
+    { name: "image", maxCount: 1 },
+    { name: "images", maxCount: 12 },
+  ]),
+  createLocation
+);
 router.get("/locations", getAllLocations);
-router.put("/locations/:id", upload.single("image"), updateLocation);
+router.put(
+  "/locations/:id",
+  upload.fields([
+    { name: "image", maxCount: 1 },
+    { name: "images", maxCount: 12 },
+  ]),
+  updateLocation
+);
 router.delete("/locations/:id", deleteLocation);
 
 router.get("/bookings", getAllBookings);
+router.put("/bookings/:id/status", updateBookingStatus);
 router.delete("/bookings/:id", deleteBooking);
 
 router.get("/posts", getAllPosts);

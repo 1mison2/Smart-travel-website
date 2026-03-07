@@ -32,6 +32,17 @@ export default function AdminBookings() {
     }
   };
 
+  const onUpdateStatus = async (id, bookingStatus) => {
+    try {
+      const { data } = await api.put(`/api/admin/bookings/${id}/status`, { bookingStatus });
+      setBookings((prev) =>
+        prev.map((item) => (item._id === id ? { ...item, ...data.booking } : item))
+      );
+    } catch (err) {
+      setError(err?.response?.data?.message || "Failed to update booking status");
+    }
+  };
+
   return (
     <section className="admin-page">
       <h1 className="admin-page__title">Booking Management</h1>
@@ -48,6 +59,7 @@ export default function AdminBookings() {
                 <th>Location</th>
                 <th>Date</th>
                 <th>Amount</th>
+                <th>Booking</th>
                 <th>Payment</th>
                 <th>Action</th>
               </tr>
@@ -62,6 +74,19 @@ export default function AdminBookings() {
                   <td>
                     <span
                       className={`admin-badge ${
+                        booking.bookingStatus === "confirmed"
+                          ? "admin-badge--success"
+                          : booking.bookingStatus === "cancelled"
+                          ? "admin-badge--danger"
+                          : "admin-badge--warning"
+                      }`}
+                    >
+                      {booking.bookingStatus || "pending"}
+                    </span>
+                  </td>
+                  <td>
+                    <span
+                      className={`admin-badge ${
                         booking.paymentStatus === "paid"
                           ? "admin-badge--success"
                           : booking.paymentStatus === "failed"
@@ -73,13 +98,29 @@ export default function AdminBookings() {
                     </span>
                   </td>
                   <td>
-                    <button
-                      type="button"
-                      onClick={() => onDelete(booking._id)}
-                      className="admin-btn admin-btn--danger"
-                    >
-                      Delete
-                    </button>
+                    <div className="admin-actions">
+                      <button
+                        type="button"
+                        onClick={() => onUpdateStatus(booking._id, "confirmed")}
+                        className="admin-btn admin-btn--success"
+                      >
+                        Confirm
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => onUpdateStatus(booking._id, "cancelled")}
+                        className="admin-btn admin-btn--warning"
+                      >
+                        Cancel
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => onDelete(booking._id)}
+                        className="admin-btn admin-btn--danger"
+                      >
+                        Delete
+                      </button>
+                    </div>
                   </td>
                 </tr>
               ))}

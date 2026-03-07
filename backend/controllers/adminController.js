@@ -3,10 +3,26 @@ const User = require("../models/User");
 const Location = require("../models/Location");
 const Booking = require("../models/Booking");
 const Post = require("../models/Post");
+const { createNotification } = require("../utils/notificationService");
 
 const isValidObjectId = (id) => mongoose.Types.ObjectId.isValid(id);
 const buildImageUrl = (req, filename) =>
   `${req.protocol}://${req.get("host")}/uploads/${filename}`;
+
+const extractUploadedImages = (req) => {
+  const images = [];
+  const fieldFiles = req.files || {};
+  if (Array.isArray(fieldFiles.images)) {
+    images.push(...fieldFiles.images.map((file) => buildImageUrl(req, file.filename)));
+  }
+  if (Array.isArray(fieldFiles.image)) {
+    images.push(...fieldFiles.image.map((file) => buildImageUrl(req, file.filename)));
+  }
+  if (req.file) {
+    images.push(buildImageUrl(req, req.file.filename));
+  }
+  return images.filter(Boolean);
+};
 
 const normalizeUser = (user) => ({
   ...user,
@@ -116,7 +132,8 @@ exports.createLocation = async (req, res) => {
       return res.status(400).json({ message: "Average cost, latitude, and longitude must be valid numbers" });
     }
 
-    const imageUrl = req.file ? buildImageUrl(req, req.file.filename) : "";
+    const uploadedImages = extractUploadedImages(req);
+    const coverImage = uploadedImages[0] || "";
 
     const location = await Location.create({
       name: name.trim(),
@@ -125,7 +142,8 @@ exports.createLocation = async (req, res) => {
       description: description.trim(),
       category: category.trim(),
       averageCost: numericCost,
-      image: imageUrl,
+      image: coverImage,
+      images: uploadedImages,
       latitude: numericLatitude,
       longitude: numericLongitude,
     });
@@ -168,10 +186,17 @@ exports.updateLocation = async (req, res) => {
     ) {
       return res.status(400).json({ message: "Average cost, latitude, and longitude must be valid numbers" });
     }
-    if (req.file) payload.image = buildImageUrl(req, req.file.filename);
+    const location = await Location.findById(id);
+    if (!location) return res.status(404).json({ message: "Location not found" });
+
+    const uploadedImages = extractUploadedImages(req);
+    if (uploadedImages.length) {
+      const existingImages = Array.isArray(location.images) ? location.images : [];
+      payload.images = [...existingImages, ...uploadedImages];
+      payload.image = payload.images[0] || location.image || "";
+    }
 
     const updated = await Location.findByIdAndUpdate(id, payload, { new: true, runValidators: true });
-    if (!updated) return res.status(404).json({ message: "Location not found" });
 
     res.json(updated);
   } catch (err) {
@@ -220,6 +245,40 @@ exports.deleteBooking = async (req, res) => {
   } catch (err) {
     console.error(err);
     res.status(500).json({ message: "Failed to delete booking" });
+  }
+};
+
+exports.updateBookingStatus = async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { bookingStatus } = req.body || {};
+    if (!isValidObjectId(id)) return res.status(400).json({ message: "Invalid booking id" });
+    if (!["pending", "confirmed", "cancelled"].includes(bookingStatus)) {
+      return res.status(400).json({ message: "Invalid booking status" });
+    }
+
+    const booking = await Booking.findById(id).populate("locationId", "name");
+    if (!booking) return res.status(404).json({ message: "Booking not found" });
+
+    booking.bookingStatus = bookingStatus;
+    if (bookingStatus === "cancelled") booking.cancelledAt = new Date();
+    if (bookingStatus !== "cancelled") booking.cancelledAt = undefined;
+    await booking.save();
+
+    await createNotification({
+      recipient: booking.userId,
+      type: "booking_updated",
+      title: "Booking status updated",
+      message: `Your booking for ${
+        booking.locationId?.name || "selected location"
+      } is now ${bookingStatus}.`,
+      meta: { bookingId: booking._id, bookingStatus },
+    });
+
+    res.json({ message: "Booking status updated successfully", booking });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ message: "Failed to update booking status" });
   }
 };
 

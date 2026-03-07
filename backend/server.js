@@ -2,7 +2,9 @@ const express = require("express");
 const dotenv = require("dotenv");
 const cors = require("cors");
 const path = require("path");
+const http = require("http");
 const connectDB = require("./config/db");
+const { createSocketServer } = require("./config/socket");
 
 dotenv.config({ path: path.join(__dirname, ".env") });
 connectDB();
@@ -18,6 +20,14 @@ app.use("/api/auth", require("./routes/authRoutes"));
 app.use("/api/user", require("./routes/userRoutes"));
 app.use("/api/admin", require("./routes/adminRoutes"));
 app.use("/api/locations", require("./routes/locationRoutes"));
+app.use("/api/bookings", require("./routes/bookingRoutes"));
+app.use("/api/notifications", require("./routes/notificationRoutes"));
+app.use("/api/places", require("./routes/placesRoutes"));
+app.use("/api/itineraries", require("./routes/itineraryRoutes"));
+app.use("/api/payments", require("./routes/paymentRoutes"));
+app.use("/api/chat", require("./routes/chatRoutes"));
+app.use("/api/listings", require("./routes/listingRoutes"));
+app.use("/api/admin/listings", require("./routes/adminListingRoutes"));
 
 app.use((err, _req, res, next) => {
   if (!err) return next();
@@ -32,7 +42,9 @@ app.use((err, _req, res, next) => {
 });
 
 const PORT = process.env.PORT || 5001;
-const server = app.listen(PORT, () => console.log(`Server running on port ${PORT}`));
+const server = http.createServer(app);
+createSocketServer(server);
+server.listen(PORT, () => console.log(`Server running on port ${PORT}`));
 
 server.on('error', (err) => {
   if (err.code === 'EADDRINUSE') {
