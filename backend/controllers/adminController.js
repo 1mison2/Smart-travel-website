@@ -1,13 +1,51 @@
 const mongoose = require("mongoose");
+const fs = require("fs/promises");
+const path = require("path");
 const User = require("../models/User");
 const Location = require("../models/Location");
 const Booking = require("../models/Booking");
 const Post = require("../models/Post");
-const { createNotification } = require("../utils/notificationService");
+const { createNotification, notifyAdmins } = require("../utils/notificationService");
 
 const isValidObjectId = (id) => mongoose.Types.ObjectId.isValid(id);
 const buildImageUrl = (req, filename) =>
   `${req.protocol}://${req.get("host")}/uploads/${filename}`;
+const uploadsDir = path.join(__dirname, "..", "uploads");
+
+const dedupeImages = (images) => Array.from(new Set((images || []).filter(Boolean)));
+const uploadedUrlsForField = (req, fieldName) =>
+  Array.isArray(req.files?.[fieldName])
+    ? req.files[fieldName].map((file) => buildImageUrl(req, file.filename)).filter(Boolean)
+    : [];
+
+const extractUploadFilename = (mediaUrl) => {
+  if (!mediaUrl || typeof mediaUrl !== "string") return "";
+  try {
+    const parsed = new URL(mediaUrl);
+    const match = parsed.pathname.match(/\/uploads\/([^/?#]+)/);
+    return match?.[1] || "";
+  } catch (_err) {
+    const match = mediaUrl.match(/\/uploads\/([^/?#]+)/);
+    return match?.[1] || "";
+  }
+};
+
+const removeUploadedFiles = async (mediaUrls = []) => {
+  const filenames = Array.from(
+    new Set(mediaUrls.map(extractUploadFilename).filter(Boolean))
+  );
+  await Promise.all(
+    filenames.map(async (filename) => {
+      try {
+        await fs.unlink(path.join(uploadsDir, filename));
+      } catch (err) {
+        if (err?.code !== "ENOENT") {
+          console.warn(`Failed to remove uploaded file: ${filename}`, err);
+        }
+      }
+    })
+  );
+};
 
 const extractUploadedImages = (req) => {
   const images = [];
@@ -21,7 +59,7 @@ const extractUploadedImages = (req) => {
   if (req.file) {
     images.push(buildImageUrl(req, req.file.filename));
   }
-  return images.filter(Boolean);
+  return dedupeImages(images);
 };
 
 const normalizeUser = (user) => ({
@@ -80,6 +118,14 @@ exports.toggleBlockUser = async (req, res) => {
 
     const payload = user.toObject();
     delete payload.password;
+    await notifyAdmins({
+      type: "system",
+      title: `User ${isBlocked ? "blocked" : "unblocked"}`,
+      message: `Admin ${req.user?.name || req.user?.email} ${isBlocked ? "blocked" : "unblocked"} user ${
+        user.name || user.email
+      }.`,
+      meta: { userId: user._id, isBlocked },
+    });
     res.json({ message: `User ${isBlocked ? "blocked" : "unblocked"} successfully`, user: normalizeUser(payload) });
   } catch (err) {
     console.error(err);
@@ -98,6 +144,12 @@ exports.deleteUser = async (req, res) => {
     const deleted = await User.findByIdAndDelete(id);
     if (!deleted) return res.status(404).json({ message: "User not found" });
 
+    await notifyAdmins({
+      type: "system",
+      title: "User deleted",
+      message: `Admin ${req.user?.name || req.user?.email} deleted user ${deleted.name || deleted.email}.`,
+      meta: { userId: deleted._id },
+    });
     res.json({ message: "User deleted successfully" });
   } catch (err) {
     console.error(err);
@@ -143,11 +195,17 @@ exports.createLocation = async (req, res) => {
       category: category.trim(),
       averageCost: numericCost,
       image: coverImage,
-      images: uploadedImages,
+      images: dedupeImages(uploadedImages),
       latitude: numericLatitude,
       longitude: numericLongitude,
     });
 
+    await notifyAdmins({
+      type: "system",
+      title: "Location created",
+      message: `Admin ${req.user?.name || req.user?.email} created location ${location.name}.`,
+      meta: { locationId: location._id },
+    });
     res.status(201).json(location);
   } catch (err) {
     console.error(err);
@@ -189,15 +247,36 @@ exports.updateLocation = async (req, res) => {
     const location = await Location.findById(id);
     if (!location) return res.status(404).json({ message: "Location not found" });
 
-    const uploadedImages = extractUploadedImages(req);
-    if (uploadedImages.length) {
-      const existingImages = Array.isArray(location.images) ? location.images : [];
-      payload.images = [...existingImages, ...uploadedImages];
-      payload.image = payload.images[0] || location.image || "";
+    const uploadedCover = uploadedUrlsForField(req, "image");
+    const uploadedGallery = uploadedUrlsForField(req, "images");
+    const hasCoverUpload = uploadedCover.length > 0;
+    const hasGalleryUpload = uploadedGallery.length > 0;
+
+    if (hasCoverUpload || hasGalleryUpload) {
+      payload.image = hasCoverUpload ? uploadedCover[0] : location.image || "";
+      payload.images = hasGalleryUpload
+        ? dedupeImages(uploadedGallery)
+        : dedupeImages(Array.isArray(location.images) ? location.images : []);
+
+      const previousMedia = dedupeImages([
+        location.image || "",
+        ...(Array.isArray(location.images) ? location.images : []),
+      ]);
+      const nextMedia = dedupeImages([payload.image || "", ...(payload.images || [])]);
+      const removedMedia = previousMedia.filter((item) => !nextMedia.includes(item));
+      if (removedMedia.length) {
+        await removeUploadedFiles(removedMedia);
+      }
     }
 
     const updated = await Location.findByIdAndUpdate(id, payload, { new: true, runValidators: true });
 
+    await notifyAdmins({
+      type: "system",
+      title: "Location updated",
+      message: `Admin ${req.user?.name || req.user?.email} updated location ${updated.name}.`,
+      meta: { locationId: updated._id },
+    });
     res.json(updated);
   } catch (err) {
     console.error(err);
@@ -213,6 +292,12 @@ exports.deleteLocation = async (req, res) => {
     const deleted = await Location.findByIdAndDelete(id);
     if (!deleted) return res.status(404).json({ message: "Location not found" });
 
+    await notifyAdmins({
+      type: "system",
+      title: "Location deleted",
+      message: `Admin ${req.user?.name || req.user?.email} deleted location ${deleted.name}.`,
+      meta: { locationId: deleted._id },
+    });
     res.json({ message: "Location deleted successfully" });
   } catch (err) {
     console.error(err);
@@ -225,7 +310,9 @@ exports.getAllBookings = async (_req, res) => {
     const bookings = await Booking.find()
       .sort({ createdAt: -1 })
       .populate("userId", "name email")
-      .populate("locationId", "name province district");
+      .populate("locationId", "name province district")
+      .populate("listingId", "title type")
+      .populate("tripPackageId", "title");
     res.json(bookings);
   } catch (err) {
     console.error(err);
@@ -257,7 +344,10 @@ exports.updateBookingStatus = async (req, res) => {
       return res.status(400).json({ message: "Invalid booking status" });
     }
 
-    const booking = await Booking.findById(id).populate("locationId", "name");
+    const booking = await Booking.findById(id)
+      .populate("locationId", "name")
+      .populate("listingId", "title")
+      .populate("tripPackageId", "title");
     if (!booking) return res.status(404).json({ message: "Booking not found" });
 
     booking.bookingStatus = bookingStatus;
@@ -265,14 +355,24 @@ exports.updateBookingStatus = async (req, res) => {
     if (bookingStatus !== "cancelled") booking.cancelledAt = undefined;
     await booking.save();
 
+    const bookingName =
+      booking.tripPackageId?.title ||
+      booking.listingId?.title ||
+      booking.locationId?.name ||
+      "selected booking";
+
     await createNotification({
       recipient: booking.userId,
       type: "booking_updated",
       title: "Booking status updated",
-      message: `Your booking for ${
-        booking.locationId?.name || "selected location"
-      } is now ${bookingStatus}.`,
+      message: `Your booking for ${bookingName} is now ${bookingStatus}.`,
       meta: { bookingId: booking._id, bookingStatus },
+    });
+    await notifyAdmins({
+      type: "booking_updated",
+      title: "Booking status updated",
+      message: `Admin ${req.user?.name || req.user?.email} set booking status to ${bookingStatus}.`,
+      meta: { bookingId: booking._id, bookingStatus, userId: booking.userId },
     });
 
     res.json({ message: "Booking status updated successfully", booking });
@@ -302,6 +402,12 @@ exports.approvePost = async (req, res) => {
     const post = await Post.findByIdAndUpdate(id, { status: "approved" }, { new: true });
     if (!post) return res.status(404).json({ message: "Post not found" });
 
+    await notifyAdmins({
+      type: "system",
+      title: "Post approved",
+      message: `Admin ${req.user?.name || req.user?.email} approved a post.`,
+      meta: { postId: post._id, userId: post.userId },
+    });
     res.json({ message: "Post approved successfully", post });
   } catch (err) {
     console.error(err);
@@ -317,6 +423,12 @@ exports.deletePost = async (req, res) => {
     const deleted = await Post.findByIdAndDelete(id);
     if (!deleted) return res.status(404).json({ message: "Post not found" });
 
+    await notifyAdmins({
+      type: "system",
+      title: "Post deleted",
+      message: `Admin ${req.user?.name || req.user?.email} deleted a post.`,
+      meta: { postId: deleted._id, userId: deleted.userId },
+    });
     res.json({ message: "Post deleted successfully" });
   } catch (err) {
     console.error(err);

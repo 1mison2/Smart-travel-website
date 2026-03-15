@@ -238,7 +238,9 @@ exports.getMyBookings = async (req, res) => {
     const bookings = await Booking.find({ userId: req.user._id })
       .sort({ createdAt: -1 })
       .populate("locationId", "name province district image")
-      .populate("listingId", "title type location photos rating pricePerUnit");
+      .populate("listingId", "title type location photos rating pricePerUnit")
+      .populate("tripPackageId")
+      .populate("addOnListingIds", "title type pricePerUnit pricing");
     res.json({ bookings });
   } catch (err) {
     console.error(err);
@@ -254,6 +256,8 @@ exports.getBookingById = async (req, res) => {
     const booking = await Booking.findById(id)
       .populate("locationId", "name province district image")
       .populate("listingId", "title type location photos rating pricePerUnit")
+      .populate("tripPackageId")
+      .populate("addOnListingIds", "title type pricePerUnit pricing")
       .populate("userId", "name email role");
     if (!booking) return res.status(404).json({ message: "Booking not found" });
     if (!canAccessBooking(booking, req.user)) return res.status(403).json({ message: "Forbidden" });
@@ -272,7 +276,8 @@ exports.cancelBooking = async (req, res) => {
 
     const booking = await Booking.findById(id)
       .populate("locationId", "name")
-      .populate("listingId", "title");
+      .populate("listingId", "title")
+      .populate("tripPackageId", "title");
     if (!booking) return res.status(404).json({ message: "Booking not found" });
     if (!canAccessBooking(booking, req.user)) return res.status(403).json({ message: "Forbidden" });
     if (booking.paymentStatus === "paid") {
@@ -284,7 +289,11 @@ exports.cancelBooking = async (req, res) => {
     booking.cancelledAt = new Date();
     await booking.save();
 
-    const bookingName = booking.listingId?.title || booking.locationId?.name || "selected place";
+    const bookingName =
+      booking.tripPackageId?.title ||
+      booking.listingId?.title ||
+      booking.locationId?.name ||
+      "selected place";
     await createNotification({
       recipient: booking.userId,
       type: "booking_cancelled",
@@ -312,7 +321,10 @@ exports.initiateBookingPayment = async (req, res) => {
     const { paymentProvider = "mock", paymentReference } = req.body || {};
 
     if (!isValidObjectId(id)) return res.status(400).json({ message: "Invalid booking id" });
-    const booking = await Booking.findById(id).populate("locationId", "name").populate("listingId", "title");
+    const booking = await Booking.findById(id)
+      .populate("locationId", "name")
+      .populate("listingId", "title")
+      .populate("tripPackageId", "title");
     if (!booking) return res.status(404).json({ message: "Booking not found" });
     if (!canAccessBooking(booking, req.user)) return res.status(403).json({ message: "Forbidden" });
     if (booking.bookingStatus === "cancelled") {
@@ -332,7 +344,11 @@ exports.initiateBookingPayment = async (req, res) => {
     booking.bookingStatus = "awaiting_payment";
     await booking.save();
 
-    const bookingName = booking.listingId?.title || booking.locationId?.name || "selected place";
+    const bookingName =
+      booking.tripPackageId?.title ||
+      booking.listingId?.title ||
+      booking.locationId?.name ||
+      "selected place";
     await createNotification({
       recipient: booking.userId,
       type: "payment_initiated",
@@ -369,7 +385,10 @@ exports.confirmBookingPayment = async (req, res) => {
     const { paymentId, success = true } = req.body || {};
 
     if (!isValidObjectId(id)) return res.status(400).json({ message: "Invalid booking id" });
-    const booking = await Booking.findById(id).populate("locationId", "name").populate("listingId", "title");
+    const booking = await Booking.findById(id)
+      .populate("locationId", "name")
+      .populate("listingId", "title")
+      .populate("tripPackageId", "title");
     if (!booking) return res.status(404).json({ message: "Booking not found" });
     if (!canAccessBooking(booking, req.user)) return res.status(403).json({ message: "Forbidden" });
     if (booking.bookingStatus === "cancelled") {
@@ -397,7 +416,11 @@ exports.confirmBookingPayment = async (req, res) => {
     }
     await booking.save();
 
-    const bookingName = booking.listingId?.title || booking.locationId?.name || "selected place";
+    const bookingName =
+      booking.tripPackageId?.title ||
+      booking.listingId?.title ||
+      booking.locationId?.name ||
+      "selected place";
     const type = success ? "payment_success" : "payment_failed";
     const title = success ? "Payment successful" : "Payment failed";
     const message = success

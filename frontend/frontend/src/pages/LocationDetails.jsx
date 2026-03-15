@@ -20,6 +20,7 @@ export default function LocationDetails() {
   const [location, setLocation] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
+  const [previewImage, setPreviewImage] = useState("");
 
   const [activities, setActivities] = useState([]);
   const [cafes, setCafes] = useState([]);
@@ -42,6 +43,7 @@ export default function LocationDetails() {
   const [bookingError, setBookingError] = useState("");
   const [bookingFocusPulse, setBookingFocusPulse] = useState(false);
   const bookingPanelRef = useRef(null);
+  const stayEatRef = useRef(null);
   const quoteDebounceRef = useRef(null);
 
   const [planForm, setPlanForm] = useState({
@@ -49,6 +51,7 @@ export default function LocationDetails() {
     durationDays: 3,
     interests: "nature,food,culture",
   });
+  const [showAllStayEat, setShowAllStayEat] = useState(false);
 
   const selectedListing = useMemo(
     () => localListings.find((item) => item._id === bookingForm.listingId) || null,
@@ -61,6 +64,10 @@ export default function LocationDetails() {
   const stayEatListings = useMemo(
     () => localListings.filter((item) => ["hotel", "cafe", "restaurant"].includes(item.type)),
     [localListings]
+  );
+  const stayEatVisible = useMemo(
+    () => (showAllStayEat ? stayEatListings : stayEatListings.slice(0, 3)),
+    [showAllStayEat, stayEatListings]
   );
 
   const fetchNearbyByType = async (lat, lng, type, limit = 8) => {
@@ -208,6 +215,16 @@ export default function LocationDetails() {
     setBookingError("");
   };
 
+  const handleToggleStayEat = () => {
+    setShowAllStayEat((prev) => {
+      const next = !prev;
+      if (!prev && stayEatRef.current) {
+        stayEatRef.current.scrollIntoView({ behavior: "smooth", block: "start" });
+      }
+      return next;
+    });
+  };
+
   useEffect(() => {
     if (!bookingForm.listingId) {
       setQuote(null);
@@ -232,6 +249,27 @@ export default function LocationDetails() {
     navigate(`/book/${bookingForm.listingId}?${params.toString()}`);
   };
 
+  const imageCandidates = Array.from(new Set([
+    location?.image ? resolveImageUrl(location.image) : "",
+    ...(Array.isArray(location?.images) ? location.images.map((img) => resolveImageUrl(img)) : []),
+    ...activities.map((p) => p.photo).filter(Boolean),
+    ...hotels.map((p) => p.photo).filter(Boolean),
+    ...restaurants.map((p) => p.photo).filter(Boolean),
+  ].filter(Boolean)));
+
+  const heroImage =
+    imageCandidates[0] ||
+    "https://images.unsplash.com/photo-1544735716-392fe2489ffa?q=80&w=1400&auto=format&fit=crop";
+
+  useEffect(() => {
+    if (!previewImage) return;
+    const onKeyDown = (event) => {
+      if (event.key === "Escape") setPreviewImage("");
+    };
+    window.addEventListener("keydown", onKeyDown);
+    return () => window.removeEventListener("keydown", onKeyDown);
+  }, [previewImage]);
+
   if (loading)
     return (
       <div className="travel-shell">
@@ -246,14 +284,6 @@ export default function LocationDetails() {
         </div>
       </div>
     );
-
-  const imageCandidates = [
-    location.image ? resolveImageUrl(location.image) : "",
-    ...(Array.isArray(location.images) ? location.images.map((img) => resolveImageUrl(img)) : []),
-    ...activities.map((p) => p.photo).filter(Boolean),
-    ...hotels.map((p) => p.photo).filter(Boolean),
-    ...restaurants.map((p) => p.photo).filter(Boolean),
-  ].filter(Boolean);
 
   return (
     <div className="travel-shell">
@@ -270,29 +300,34 @@ export default function LocationDetails() {
               <span>{location.province || "Province"}</span>
               <span>{location.category || "Destination"}</span>
             </div>
+            <article className="hub-hero__about">
+              <h2 className="hub-section-title">About this destination</h2>
+              <p className="hub-copy">{location.description}</p>
+              <div className="hub-pills">
+                <span className="hub-pill">Avg Local Cost: NPR {location.averageCost || "-"}</span>
+                <span className="hub-pill">{location.district || "District"}</span>
+                <span className="hub-pill">{location.province || "Province"}</span>
+              </div>
+            </article>
           </div>
           <div className="hub-hero__image">
-            <img src={imageCandidates[0] || "https://images.unsplash.com/photo-1544735716-392fe2489ffa?q=80&w=1400&auto=format&fit=crop"} alt={location.name} />
+            <img src={heroImage} alt={location.name} />
           </div>
         </header>
 
-        <section className="hub-top-grid">
-          <article className="travel-card hub-panel">
-            <h2 className="hub-section-title">About this destination</h2>
-            <p className="hub-copy">{location.description}</p>
-            <div className="hub-pills">
-              <span className="hub-pill">Avg Local Cost: NPR {location.averageCost || "-"}</span>
-              <span className="hub-pill">{location.district || "District"}</span>
-              <span className="hub-pill">{location.province || "Province"}</span>
-            </div>
-          </article>
+        <section className="hub-top-grid hub-top-grid--single">
           <article className="travel-card hub-panel">
             <h2 className="hub-section-title">Photo gallery</h2>
             <div className="hub-gallery">
               {imageCandidates.slice(0, 6).map((img, idx) => (
-                <figure key={`${img}-${idx}`} className="hub-gallery__item">
+                <button
+                  key={`${img}-${idx}`}
+                  type="button"
+                  className="hub-gallery__item"
+                  onClick={() => setPreviewImage(img)}
+                >
                   <img src={img} alt={`gallery-${idx}`} />
-                </figure>
+                </button>
               ))}
               {!imageCandidates.length && <EmptyState text="No extra photos available yet." />}
             </div>
@@ -319,9 +354,16 @@ export default function LocationDetails() {
         </div>
 
         <SectionHeader title="Stay, Eat & Book" subtitle="Hotels, Cafes & Restaurants" />
-        <p className="hub-helper">Choose your stay or food spot and continue booking without leaving this page.</p>
+        <div className="hub-section-actions" ref={stayEatRef}>
+          <p className="hub-helper">Choose your stay or food spot and continue booking without leaving this page.</p>
+          {stayEatListings.length > 3 && (
+            <button type="button" className="travel-btn travel-btn-soft" onClick={handleToggleStayEat}>
+              {showAllStayEat ? "Show less" : "See all"}
+            </button>
+          )}
+        </div>
         <div className="hub-card-grid">
-          {stayEatListings.map((listing) => (
+          {stayEatVisible.map((listing) => (
             <ListingSelectionCard
               key={listing._id}
               listing={listing}
@@ -474,6 +516,28 @@ export default function LocationDetails() {
             {!recommendations.length && <EmptyState text="No nearby recommendations available yet." />}
           </div>
         </section>
+
+        {previewImage && (
+          <div
+            className="hub-lightbox"
+            role="dialog"
+            aria-modal="true"
+            aria-label="Image preview"
+            onClick={() => setPreviewImage("")}
+          >
+            <div className="hub-lightbox__inner" onClick={(e) => e.stopPropagation()}>
+              <button
+                type="button"
+                className="hub-lightbox__close"
+                onClick={() => setPreviewImage("")}
+                aria-label="Close image preview"
+              >
+                x
+              </button>
+              <img src={previewImage} alt={`${location.name} preview`} />
+            </div>
+          </div>
+        )}
       </div>
     </div>
   );

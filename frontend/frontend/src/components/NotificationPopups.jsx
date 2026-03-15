@@ -94,6 +94,9 @@ export default function NotificationPopups() {
         if (!initializedRef.current) {
           const seen = readSeenIds(user._id);
           if (seen.size === 0) {
+            if (unread.length > 0) {
+              enqueuePopup(unread[0]);
+            }
             unread.forEach((item) => seen.add(String(item._id)));
             writeSeenIds(user._id, seen);
           }
@@ -145,6 +148,7 @@ export default function NotificationPopups() {
         >
           <div className="notif-toast__head">
             <p>{popup.title}</p>
+            <span className="notif-toast__tag">New</span>
             <button
               type="button"
               className="notif-toast__close"
@@ -163,4 +167,3 @@ export default function NotificationPopups() {
     </div>
   );
 }
-

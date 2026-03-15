@@ -7,7 +7,25 @@ export default function PlaceDetails() {
   const [listing, setListing] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
-  const [activePhoto, setActivePhoto] = useState("");
+  const [gallery, setGallery] = useState([]);
+  const [selectedPhoto, setSelectedPhoto] = useState("");
+  const [previewImage, setPreviewImage] = useState("");
+
+  const normalizeGallery = (photos) => {
+    const items = (Array.isArray(photos) ? photos : [])
+      .map((item) => resolveImageUrl(item))
+      .filter(Boolean);
+    return Array.from(new Set(items));
+  };
+
+  useEffect(() => {
+    if (!previewImage) return;
+    const onKeyDown = (e) => {
+      if (e.key === "Escape") setPreviewImage("");
+    };
+    window.addEventListener("keydown", onKeyDown);
+    return () => window.removeEventListener("keydown", onKeyDown);
+  }, [previewImage]);
 
   useEffect(() => {
     let active = true;
@@ -18,10 +36,9 @@ export default function PlaceDetails() {
         if (!active) return;
         const nextListing = data?.listing || null;
         setListing(nextListing);
-        const nextGallery = (Array.isArray(nextListing?.photos) ? nextListing.photos : [])
-          .map((item) => resolveImageUrl(item))
-          .filter(Boolean);
-        setActivePhoto(nextGallery[0] || "");
+        const nextGallery = normalizeGallery(nextListing?.photos);
+        setGallery(nextGallery);
+        setSelectedPhoto(nextGallery[0] || "");
         setError("");
       } catch (err) {
         if (!active) return;
@@ -39,13 +56,10 @@ export default function PlaceDetails() {
   if (loading) return <div className="travel-shell"><div className="travel-container">Loading place details...</div></div>;
   if (error || !listing) return <div className="travel-shell"><div className="travel-container"><p className="travel-alert travel-alert-error">{error || "Place not found"}</p></div></div>;
 
-  const gallery = (Array.isArray(listing?.photos) ? listing.photos : [])
-    .map((item) => resolveImageUrl(item))
-    .filter(Boolean);
   const reviews = Array.isArray(listing.reviews) ? listing.reviews : [];
   const amenities = Array.isArray(listing.amenities) ? listing.amenities.filter(Boolean) : [];
-  const displayPhoto =
-    activePhoto || gallery[0] || "https://images.unsplash.com/photo-1551882547-ff40c63fe5fa?q=80&w=1400&auto=format&fit=crop";
+  const coverPhoto =
+    gallery[0] || "https://images.unsplash.com/photo-1551882547-ff40c63fe5fa?q=80&w=1400&auto=format&fit=crop";
 
   return (
     <div className="travel-shell">
@@ -58,7 +72,7 @@ export default function PlaceDetails() {
         </div>
 
         <header className="place-hero">
-          <img src={displayPhoto} alt={listing.title} />
+          <img src={coverPhoto} alt={listing.title} />
           <div className="place-hero__overlay">
             <h1>{listing.title}</h1>
             <p>{[listing.location?.name, listing.location?.district, listing.location?.province].filter(Boolean).join(", ")}</p>
@@ -118,22 +132,44 @@ export default function PlaceDetails() {
         {!!gallery.length && (
           <section className="place-gallery">
             <h2>Photos</h2>
-            <figure className="place-gallery__main">
-              <img src={displayPhoto} alt={`${listing.title} main`} />
-            </figure>
             <div className="place-gallery__thumbs">
               {gallery.map((img, idx) => (
                 <button
                   key={`${img}-${idx}`}
                   type="button"
-                  className={`place-thumb ${displayPhoto === img ? "place-thumb--active" : ""}`}
-                  onClick={() => setActivePhoto(img)}
+                  className={`place-thumb ${selectedPhoto === img ? "place-thumb--active" : ""}`}
+                  onClick={() => {
+                    setSelectedPhoto(img);
+                    setPreviewImage(img);
+                  }}
                 >
                   <img src={img} alt={`${listing.title}-${idx + 1}`} />
                 </button>
               ))}
             </div>
           </section>
+        )}
+
+        {previewImage && (
+          <div
+            className="hub-lightbox"
+            role="dialog"
+            aria-modal="true"
+            aria-label="Image preview"
+            onClick={() => setPreviewImage("")}
+          >
+            <div className="hub-lightbox__inner" onClick={(e) => e.stopPropagation()}>
+              <button
+                type="button"
+                className="hub-lightbox__close"
+                onClick={() => setPreviewImage("")}
+                aria-label="Close image preview"
+              >
+                x
+              </button>
+              <img src={previewImage} alt={`${listing.title} preview`} />
+            </div>
+          </div>
         )}
 
         <section className="place-reviews">

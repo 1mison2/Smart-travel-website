@@ -46,6 +46,7 @@ export default function MyTrips() {
         </div>
         <div className="trips-page__actions">
           <Link to="/explore" className="trips-btn trips-btn--ghost">Explore</Link>
+          <Link to="/trip-packages" className="trips-btn trips-btn--ghost">Trip Packages</Link>
           <Link to="/plan-trip" className="trips-btn trips-btn--primary">New Trip Plan</Link>
         </div>
       </header>

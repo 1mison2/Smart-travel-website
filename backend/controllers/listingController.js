@@ -14,16 +14,30 @@ const parseJsonIfNeeded = (value) => {
   }
 };
 
+const dedupePreserveOrder = (items) => {
+  const seen = new Set();
+  const out = [];
+  for (const item of Array.isArray(items) ? items : []) {
+    const value = String(item || "").trim();
+    if (!value || seen.has(value)) continue;
+    seen.add(value);
+    out.push(value);
+  }
+  return out;
+};
+
 const normalizeStringArray = (input) => {
   const parsed = parseJsonIfNeeded(input);
   if (Array.isArray(parsed)) {
-    return parsed.map((item) => String(item || "").trim()).filter(Boolean);
+    return dedupePreserveOrder(parsed);
   }
   if (typeof parsed === "string") {
-    return parsed
-      .split(",")
-      .map((item) => item.trim())
-      .filter(Boolean);
+    return dedupePreserveOrder(
+      parsed
+        .split(",")
+        .map((item) => item.trim())
+        .filter(Boolean)
+    );
   }
   return [];
 };
@@ -58,7 +72,7 @@ exports.createListing = async (req, res) => {
       ? req.files.map((file) => buildImageUrl(req, file.filename))
       : [];
     const manualPhotos = normalizeStringArray(payload.photos);
-    const mergedPhotos = [...manualPhotos, ...uploadedPhotos];
+    const mergedPhotos = dedupePreserveOrder([...manualPhotos, ...uploadedPhotos]);
 
     const listing = await Listing.create({
       type: payload.type,
@@ -140,7 +154,7 @@ exports.updateListing = async (req, res) => {
     if (payload.photos !== undefined) payload.photos = normalizeStringArray(payload.photos);
     if (Array.isArray(req.files) && req.files.length) {
       const uploadedPhotos = req.files.map((file) => buildImageUrl(req, file.filename));
-      payload.photos = [...(payload.photos || []), ...uploadedPhotos];
+      payload.photos = dedupePreserveOrder([...(payload.photos || []), ...uploadedPhotos]);
     }
     if (payload.location?.lat !== undefined) {
       payload.location.lat =

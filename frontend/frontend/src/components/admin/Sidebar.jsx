@@ -1,6 +1,7 @@
 import React from "react";
 import { NavLink } from "react-router-dom";
-import { LayoutDashboard, Users, MapPinned, BookOpenCheck, MessageSquare, CreditCard, Building2 } from "lucide-react";
+import { LayoutDashboard, Users, MapPinned, BookOpenCheck, MessageSquare, CreditCard, Building2, Bell, Briefcase } from "lucide-react";
+import NotificationCountBadge from "../NotificationCountBadge";
 
 const links = [
   { to: "/admin", label: "Dashboard", icon: LayoutDashboard, end: true },
@@ -8,8 +9,10 @@ const links = [
   { to: "/admin/locations", label: "Locations", icon: MapPinned },
   { to: "/admin/listings", label: "Listings", icon: Building2 },
   { to: "/admin/bookings", label: "Bookings", icon: BookOpenCheck },
+  { to: "/admin/trip-packages", label: "Trip Packages", icon: Briefcase },
   { to: "/admin/payments", label: "Payments", icon: CreditCard },
   { to: "/admin/posts", label: "Posts", icon: MessageSquare },
+  { to: "/notifications", label: "Notifications", icon: Bell },
 ];
 
 export default function Sidebar() {
@@ -31,6 +34,9 @@ export default function Sidebar() {
           >
             <Icon size={16} />
             <span>{label}</span>
+            {label === "Notifications" && (
+              <NotificationCountBadge className="admin-nav__badge" />
+            )}
           </NavLink>
         ))}
       </nav>

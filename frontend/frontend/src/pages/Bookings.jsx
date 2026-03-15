@@ -60,8 +60,13 @@ export default function Bookings() {
 
         <div className="travel-grid-2">
           {bookings.map((booking) => {
-            const placeName = booking.listingId?.title || booking.locationId?.name || "Unknown place";
+            const placeName =
+              booking.tripPackageId?.title ||
+              booking.listingId?.title ||
+              booking.locationId?.name ||
+              "Unknown place";
             const canCancel = booking.bookingStatus !== "cancelled" && booking.paymentStatus !== "paid";
+            const addOns = Array.isArray(booking.addOnListingIds) ? booking.addOnListingIds : [];
 
             return (
               <article key={booking._id} className="travel-card" style={{ padding: "14px" }}>
@@ -74,6 +79,11 @@ export default function Bookings() {
                     <p className="mt-1 text-sm text-slate-700">
                       Guests: {booking.guests || 1} | Total: NPR {booking.amount}
                     </p>
+                    {addOns.length > 0 && (
+                      <p className="mt-1 text-xs text-slate-500">
+                        Add-ons: {addOns.map((item) => item.title || "Add-on").join(", ")}
+                      </p>
+                    )}
                   </div>
                   <div className="flex gap-2 text-xs font-semibold">
                     <span className="rounded-full bg-slate-100 px-2 py-1 text-slate-700">{booking.bookingStatus}</span>

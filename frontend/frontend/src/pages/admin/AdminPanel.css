@@ -79,6 +79,21 @@
   box-shadow: 0 10px 22px rgba(14, 165, 233, 0.25);
 }
 
+.admin-nav__badge {
+  margin-left: auto;
+  min-width: 18px;
+  height: 18px;
+  padding: 0 6px;
+  border-radius: 999px;
+  background: linear-gradient(135deg, #ef4444, #f97316);
+  color: #fff;
+  font-size: 0.7rem;
+  font-weight: 800;
+  display: grid;
+  place-items: center;
+  border: 2px solid rgba(15, 23, 42, 0.7);
+}
+
 .admin-main {
   min-width: 0;
 }
@@ -94,6 +109,25 @@
   align-items: center;
   gap: 12px;
   backdrop-filter: blur(10px);
+}
+
+.admin-topbar__actions {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.admin-notif-btn {
+  width: 36px;
+  height: 36px;
+  border-radius: 12px;
+  border: 1px solid #dbe6f4;
+  background: #fff;
+  color: var(--ink);
+}
+
+.admin-notif-btn:hover {
+  background: #f1f5f9;
 }
 
 .admin-topbar__kicker {
@@ -286,6 +320,17 @@
   gap: 10px;
 }
 
+.admin-addon {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  border: 1px solid #dbe6f4;
+  border-radius: 10px;
+  padding: 8px 10px;
+  background: #fff;
+  font-size: 0.85rem;
+}
+
 .admin-input,
 .admin-textarea,
 .admin-file {
@@ -312,6 +357,80 @@
 .admin-loading {
   margin: 0;
   color: var(--muted);
+}
+
+.admin-photo-block {
+  display: grid;
+  gap: 10px;
+}
+
+.admin-photo-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.admin-photo-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
+  gap: 10px;
+}
+
+.admin-photo-item {
+  display: grid;
+  gap: 8px;
+}
+
+.admin-photo-thumb {
+  position: relative;
+  border: 1px solid #cdd8ea;
+  border-radius: 14px;
+  overflow: hidden;
+  padding: 0;
+  background: #fff;
+  cursor: pointer;
+  height: 110px;
+}
+
+.admin-photo-thumb img {
+  width: 100%;
+  height: 100%;
+  display: block;
+  object-fit: cover;
+}
+
+.admin-photo-thumb.is-cover {
+  border-color: #14b8a6;
+  box-shadow: 0 0 0 3px rgba(20, 184, 166, 0.25);
+}
+
+.admin-photo-badge {
+  position: absolute;
+  left: 8px;
+  top: 8px;
+  background: rgba(15, 118, 110, 0.92);
+  color: #fff;
+  padding: 4px 8px;
+  border-radius: 999px;
+  font-size: 0.72rem;
+  font-weight: 800;
+  letter-spacing: 0.01em;
+}
+
+.admin-photo-actions {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.admin-btn--xs {
+  padding: 7px 10px;
+  font-size: 0.74rem;
+  border-radius: 10px;
 }
 
 @media (max-width: 1080px) {

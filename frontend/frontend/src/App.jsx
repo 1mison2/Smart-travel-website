@@ -19,6 +19,7 @@ import PaymentPage from "./pages/PaymentPage";
 import BuddyFinder from "./pages/BuddyFinder";
 import PlaceDetails from "./pages/PlaceDetails";
 import BookingCheckout from "./pages/BookingCheckout";
+import TripPackages from "./pages/TripPackages";
 import AdminLayout from "./pages/admin/AdminLayout";
 import AdminDashboard from "./pages/admin/Dashboard";
 import AdminUsers from "./pages/admin/Users";
@@ -27,6 +28,7 @@ import AdminListings from "./pages/admin/Listings";
 import AdminBookings from "./pages/admin/Bookings";
 import AdminPosts from "./pages/admin/Posts";
 import AdminPayments from "./pages/admin/Payments";
+import AdminTripPackages from "./pages/admin/TripPackages";
 import NotificationPopups from "./components/NotificationPopups";
 import GlobalHeader from "./components/GlobalHeader";
 import { useAuth } from "./context/AuthContext";
@@ -73,6 +75,7 @@ export default function App() {
         <Route path="/itinerary-planner" element={<Protected><ItineraryPlanner /></Protected>} />
         <Route path="/payment" element={<Protected><PaymentPage /></Protected>} />
         <Route path="/buddy-finder" element={<Protected><BuddyFinder /></Protected>} />
+        <Route path="/trip-packages" element={<Protected><TripPackages /></Protected>} />
         <Route
           path="/admin"
           element={
@@ -88,6 +91,7 @@ export default function App() {
           <Route path="bookings" element={<AdminBookings />} />
           <Route path="payments" element={<AdminPayments />} />
           <Route path="posts" element={<AdminPosts />} />
+          <Route path="trip-packages" element={<AdminTripPackages />} />
         </Route>
       </Routes>
     </>

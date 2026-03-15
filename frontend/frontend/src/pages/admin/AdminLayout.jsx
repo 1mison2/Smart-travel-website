@@ -2,6 +2,7 @@ import React from "react";
 import { Outlet, useNavigate } from "react-router-dom";
 import Sidebar from "../../components/admin/Sidebar";
 import { useAuth } from "../../context/AuthContext";
+import NotificationBell from "../../components/NotificationBell";
 import "./AdminPanel.css";
 
 export default function AdminLayout() {
@@ -24,13 +25,16 @@ export default function AdminLayout() {
               Welcome, {user?.name || "Admin"}
             </h2>
           </div>
-          <button
-            type="button"
-            onClick={onLogout}
-            className="admin-btn admin-btn--muted"
-          >
-            Logout
-          </button>
+          <div className="admin-topbar__actions">
+            <NotificationBell className="admin-notif-btn" />
+            <button
+              type="button"
+              onClick={onLogout}
+              className="admin-btn admin-btn--muted"
+            >
+              Logout
+            </button>
+          </div>
         </header>
         <div className="admin-content">
           <Outlet />

@@ -1,10 +1,11 @@
-import React, { useCallback, useEffect, useState } from "react";
+import React, { useCallback, useEffect, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { MapPin, Calendar, Users, Mountain, Sparkles, Compass, Clock, Search, Bell, User, LogOut, Settings, UserCircle } from "lucide-react";
 import { useAuth } from "../context/AuthContext";
 import api from "../utils/api";
 
 const DESTINATIONS_CACHE_KEY = "st_dashboard_destinations";
+const NOTIFICATION_POLL_MS = 15000;
 
 const readCachedDestinations = () => {
   try {
@@ -21,6 +22,10 @@ export default function Dashboard() {
   const { user, logout } = useAuth();
   const navigate = useNavigate();
   const [showProfileMenu, setShowProfileMenu] = useState(false);
+  const [unreadCount, setUnreadCount] = useState(0);
+  const [notifPulse, setNotifPulse] = useState(false);
+  const unreadCountRef = useRef(0);
+  const pulseTimerRef = useRef(null);
   const displayName = user?.name || user?.fullName || "Traveler";
 
   const itineraryDays = [
@@ -84,6 +89,41 @@ export default function Dashboard() {
     loadTrips();
   }, [loadTrips]);
 
+  useEffect(() => {
+    if (!user?._id) return undefined;
+
+    let active = true;
+
+    const fetchUnreadCount = async () => {
+      try {
+        const { data } = await api.get("/api/notifications/me?limit=1");
+        if (!active) return;
+        const count = Number(data?.unreadCount || 0);
+        if (count > unreadCountRef.current) {
+          setNotifPulse(true);
+          if (pulseTimerRef.current) clearTimeout(pulseTimerRef.current);
+          pulseTimerRef.current = setTimeout(() => setNotifPulse(false), 4000);
+        }
+        unreadCountRef.current = count;
+        setUnreadCount(count);
+      } catch {
+        // ignore notification polling errors
+      }
+    };
+
+    fetchUnreadCount();
+    const intervalId = setInterval(fetchUnreadCount, NOTIFICATION_POLL_MS);
+
+    return () => {
+      active = false;
+      clearInterval(intervalId);
+      if (pulseTimerRef.current) {
+        clearTimeout(pulseTimerRef.current);
+        pulseTimerRef.current = null;
+      }
+    };
+  }, [user?._id]);
+
   const popularDestinations = liveDestinations;
   const now = new Date();
   const sortedTrips = [...trips].sort((a, b) => new Date(a.startDate) - new Date(b.startDate));
@@ -126,6 +166,7 @@ export default function Dashboard() {
           <nav className="topbar__menu" aria-label="Primary">
             <button type="button" className="topbar__link" onClick={() => navigate("/dashboard")}>Dashboard</button>
             <button type="button" className="topbar__link" onClick={() => navigate("/my-trips")}>My Trips</button>
+            <button type="button" className="topbar__link" onClick={() => navigate("/trip-packages")}>Trip Packages</button>
             <button type="button" className="topbar__link" onClick={() => navigate("/explore")}>Explore</button>
             <button type="button" className="topbar__link" onClick={() => navigate("/bookings")}>Bookings</button>
             <button type="button" className="topbar__link" onClick={() => navigate("/destination-search")}>Find Stays</button>
@@ -140,8 +181,21 @@ export default function Dashboard() {
           </div>
 
           <div className="topbar__actions">
-            <button type="button" className="icon-btn" aria-label="Notifications" onClick={() => navigate("/notifications")}>
+            <button
+              type="button"
+              className={`icon-btn ${notifPulse ? "icon-btn--pulse" : ""}`}
+              aria-label="Notifications"
+              onClick={() => {
+                setNotifPulse(false);
+                navigate("/notifications");
+              }}
+            >
               <Bell size={18} />
+              {unreadCount > 0 && (
+                <span className="notif-badge" aria-label={`${unreadCount} unread notifications`}>
+                  {unreadCount > 99 ? "99+" : unreadCount}
+                </span>
+              )}
             </button>
             <div className="profile">
               <button
@@ -414,20 +468,20 @@ export default function Dashboard() {
 
         .dashboard__container {
           position: relative;
-          max-width: 1200px;
+          max-width: 1500px;
           margin: 0 auto;
-          padding: 40px 20px 60px;
+          padding: 40px 8px 60px;
         }
 
         .dashboard__topbar {
           position: sticky;
-          top: 16px;
+          top: 12px;
           z-index: 5;
           display: grid;
           grid-template-columns: auto 1fr minmax(220px, 320px) auto;
           align-items: center;
           gap: 18px;
-          padding: 14px 18px;
+          padding: 10px 12px;
           border-radius: 16px;
           background: rgba(255, 255, 255, 0.96);
           box-shadow: var(--shadow);
@@ -448,8 +502,17 @@ export default function Dashboard() {
         .topbar__menu {
           display: flex;
           align-items: center;
-          gap: 12px;
-          flex-wrap: wrap;
+          gap: 14px;
+          flex-wrap: nowrap;
+          white-space: nowrap;
+          overflow-x: auto;
+          scrollbar-width: none;
+          width: 100%;
+          justify-content: space-between;
+        }
+
+        .topbar__menu::-webkit-scrollbar {
+          display: none;
         }
 
         .topbar__link {
@@ -462,6 +525,7 @@ export default function Dashboard() {
           padding: 6px 10px;
           border-radius: 10px;
           transition: background 0.2s ease, color 0.2s ease;
+          white-space: nowrap;
         }
 
         .topbar__link:hover {
@@ -586,11 +650,47 @@ export default function Dashboard() {
           cursor: pointer;
           color: var(--ink);
           transition: transform 0.2s ease, background 0.2s ease;
+          position: relative;
         }
 
         .icon-btn:hover {
           transform: translateY(-2px);
           background: rgba(47, 107, 79, 0.12);
+        }
+
+        .icon-btn--pulse {
+          box-shadow: 0 0 0 0 rgba(47, 107, 79, 0.35);
+          animation: notifPulse 1.8s ease-out 1;
+        }
+
+        .notif-badge {
+          position: absolute;
+          top: -6px;
+          right: -6px;
+          min-width: 20px;
+          height: 20px;
+          padding: 0 6px;
+          border-radius: 999px;
+          background: linear-gradient(135deg, #ef4444, #f97316);
+          color: white;
+          font-size: 0.68rem;
+          font-weight: 700;
+          display: grid;
+          place-items: center;
+          border: 2px solid #fff;
+          box-shadow: 0 6px 12px rgba(239, 68, 68, 0.25);
+        }
+
+        @keyframes notifPulse {
+          0% {
+            box-shadow: 0 0 0 0 rgba(47, 107, 79, 0.35);
+          }
+          70% {
+            box-shadow: 0 0 0 10px rgba(47, 107, 79, 0);
+          }
+          100% {
+            box-shadow: 0 0 0 0 rgba(47, 107, 79, 0);
+          }
         }
 
         .dashboard__header {

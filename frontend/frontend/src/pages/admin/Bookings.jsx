@@ -68,7 +68,12 @@ export default function AdminBookings() {
               {bookings.map((booking) => (
                 <tr key={booking._id}>
                   <td>{booking.userId?.name || "Unknown"}</td>
-                  <td>{booking.locationId?.name || "Unknown"}</td>
+                  <td>
+                    {booking.tripPackageId?.title ||
+                      booking.listingId?.title ||
+                      booking.locationId?.name ||
+                      "Unknown"}
+                  </td>
                   <td>{new Date(booking.date).toLocaleDateString()}</td>
                   <td>${booking.amount}</td>
                   <td>

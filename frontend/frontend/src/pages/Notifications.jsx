@@ -1,5 +1,4 @@
 import React, { useEffect, useState } from "react";
-import { Link } from "react-router-dom";
 import api from "../utils/api";
 
 export default function Notifications() {
@@ -62,7 +61,6 @@ export default function Notifications() {
           <p>{unreadCount} unread notification(s).</p>
         </div>
         <div className="notifications-page__actions">
-          <Link to="/bookings">Go to Bookings</Link>
           <button onClick={onMarkAllRead} disabled={!notifications.length || unreadCount === 0}>
             Mark All Read
           </button>

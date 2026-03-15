@@ -9,6 +9,7 @@ const NotificationSchema = new mongoose.Schema(
         "booking_created",
         "booking_updated",
         "booking_cancelled",
+        "trip_booking_created",
         "payment_initiated",
         "payment_success",
         "payment_failed",

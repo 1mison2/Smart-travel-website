@@ -1,5 +1,5 @@
-import React, { useEffect, useState } from "react";
-import api from "../../utils/api";
+import React, { useEffect, useMemo, useState } from "react";
+import api, { resolveImageUrl } from "../../utils/api";
 
 const emptyForm = {
   type: "hotel",
@@ -25,6 +25,30 @@ export default function AdminListings() {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
+
+  const photoUrls = useMemo(() => {
+    const items = String(form.photos || "")
+      .split(",")
+      .map((item) => item.trim())
+      .filter(Boolean)
+      .map((item) => resolveImageUrl(item))
+      .filter(Boolean);
+    return Array.from(new Set(items));
+  }, [form.photos]);
+
+  const setPhotosCsv = (urls) => {
+    const unique = Array.from(new Set((Array.isArray(urls) ? urls : []).map((u) => String(u || "").trim()).filter(Boolean)));
+    setForm((prev) => ({ ...prev, photos: unique.join(", ") }));
+  };
+
+  const removePhoto = (url) => {
+    setPhotosCsv(photoUrls.filter((item) => item !== url));
+  };
+
+  const makeCover = (url) => {
+    const next = [url, ...photoUrls.filter((item) => item !== url)];
+    setPhotosCsv(next);
+  };
 
   const loadListings = async () => {
     try {
@@ -53,10 +77,14 @@ export default function AdminListings() {
       .split(",")
       .map((item) => item.trim())
       .filter(Boolean);
-    const photos = form.photos
-      .split(",")
-      .map((item) => item.trim())
-      .filter(Boolean);
+    const photos = Array.from(
+      new Set(
+        form.photos
+          .split(",")
+          .map((item) => resolveImageUrl(item.trim()))
+          .filter(Boolean)
+      )
+    );
     const reviews = form.reviews
       .split("\n")
       .map((line) => line.trim())
@@ -207,6 +235,37 @@ export default function AdminListings() {
           multiple
           onChange={(e) => setPhotoFiles(Array.from(e.target.files || []))}
         />
+        {!!photoUrls.length && (
+          <div className="admin-photo-block">
+            <div className="admin-photo-head">
+              <p className="admin-page__subtitle">Click a photo to set it as cover. Use Remove to delete it from this listing.</p>
+              <p className="admin-page__subtitle">{photoUrls.length} photo(s)</p>
+            </div>
+            <div className="admin-photo-grid" role="list">
+              {photoUrls.map((url, idx) => (
+                <div key={`${url}-${idx}`} className="admin-photo-item" role="listitem">
+                  <button
+                    type="button"
+                    className={`admin-photo-thumb ${idx === 0 ? "is-cover" : ""}`}
+                    onClick={() => makeCover(url)}
+                    title="Set as cover"
+                  >
+                    <img src={url} alt={`listing-photo-${idx + 1}`} loading="lazy" />
+                    {idx === 0 && <span className="admin-photo-badge">Cover</span>}
+                  </button>
+                  <div className="admin-photo-actions">
+                    <button type="button" className="admin-btn admin-btn--muted admin-btn--xs" onClick={() => makeCover(url)}>
+                      Make cover
+                    </button>
+                    <button type="button" className="admin-btn admin-btn--danger admin-btn--xs" onClick={() => removePhoto(url)}>
+                      Remove
+                    </button>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
         {photoFiles.length > 0 && (
           <p className="admin-page__subtitle">{photoFiles.length} image file(s) selected for upload.</p>
         )}
