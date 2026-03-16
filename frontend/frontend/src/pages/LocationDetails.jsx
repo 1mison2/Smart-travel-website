@@ -1,22 +1,9 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
-import { Link, useNavigate, useParams } from "react-router-dom";
+import { Link, useParams } from "react-router-dom";
 import api, { resolveImageUrl } from "../utils/api";
-
-const tomorrow = () => {
-  const d = new Date();
-  d.setDate(d.getDate() + 1);
-  return d.toISOString().slice(0, 10);
-};
-
-const dayAfter = () => {
-  const d = new Date();
-  d.setDate(d.getDate() + 2);
-  return d.toISOString().slice(0, 10);
-};
 
 export default function LocationDetails() {
   const { id } = useParams();
-  const navigate = useNavigate();
   const [location, setLocation] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
@@ -29,34 +16,9 @@ export default function LocationDetails() {
   const [recommendations, setRecommendations] = useState([]);
   const [localListings, setLocalListings] = useState([]);
 
-  const [itinerary, setItinerary] = useState(null);
-  const [itinerarySummary, setItinerarySummary] = useState(null);
-  const [plannerLoading, setPlannerLoading] = useState(false);
-
-  const [bookingForm, setBookingForm] = useState({
-    listingId: "",
-    checkIn: tomorrow(),
-    checkOut: dayAfter(),
-    guests: 1,
-  });
-  const [quote, setQuote] = useState(null);
-  const [bookingError, setBookingError] = useState("");
-  const [bookingFocusPulse, setBookingFocusPulse] = useState(false);
-  const bookingPanelRef = useRef(null);
   const stayEatRef = useRef(null);
-  const quoteDebounceRef = useRef(null);
-
-  const [planForm, setPlanForm] = useState({
-    budget: 15000,
-    durationDays: 3,
-    interests: "nature,food,culture",
-  });
   const [showAllStayEat, setShowAllStayEat] = useState(false);
 
-  const selectedListing = useMemo(
-    () => localListings.find((item) => item._id === bookingForm.listingId) || null,
-    [localListings, bookingForm.listingId]
-  );
   const activityListings = useMemo(
     () => localListings.filter((item) => item.type === "activity"),
     [localListings]
@@ -109,7 +71,6 @@ export default function LocationDetails() {
 
         const listings = Array.isArray(listingsRes.data?.listings) ? listingsRes.data.listings : [];
         setLocalListings(listings);
-        if (listings.length) setBookingForm((prev) => ({ ...prev, listingId: listings[0]._id }));
 
         if (current.latitude && current.longitude) {
           const [activityPlaces, cafePlaces, restaurantPlaces, hotelPlaces] = await Promise.all([
@@ -137,84 +98,6 @@ export default function LocationDetails() {
     };
   }, [id]);
 
-  const onGenerateItinerary = async (e) => {
-    e.preventDefault();
-    if (!location) return;
-    try {
-      setPlannerLoading(true);
-      const { data } = await api.post("/api/itineraries/generate", {
-        destination: location.name,
-        budget: Number(planForm.budget),
-        durationDays: Number(planForm.durationDays),
-        interests: String(planForm.interests)
-          .split(",")
-          .map((item) => item.trim())
-          .filter(Boolean),
-      });
-      setItinerary(data?.itinerary || null);
-      setItinerarySummary(data?.summary || null);
-    } catch (err) {
-      setError(err?.response?.data?.message || "Failed to generate itinerary");
-    } finally {
-      setPlannerLoading(false);
-    }
-  };
-
-  const onBookingChange = (e) => {
-    const { name, value } = e.target;
-    setBookingError("");
-    setBookingForm((prev) => ({ ...prev, [name]: name === "guests" ? Number(value) : value }));
-  };
-
-  const refreshQuoteFor = async (listingId, payload = {}) => {
-    if (!listingId) return;
-    try {
-      setBookingError("");
-      const { data } = await api.post("/api/bookings/quote", {
-        listingId,
-        checkIn: payload.checkIn || bookingForm.checkIn,
-        checkOut: payload.checkOut || bookingForm.checkOut,
-        guests: payload.guests || bookingForm.guests,
-      });
-      setQuote(data?.quote || null);
-    } catch (err) {
-      setQuote(null);
-      setBookingError(err?.response?.data?.message || "Failed to fetch quote");
-    }
-  };
-
-  const onRefreshQuote = async () => {
-    await refreshQuoteFor(bookingForm.listingId);
-  };
-
-  const handleSelectListing = async (listing) => {
-    if (bookingForm.listingId === listing._id) {
-      setBookingForm((prev) => ({ ...prev, listingId: "" }));
-      setQuote(null);
-      setBookingError("");
-      return;
-    }
-    const next = {
-      listingId: listing._id,
-      checkIn: bookingForm.checkIn,
-      checkOut: bookingForm.checkOut,
-      guests: bookingForm.guests,
-    };
-    setBookingForm((prev) => ({ ...prev, listingId: listing._id }));
-    await refreshQuoteFor(listing._id, next);
-    if (bookingPanelRef.current) {
-      bookingPanelRef.current.scrollIntoView({ behavior: "smooth", block: "center" });
-      setBookingFocusPulse(true);
-      setTimeout(() => setBookingFocusPulse(false), 1200);
-    }
-  };
-
-  const handleClearSelection = () => {
-    setBookingForm((prev) => ({ ...prev, listingId: "" }));
-    setQuote(null);
-    setBookingError("");
-  };
-
   const handleToggleStayEat = () => {
     setShowAllStayEat((prev) => {
       const next = !prev;
@@ -223,30 +106,6 @@ export default function LocationDetails() {
       }
       return next;
     });
-  };
-
-  useEffect(() => {
-    if (!bookingForm.listingId) {
-      setQuote(null);
-      return;
-    }
-    if (quoteDebounceRef.current) clearTimeout(quoteDebounceRef.current);
-    quoteDebounceRef.current = setTimeout(() => {
-      refreshQuoteFor(bookingForm.listingId);
-    }, 250);
-    return () => {
-      if (quoteDebounceRef.current) clearTimeout(quoteDebounceRef.current);
-    };
-  }, [bookingForm.listingId, bookingForm.checkIn, bookingForm.checkOut, bookingForm.guests]);
-
-  const onContinueToCheckout = () => {
-    if (!bookingForm.listingId) return;
-    const params = new URLSearchParams({
-      checkIn: bookingForm.checkIn,
-      checkOut: bookingForm.checkOut,
-      guests: String(bookingForm.guests || 1),
-    });
-    navigate(`/book/${bookingForm.listingId}?${params.toString()}`);
   };
 
   const imageCandidates = Array.from(new Set([
@@ -293,12 +152,17 @@ export default function LocationDetails() {
             <p className="travel-kicker">Destination Hub</p>
             <h1 className="hub-hero__title">{location.name} - Explore, Plan & Book</h1>
             <p className="hub-hero__subtitle">
-              Discover top activities, real places to stay and eat, smart itinerary suggestions, and complete your booking in one flow.
+              Discover top activities, real places to stay and eat, and plan your trip in a dedicated booking flow.
             </p>
             <div className="hub-hero__meta">
               <span>{location.district || "District"}</span>
               <span>{location.province || "Province"}</span>
               <span>{location.category || "Destination"}</span>
+            </div>
+            <div className="hub-action-row">
+              <Link to={`/plan-trip?locationId=${location._id}`} className="travel-btn travel-btn-primary">
+                Plan trip
+              </Link>
             </div>
             <article className="hub-hero__about">
               <h2 className="hub-section-title">About this destination</h2>
@@ -335,14 +199,12 @@ export default function LocationDetails() {
         </section>
 
         <SectionHeader title="What you can do here" subtitle="Activities & Attractions" />
-        <p className="hub-helper">Select any card to instantly load it into the booking panel below.</p>
+        <p className="hub-helper">Browse activities and attractions available around this destination.</p>
         <div className="hub-card-grid">
           {activityListings.map((listing) => (
             <ListingSelectionCard
               key={listing._id}
               listing={listing}
-              selected={bookingForm.listingId === listing._id}
-              onSelect={handleSelectListing}
             />
           ))}
           {activities.slice(0, 9).map((item) => (
@@ -355,7 +217,7 @@ export default function LocationDetails() {
 
         <SectionHeader title="Stay, Eat & Book" subtitle="Hotels, Cafes & Restaurants" />
         <div className="hub-section-actions" ref={stayEatRef}>
-          <p className="hub-helper">Choose your stay or food spot and continue booking without leaving this page.</p>
+          <p className="hub-helper">Choose your stay or food spot, then plan and book from the Plan Trip page.</p>
           {stayEatListings.length > 3 && (
             <button type="button" className="travel-btn travel-btn-soft" onClick={handleToggleStayEat}>
               {showAllStayEat ? "Show less" : "See all"}
@@ -367,8 +229,6 @@ export default function LocationDetails() {
             <ListingSelectionCard
               key={listing._id}
               listing={listing}
-              selected={bookingForm.listingId === listing._id}
-              onSelect={handleSelectListing}
             />
           ))}
           {hotels.slice(0, 2).map((item) => (
@@ -383,117 +243,6 @@ export default function LocationDetails() {
           {!stayEatListings.length && !hotels.length && !cafes.length && !restaurants.length && (
             <EmptyState text="No stays or food suggestions found for this destination yet." />
           )}
-        </div>
-
-        <div className="hub-tools">
-          <article className="travel-summary hub-tool">
-            <h2 className="hub-section-title">Plan itinerary for this destination</h2>
-            <form className="hub-form" onSubmit={onGenerateItinerary}>
-              <input
-                className="travel-input"
-                type="number"
-                min="1000"
-                value={planForm.budget}
-                onChange={(e) => setPlanForm((p) => ({ ...p, budget: e.target.value }))}
-                placeholder="Budget (NPR)"
-              />
-              <input
-                className="travel-input"
-                type="number"
-                min="1"
-                max="10"
-                value={planForm.durationDays}
-                onChange={(e) => setPlanForm((p) => ({ ...p, durationDays: e.target.value }))}
-                placeholder="Days"
-              />
-              <input
-                className="travel-input"
-                value={planForm.interests}
-                onChange={(e) => setPlanForm((p) => ({ ...p, interests: e.target.value }))}
-                placeholder="Interests (food,nature,culture)"
-              />
-              <button className="travel-btn travel-btn-primary" disabled={plannerLoading}>
-                {plannerLoading ? "Generating..." : "Generate itinerary"}
-              </button>
-            </form>
-            {itinerarySummary && (
-              <div className="hub-mini-card">
-                <p>Estimated cost: NPR {itinerarySummary.totalEstimatedCost}</p>
-                <p>Budget gap: NPR {itinerarySummary.budgetGap}</p>
-              </div>
-            )}
-            {itinerary?.days?.length > 0 && (
-              <div className="hub-day-list">
-                {itinerary.days.slice(0, 3).map((day) => (
-                  <div key={day.day} className="hub-day-item">
-                    <strong>{day.title}</strong>
-                    <span>{day.places?.map((p) => p.name).slice(0, 3).join(", ")}</span>
-                  </div>
-                ))}
-              </div>
-            )}
-          </article>
-
-          <article
-            ref={bookingPanelRef}
-            className={`travel-summary hub-tool ${bookingFocusPulse ? "hub-book-focus" : ""}`}
-          >
-            <h2 className="hub-section-title">Book from this page</h2>
-            <p className="hub-copy" style={{ marginTop: 0 }}>
-              Selected listing: <strong>{selectedListing?.title || "None"}</strong>
-            </p>
-            <p className="hub-copy" style={{ marginTop: "-2px", fontSize: "0.85rem" }}>
-              Next step: continue to checkout. Payment will be done on a separate final page.
-            </p>
-            {selectedListing?._id && (
-              <Link to={`/places/${selectedListing._id}`} className="hub-link">
-                View selected place details, photos and reviews
-              </Link>
-            )}
-            <div className="hub-form">
-              <select className="travel-select" name="listingId" value={bookingForm.listingId} onChange={onBookingChange}>
-                <option value="">Select listing</option>
-                {localListings.map((listing) => (
-                  <option key={listing._id} value={listing._id}>
-                    {listing.title} ({listing.type})
-                  </option>
-                ))}
-              </select>
-              <input className="travel-input" type="date" name="checkIn" value={bookingForm.checkIn} onChange={onBookingChange} />
-              <input className="travel-input" type="date" name="checkOut" value={bookingForm.checkOut} onChange={onBookingChange} />
-              <input className="travel-input" type="number" min="1" name="guests" value={bookingForm.guests} onChange={onBookingChange} />
-            </div>
-            <div className="hub-action-row">
-              <button className="travel-btn travel-btn-soft" type="button" onClick={onRefreshQuote}>
-                Get quote
-              </button>
-              <button
-                className="travel-btn travel-btn-soft"
-                type="button"
-                onClick={handleClearSelection}
-                disabled={!bookingForm.listingId}
-              >
-                Clear selection
-              </button>
-              <button
-                className="travel-btn travel-btn-primary"
-                type="button"
-                onClick={onContinueToCheckout}
-                disabled={!bookingForm.listingId}
-              >
-                Continue to checkout
-              </button>
-            </div>
-            {quote?.pricing && (
-              <div className="hub-mini-card">
-                <p>Subtotal: NPR {quote.pricing.subtotal}</p>
-                <p>Service fee: NPR {quote.pricing.serviceFee}</p>
-                <p>Tax: NPR {quote.pricing.tax}</p>
-                <p className="hub-mini-card__total">Total: NPR {quote.pricing.total}</p>
-              </div>
-            )}
-            {bookingError && <p className="travel-alert travel-alert-error">{bookingError}</p>}
-          </article>
         </div>
 
         <section className="hub-recommend">
@@ -581,15 +330,20 @@ function PlaceCard({ item }) {
 }
 
 function ListingSelectionCard({ listing, selected, onSelect }) {
+  const isSelectable = typeof onSelect === "function";
   return (
     <article
       className={`hub-listing ${selected ? "hub-listing--selected" : ""}`}
-      role="button"
-      tabIndex={0}
-      onClick={() => onSelect(listing)}
-      onKeyDown={(e) => {
-        if (e.key === "Enter" || e.key === " ") onSelect(listing);
-      }}
+      role={isSelectable ? "button" : undefined}
+      tabIndex={isSelectable ? 0 : undefined}
+      onClick={isSelectable ? () => onSelect(listing) : undefined}
+      onKeyDown={
+        isSelectable
+          ? (e) => {
+              if (e.key === "Enter" || e.key === " ") onSelect(listing);
+            }
+          : undefined
+      }
     >
       <div className="hub-listing__media">
         <img
@@ -613,16 +367,18 @@ function ListingSelectionCard({ listing, selected, onSelect }) {
         >
           View details
         </Link>
-        <button
-          type="button"
-          className="travel-btn travel-btn-primary"
-          onClick={(e) => {
-            e.stopPropagation();
-            onSelect(listing);
-          }}
-        >
-          {selected ? "Unselect" : "Select"}
-        </button>
+        {isSelectable && (
+          <button
+            type="button"
+            className="travel-btn travel-btn-primary"
+            onClick={(e) => {
+              e.stopPropagation();
+              onSelect(listing);
+            }}
+          >
+            {selected ? "Unselect" : "Select"}
+          </button>
+        )}
       </div>
     </article>
   );
