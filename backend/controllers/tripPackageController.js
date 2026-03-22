@@ -87,7 +87,8 @@ exports.bookTripPackage = async (req, res) => {
       bookingType: "trip",
       amount: total,
       currency: tripPackage.currency || "NPR",
-      bookingStatus: "confirmed",
+      bookingStatus: "awaiting_payment",
+      paymentStatus: "pending",
       pricingSnapshot: {
         unitPrice: basePrice,
         nights: 1,
@@ -105,14 +106,14 @@ exports.bookTripPackage = async (req, res) => {
     await createNotification({
       recipient: req.user._id,
       type: "trip_booking_created",
-      title: "Trip booked",
-      message: `Your trip package "${tripPackage.title}" has been booked.`,
+      title: "Trip booking created",
+      message: `Your trip package "${tripPackage.title}" is reserved. Complete payment to confirm.`,
       meta: { bookingId: booking._id, tripPackageId: tripPackage._id },
     });
     await notifyAdmins({
       type: "trip_booking_created",
-      title: "Trip package booked",
-      message: `${req.user.name || req.user.email} booked trip package "${tripPackage.title}".`,
+      title: "Trip booking created",
+      message: `${req.user.name || req.user.email} created a trip booking for "${tripPackage.title}".`,
       meta: { bookingId: booking._id, tripPackageId: tripPackage._id, userId: req.user._id },
     });
 

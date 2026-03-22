@@ -45,12 +45,17 @@ export default function TripPackages() {
     const addOns = state.addOns || [];
     setPackageState(pkg._id, { booking: true });
     try {
-      await api.post(`/api/trip-packages/${pkg._id}/book`, {
+      const { data } = await api.post(`/api/trip-packages/${pkg._id}/book`, {
         guests,
         addOnListingIds: addOns,
       });
       setPackageState(pkg._id, { booking: false, success: true });
-      navigate("/bookings");
+      const bookingId = data?.booking?._id;
+      if (bookingId) {
+        navigate(`/payment?bookingId=${bookingId}`);
+      } else {
+        navigate("/bookings");
+      }
     } catch (err) {
       setPackageState(pkg._id, {
         booking: false,

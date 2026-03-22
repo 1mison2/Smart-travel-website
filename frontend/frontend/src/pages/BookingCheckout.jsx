@@ -102,8 +102,12 @@ export default function BookingCheckout() {
         guests: Number(form.guests),
         notes: form.notes,
       });
-      setSuccessMessage("Booking confirmed successfully. Redirecting to booking history...");
-      setTimeout(() => navigate("/bookings"), 600);
+      const bookingId = data?.booking?._id;
+      setSuccessMessage("Booking created. Redirecting to payment...");
+      setTimeout(() => {
+        if (bookingId) navigate(`/payment?bookingId=${bookingId}`);
+        else navigate("/bookings");
+      }, 600);
     } catch (err) {
       setError(err?.response?.data?.message || "Failed to create booking");
     } finally {
@@ -186,7 +190,7 @@ export default function BookingCheckout() {
               disabled={submitting || !pricing}
               className="travel-btn travel-btn-primary"
             >
-              {submitting ? "Confirming booking..." : "Confirm booking"}
+              {submitting ? "Creating booking..." : "Create booking"}
             </button>
           </form>
         </section>

@@ -21,6 +21,22 @@ exports.getMyNotifications = async (req, res) => {
   }
 };
 
+exports.getAllNotifications = async (req, res) => {
+  try {
+    const limit = Math.min(Number(req.query.limit) || 50, 200);
+    const notifications = await Notification.find({})
+      .sort({ createdAt: -1 })
+      .limit(limit)
+      .populate("recipient", "name email role")
+      .lean();
+    const unreadCount = await Notification.countDocuments({ isRead: false });
+    res.json({ notifications, unreadCount });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ message: "Failed to fetch notifications" });
+  }
+};
+
 exports.markNotificationRead = async (req, res) => {
   try {
     const { id } = req.params;

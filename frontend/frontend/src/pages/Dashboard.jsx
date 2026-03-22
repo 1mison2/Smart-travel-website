@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useRef, useState } from "react";
-import { useNavigate } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
 import { MapPin, Calendar, Users, Mountain, Sparkles, Compass, Clock, Search, Bell, User, LogOut, Settings, UserCircle } from "lucide-react";
 import { useAuth } from "../context/AuthContext";
 import api from "../utils/api";
@@ -24,15 +24,20 @@ export default function Dashboard() {
   const [showProfileMenu, setShowProfileMenu] = useState(false);
   const [unreadCount, setUnreadCount] = useState(0);
   const [notifPulse, setNotifPulse] = useState(false);
+  const [searchTerm, setSearchTerm] = useState("");
+  const [searchResults, setSearchResults] = useState([]);
+  const [searchLoading, setSearchLoading] = useState(false);
+  const [searchError, setSearchError] = useState("");
+  const [searchFocused, setSearchFocused] = useState(false);
+  const searchDebounceRef = useRef(null);
+  const searchBlurRef = useRef(null);
   const unreadCountRef = useRef(0);
   const pulseTimerRef = useRef(null);
   const displayName = user?.name || user?.fullName || "Traveler";
 
-  const itineraryDays = [
-    { day: "Day 1", title: "Lakeside stroll + Phewa Tal boating", location: "Pokhara" },
-    { day: "Day 2", title: "Sarangkot sunrise + paragliding", location: "Pokhara" },
-    { day: "Day 3", title: "Peace Pagoda + local food tour", location: "Pokhara" },
-  ];
+  const [itinerary, setItinerary] = useState(null);
+  const [itineraryLoading, setItineraryLoading] = useState(true);
+  const [itineraryError, setItineraryError] = useState("");
   const [liveDestinations, setLiveDestinations] = useState(() => readCachedDestinations());
   const [destinationsLoading, setDestinationsLoading] = useState(true);
   const [destinationsError, setDestinationsError] = useState("");
@@ -89,6 +94,25 @@ export default function Dashboard() {
     loadTrips();
   }, [loadTrips]);
 
+  const loadItinerary = useCallback(async () => {
+    try {
+      setItineraryLoading(true);
+      setItineraryError("");
+      const { data } = await api.get("/api/itineraries/me");
+      const list = Array.isArray(data?.itineraries) ? data.itineraries : [];
+      setItinerary(list[0] || null);
+    } catch (err) {
+      setItineraryError(err?.response?.data?.message || "Unable to load itinerary right now.");
+      setItinerary(null);
+    } finally {
+      setItineraryLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    loadItinerary();
+  }, [loadItinerary]);
+
   useEffect(() => {
     if (!user?._id) return undefined;
 
@@ -139,6 +163,19 @@ export default function Dashboard() {
     { id: 3, name: "Rinzin", destination: "Pokhara", dates: "Mar 14 - Mar 18" },
   ];
 
+  const normalizeText = (value) => String(value || "").trim().toLowerCase();
+
+  const getTripImage = (trip) => {
+    if (!trip) return "";
+    const tripTitle = normalizeText(trip.title);
+    if (!tripTitle) return "";
+    const match = liveDestinations.find((destination) => {
+      const name = normalizeText(destination.name);
+      return name && (tripTitle.includes(name) || name.includes(tripTitle));
+    });
+    return match?.image || "";
+  };
+
   const handleLogout = () => {
     logout();
     navigate("/");
@@ -151,6 +188,60 @@ export default function Dashboard() {
     }
     navigate("/destination-search");
   };
+
+  const onDashboardSearch = (event) => {
+    event.preventDefault();
+    const term = searchTerm.trim();
+    if (!term) return;
+    // Keep user on dashboard; dropdown handles navigation.
+    if (searchResults.length === 1) {
+      goToDestinationHub(searchResults[0]?.id);
+    }
+  };
+
+  const handleSearchFocus = () => {
+    if (searchBlurRef.current) {
+      clearTimeout(searchBlurRef.current);
+      searchBlurRef.current = null;
+    }
+    setSearchFocused(true);
+  };
+
+  const handleSearchBlur = () => {
+    searchBlurRef.current = setTimeout(() => {
+      setSearchFocused(false);
+    }, 120);
+  };
+
+  useEffect(() => {
+    const term = searchTerm.trim();
+    if (searchDebounceRef.current) clearTimeout(searchDebounceRef.current);
+    if (!term) {
+      setSearchResults([]);
+      setSearchError("");
+      setSearchLoading(false);
+      return;
+    }
+
+    searchDebounceRef.current = setTimeout(async () => {
+      try {
+        setSearchLoading(true);
+        setSearchError("");
+        const { data } = await api.get(`/api/places/search?query=${encodeURIComponent(term)}`);
+        const results = Array.isArray(data?.results) ? data.results : [];
+        setSearchResults(results.slice(0, 6));
+      } catch (err) {
+        setSearchError(err?.response?.data?.message || "Search failed. Try again.");
+        setSearchResults([]);
+      } finally {
+        setSearchLoading(false);
+      }
+    }, 300);
+
+    return () => {
+      if (searchDebounceRef.current) clearTimeout(searchDebounceRef.current);
+    };
+  }, [searchTerm]);
 
   return (
     <div className="dashboard">
@@ -175,10 +266,45 @@ export default function Dashboard() {
             <button type="button" className="topbar__link" onClick={() => navigate("/buddy-finder")}>Buddy Chat</button>
           </nav>
 
-          <div className="topbar__search">
+          <form className="topbar__search" onSubmit={onDashboardSearch}>
             <Search size={18} />
-            <input type="text" placeholder="Search destinations in Nepal" />
-          </div>
+            <input
+              type="text"
+              placeholder="Search destinations in Nepal"
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
+              onFocus={handleSearchFocus}
+              onBlur={handleSearchBlur}
+            />
+            {searchFocused && (searchLoading || searchError || searchResults.length > 0) && (
+              <div className="topbar__search-results">
+                {searchLoading && <div className="topbar__search-row">Searching...</div>}
+                {!searchLoading && searchError && <div className="topbar__search-row">{searchError}</div>}
+                {!searchLoading && !searchError && searchResults.length === 0 && (
+                  <div className="topbar__search-row">No destinations found.</div>
+                )}
+                {!searchLoading && !searchError && searchResults.length > 0 && (
+                  <ul className="topbar__search-list" role="listbox">
+                    {searchResults.map((result) => (
+                      <li key={result.id} className="topbar__search-item" role="option">
+                        <button
+                          type="button"
+                          className="topbar__search-btn"
+                          onMouseDown={(e) => e.preventDefault()}
+                          onClick={() => goToDestinationHub(result.id)}
+                        >
+                          <span className="topbar__search-title">{result.name}</span>
+                          <span className="topbar__search-meta">
+                            {[result.district, result.province, result.category].filter(Boolean).join(" - ")}
+                          </span>
+                        </button>
+                      </li>
+                    ))}
+                  </ul>
+                )}
+              </div>
+            )}
+          </form>
 
           <div className="topbar__actions">
             <button
@@ -217,11 +343,25 @@ export default function Dashboard() {
                       <p className="profile__email">{user?.email || "traveler@smarttravel.com"}</p>
                     </div>
                   </div>
-                  <button type="button" className="profile__item">
+                  <button
+                    type="button"
+                    className="profile__item"
+                    onClick={() => {
+                      setShowProfileMenu(false);
+                      navigate("/profile");
+                    }}
+                  >
                     <User size={16} />
                     View Profile
                   </button>
-                  <button type="button" className="profile__item">
+                  <button
+                    type="button"
+                    className="profile__item"
+                    onClick={() => {
+                      setShowProfileMenu(false);
+                      navigate("/settings");
+                    }}
+                  >
                     <Settings size={16} />
                     Settings
                   </button>
@@ -279,7 +419,7 @@ export default function Dashboard() {
                 <div className="trip">
                   <div className="trip__image">
                     <img
-                      src="https://images.unsplash.com/photo-1500530855697-b586d89ba3ee?auto=format&fit=crop&w=1200&q=80"
+                      src={getTripImage(upcomingTrip) || "https://images.unsplash.com/photo-1500530855697-b586d89ba3ee?auto=format&fit=crop&w=1200&q=80"}
                       alt={upcomingTrip.title}
                     />
                   </div>
@@ -293,7 +433,12 @@ export default function Dashboard() {
                     </p>
                     {upcomingTrip.summary && <p className="trip__summary">{upcomingTrip.summary}</p>}
                     <div className="trip__actions">
-                      <button className="btn btn--primary" onClick={() => navigate("/my-trips")}>View Itinerary</button>
+                      <Link
+                        className="btn btn--primary"
+                        to={itinerary?._id ? `/itineraries/${itinerary._id}` : "/itinerary-planner"}
+                      >
+                        View Itinerary
+                      </Link>
                       <button className="btn btn--ghost" onClick={() => goToDestinationHub()}>Explore & Plan</button>
                     </div>
                   </div>
@@ -315,19 +460,48 @@ export default function Dashboard() {
                 <span className="card__pill card__pill--soft">AI Crafted</span>
               </div>
 
-              <div className="itinerary">
-                {itineraryDays.map((item) => (
-                  <div key={item.day} className="itinerary__day">
-                    <div className="itinerary__badge">{item.day}</div>
-                    <div>
-                      <p className="itinerary__title">{item.title}</p>
-                      <p className="itinerary__meta">
-                        <MapPin size={14} /> {item.location}
-                      </p>
+              {itineraryLoading && <p className="dashboard__hint">Loading your latest itinerary...</p>}
+              {!itineraryLoading && itineraryError && <p className="dashboard__error">{itineraryError}</p>}
+              {!itineraryLoading && !itineraryError && itinerary && (
+                <div className="itinerary">
+                  {(itinerary.days || []).map((day) => (
+                    <div key={day.day} className="itinerary__day">
+                      <div className="itinerary__badge">Day {day.day}</div>
+                      <div>
+                        <p className="itinerary__title">{day.title}</p>
+                        <p className="itinerary__meta">
+                          <MapPin size={14} /> {itinerary.destination}
+                        </p>
+                        <p className="itinerary__summary">
+                          {(day.places || []).map((place) => place.name).filter(Boolean).join(", ") || "No places yet."}
+                        </p>
+                        {(day.places || []).some((place) => place.image) && (
+                          <div className="itinerary__media">
+                            {(day.places || [])
+                              .filter((place) => place.image)
+                              .slice(0, 3)
+                              .map((place, index) => (
+                                <div key={`${place.name}-${index}`} className="itinerary__thumb">
+                                  <img src={place.image} alt={place.name} />
+                                </div>
+                              ))}
+                          </div>
+                        )}
+                      </div>
                     </div>
+                  ))}
+                </div>
+              )}
+              {!itineraryLoading && !itineraryError && !itinerary && (
+                <div className="empty">
+                  No itinerary generated yet. Start from the planner to create one.
+                  <div className="card__actions">
+                    <button className="btn btn--primary" onClick={() => navigate("/itinerary-planner")}>
+                      Create Itinerary
+                    </button>
                   </div>
-                ))}
-              </div>
+                </div>
+              )}
 
               <div className="card__actions">
                 <button className="btn btn--primary" onClick={() => navigate("/my-trips")}>View Full Itinerary</button>
@@ -419,7 +593,7 @@ export default function Dashboard() {
                     <div>
                       <p className="buddy__name">{buddy.name}</p>
                       <p className="buddy__meta">
-                        {buddy.destination} · {buddy.dates}
+                        {buddy.destination} - {buddy.dates}
                       </p>
                     </div>
                   </div>
@@ -468,9 +642,9 @@ export default function Dashboard() {
 
         .dashboard__container {
           position: relative;
-          max-width: 1500px;
+          max-width: 1280px;
           margin: 0 auto;
-          padding: 40px 8px 60px;
+          padding: 20px 12px 32px;
         }
 
         .dashboard__topbar {
@@ -480,13 +654,13 @@ export default function Dashboard() {
           display: grid;
           grid-template-columns: auto 1fr minmax(220px, 320px) auto;
           align-items: center;
-          gap: 18px;
-          padding: 10px 12px;
+          gap: 10px;
+          padding: 6px 10px;
           border-radius: 16px;
           background: rgba(255, 255, 255, 0.96);
           box-shadow: var(--shadow);
           border: 1px solid var(--border);
-          margin-bottom: 28px;
+          margin-bottom: 14px;
           backdrop-filter: blur(4px);
         }
 
@@ -502,7 +676,7 @@ export default function Dashboard() {
         .topbar__menu {
           display: flex;
           align-items: center;
-          gap: 14px;
+          gap: 10px;
           flex-wrap: nowrap;
           white-space: nowrap;
           overflow-x: auto;
@@ -541,6 +715,7 @@ export default function Dashboard() {
           background: var(--snow);
           border-radius: 12px;
           border: 1px solid var(--border);
+          position: relative;
         }
 
         .topbar__search input {
@@ -550,6 +725,66 @@ export default function Dashboard() {
           width: 100%;
           font-size: 0.9rem;
           color: var(--ink);
+        }
+
+        .topbar__search-results {
+          position: absolute;
+          top: calc(100% + 8px);
+          left: 0;
+          right: 0;
+          background: white;
+          border-radius: 12px;
+          border: 1px solid var(--border);
+          box-shadow: var(--shadow);
+          padding: 6px;
+          z-index: 30;
+        }
+
+        .topbar__search-row {
+          padding: 10px 12px;
+          font-size: 0.85rem;
+          color: var(--muted);
+        }
+
+        .topbar__search-list {
+          list-style: none;
+          margin: 0;
+          padding: 0;
+          display: grid;
+          gap: 4px;
+        }
+
+        .topbar__search-item {
+          margin: 0;
+        }
+
+        .topbar__search-btn {
+          width: 100%;
+          border: none;
+          background: var(--snow);
+          border-radius: 10px;
+          padding: 10px 12px;
+          display: grid;
+          gap: 4px;
+          text-align: left;
+          cursor: pointer;
+          transition: background 0.2s ease, transform 0.2s ease;
+        }
+
+        .topbar__search-btn:hover {
+          background: rgba(47, 107, 79, 0.12);
+          transform: translateY(-1px);
+        }
+
+        .topbar__search-title {
+          font-weight: 600;
+          color: var(--ink);
+          font-size: 0.9rem;
+        }
+
+        .topbar__search-meta {
+          font-size: 0.78rem;
+          color: var(--muted);
         }
 
         .topbar__actions {
@@ -697,8 +932,8 @@ export default function Dashboard() {
           display: flex;
           justify-content: space-between;
           align-items: flex-start;
-          gap: 24px;
-          margin-bottom: 28px;
+          gap: 12px;
+          margin-bottom: 14px;
         }
 
         .dashboard__kicker {
@@ -754,23 +989,23 @@ export default function Dashboard() {
         .dashboard__grid {
           display: grid;
           grid-template-columns: 2.3fr 1fr;
-          gap: 24px;
+          gap: 12px;
         }
 
         .dashboard__main {
           display: grid;
-          gap: 24px;
+          gap: 12px;
         }
 
         .dashboard__sidebar {
           display: grid;
-          gap: 24px;
+          gap: 12px;
         }
 
         .card {
           background: var(--card);
           border-radius: 16px;
-          padding: 24px;
+          padding: 16px;
           box-shadow: var(--shadow);
           border: 1px solid var(--border);
         }
@@ -830,7 +1065,7 @@ export default function Dashboard() {
         .trip__image {
           border-radius: 14px;
           overflow: hidden;
-          height: 190px;
+          height: 150px;
         }
 
         .trip__image img {
@@ -912,6 +1147,36 @@ export default function Dashboard() {
           font-size: 0.85rem;
         }
 
+        .itinerary__summary {
+          margin: 6px 0 0;
+          color: #475569;
+          font-size: 0.85rem;
+          line-height: 1.5;
+        }
+
+        .itinerary__media {
+          display: flex;
+          gap: 6px;
+          margin-top: 8px;
+          flex-wrap: wrap;
+        }
+
+        .itinerary__thumb {
+          width: 54px;
+          height: 42px;
+          border-radius: 10px;
+          overflow: hidden;
+          border: 1px solid var(--border);
+          background: var(--snow);
+        }
+
+        .itinerary__thumb img {
+          width: 100%;
+          height: 100%;
+          object-fit: cover;
+          display: block;
+        }
+
         .card__actions {
           display: flex;
           gap: 10px;
@@ -922,7 +1187,7 @@ export default function Dashboard() {
         .destinations {
           display: grid;
           grid-template-columns: repeat(3, minmax(0, 1fr));
-          gap: 16px;
+          gap: 10px;
         }
 
         .destination {
@@ -983,7 +1248,7 @@ export default function Dashboard() {
 
         .history {
           display: grid;
-          gap: 12px;
+          gap: 8px;
         }
 
         .history__item {
@@ -1018,7 +1283,7 @@ export default function Dashboard() {
 
         .buddies {
           display: grid;
-          gap: 12px;
+          gap: 8px;
           margin-bottom: 16px;
         }
 

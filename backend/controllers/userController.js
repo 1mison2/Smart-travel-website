@@ -1,4 +1,6 @@
 const Trip = require('../models/Trip');
+const User = require("../models/User");
+const bcrypt = require("bcryptjs");
 
 exports.getStats = async (req, res) => {
   try {
@@ -43,5 +45,121 @@ exports.createTrip = async (req, res) => {
   } catch (err) {
     console.error(err);
     res.status(500).json({ message: 'Server error' });
+  }
+};
+
+const sanitizeUser = (user) => {
+  if (!user) return null;
+  const obj = user.toObject ? user.toObject() : { ...user };
+  delete obj.password;
+  return obj;
+};
+
+const normalizeStringArray = (input) => {
+  if (!Array.isArray(input)) return [];
+  return input.map((item) => String(item || "").trim()).filter(Boolean);
+};
+
+exports.updateProfile = async (req, res) => {
+  try {
+    const userId = req.user._id;
+    const {
+      name,
+      email,
+      phone,
+      location,
+      bio,
+      birthDate,
+      languages,
+      preferences,
+      notifications,
+    } = req.body || {};
+
+    const user = await User.findById(userId).select("-password");
+    if (!user) return res.status(404).json({ message: "User not found" });
+
+    if (email && String(email).toLowerCase() !== String(user.email).toLowerCase()) {
+      const exists = await User.findOne({ email: String(email).toLowerCase() });
+      if (exists) return res.status(400).json({ message: "Email already in use" });
+      user.email = String(email).toLowerCase().trim();
+    }
+
+    if (name !== undefined) user.name = String(name || "").trim();
+    if (phone !== undefined) user.phone = String(phone || "").trim();
+    if (location !== undefined) user.location = String(location || "").trim();
+    if (bio !== undefined) user.bio = String(bio || "").trim();
+    if (birthDate !== undefined) user.birthDate = birthDate ? new Date(birthDate) : undefined;
+    if (languages !== undefined) user.languages = normalizeStringArray(languages);
+
+    if (preferences && typeof preferences === "object") {
+      user.preferences = {
+        budget: String(preferences.budget || user.preferences?.budget || "").trim(),
+        travelStyle: String(preferences.travelStyle || user.preferences?.travelStyle || "").trim(),
+        accommodation: String(preferences.accommodation || user.preferences?.accommodation || "").trim(),
+        interests: normalizeStringArray(preferences.interests || user.preferences?.interests || []),
+      };
+    }
+
+    if (notifications && typeof notifications === "object") {
+      user.notifications = {
+        emailNotifications:
+          notifications.emailNotifications !== undefined
+            ? Boolean(notifications.emailNotifications)
+            : user.notifications?.emailNotifications ?? true,
+        pushNotifications:
+          notifications.pushNotifications !== undefined
+            ? Boolean(notifications.pushNotifications)
+            : user.notifications?.pushNotifications ?? true,
+        tripReminders:
+          notifications.tripReminders !== undefined
+            ? Boolean(notifications.tripReminders)
+            : user.notifications?.tripReminders ?? true,
+        priceAlerts:
+          notifications.priceAlerts !== undefined
+            ? Boolean(notifications.priceAlerts)
+            : user.notifications?.priceAlerts ?? false,
+        newsletter:
+          notifications.newsletter !== undefined
+            ? Boolean(notifications.newsletter)
+            : user.notifications?.newsletter ?? true,
+      };
+    }
+
+    await user.save();
+    res.json({ user: sanitizeUser(user) });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ message: "Server error" });
+  }
+};
+
+exports.updatePassword = async (req, res) => {
+  try {
+    const userId = req.user._id;
+    const { currentPassword, newPassword } = req.body || {};
+    if (!currentPassword || !newPassword) {
+      return res.status(400).json({ message: "Current password and new password are required" });
+    }
+    if (String(newPassword).length < 6) {
+      return res.status(400).json({ message: "Password must be at least 6 characters" });
+    }
+
+    const user = await User.findById(userId);
+    if (!user) return res.status(404).json({ message: "User not found" });
+    if (!user.password) {
+      return res.status(400).json({ message: "Password updates are not available for this account" });
+    }
+
+    const match = await bcrypt.compare(String(currentPassword), user.password);
+    if (!match) return res.status(400).json({ message: "Current password is incorrect" });
+
+    const salt = await bcrypt.genSalt(10);
+    user.password = await bcrypt.hash(String(newPassword), salt);
+    await user.save();
+
+    res.json({ message: "Password updated successfully" });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ message: "Server error" });
   }
 };

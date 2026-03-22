@@ -34,6 +34,38 @@ const UserSchema = new mongoose.Schema({
     type: Boolean,
     default: false
   },
+  phone: {
+    type: String,
+    default: ""
+  },
+  location: {
+    type: String,
+    default: ""
+  },
+  bio: {
+    type: String,
+    default: ""
+  },
+  birthDate: {
+    type: Date
+  },
+  languages: {
+    type: [String],
+    default: []
+  },
+  preferences: {
+    budget: { type: String, default: "" },
+    travelStyle: { type: String, default: "" },
+    accommodation: { type: String, default: "" },
+    interests: { type: [String], default: [] }
+  },
+  notifications: {
+    emailNotifications: { type: Boolean, default: true },
+    pushNotifications: { type: Boolean, default: true },
+    tripReminders: { type: Boolean, default: true },
+    priceAlerts: { type: Boolean, default: false },
+    newsletter: { type: Boolean, default: true }
+  },
   resetPasswordToken: {
     type: String,
     select: false // Don't include in queries by default

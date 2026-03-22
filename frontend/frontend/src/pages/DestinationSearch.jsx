@@ -1,5 +1,5 @@
-import React, { useMemo, useState } from "react";
-import { Link } from "react-router-dom";
+import React, { useEffect, useMemo, useState } from "react";
+import { Link, useSearchParams } from "react-router-dom";
 import api from "../utils/api";
 
 const destinationSuggestions = ["Pokhara", "Kathmandu", "Chitwan", "Lumbini", "Nagarkot"];
@@ -11,16 +11,27 @@ export default function DestinationSearch() {
   const [error, setError] = useState("");
   const [listings, setListings] = useState([]);
   const [discoveries, setDiscoveries] = useState([]);
+  const [searchParams] = useSearchParams();
+  const [autoSearchDone, setAutoSearchDone] = useState(false);
 
-  const onSearch = async (e) => {
-    e.preventDefault();
-    if (!destination.trim()) return;
+  const initialQuery = useMemo(
+    () => String(searchParams.get("query") || searchParams.get("q") || "").trim(),
+    [searchParams]
+  );
+  const initialType = useMemo(
+    () => String(searchParams.get("type") || "").trim(),
+    [searchParams]
+  );
+
+  const runSearch = async (searchValue, selectedType) => {
+    const safeQuery = String(searchValue || "").trim();
+    if (!safeQuery) return;
     try {
       setLoading(true);
       setError("");
       const [listingRes, placesRes] = await Promise.all([
-        api.get(`/api/listings?city=${encodeURIComponent(destination.trim())}&type=${encodeURIComponent(type)}`),
-        api.get(`/api/places/search?query=${encodeURIComponent(destination.trim())}`),
+        api.get(`/api/listings?city=${encodeURIComponent(safeQuery)}&type=${encodeURIComponent(selectedType)}`),
+        api.get(`/api/places/search?query=${encodeURIComponent(safeQuery)}`),
       ]);
       setListings(Array.isArray(listingRes.data?.listings) ? listingRes.data.listings : []);
       setDiscoveries(Array.isArray(placesRes.data?.results) ? placesRes.data.results : []);
@@ -32,6 +43,29 @@ export default function DestinationSearch() {
       setLoading(false);
     }
   };
+
+  const onSearch = async (e) => {
+    e.preventDefault();
+    runSearch(destination, type);
+  };
+
+  useEffect(() => {
+    if (!initialType) return;
+    if (["hotel", "activity", "cafe", "restaurant"].includes(initialType)) {
+      setType(initialType);
+    }
+  }, [initialType]);
+
+  useEffect(() => {
+    setAutoSearchDone(false);
+  }, [initialQuery]);
+
+  useEffect(() => {
+    if (!initialQuery || autoSearchDone) return;
+    setDestination(initialQuery);
+    runSearch(initialQuery, type);
+    setAutoSearchDone(true);
+  }, [initialQuery, autoSearchDone, type]);
 
   const discoveryTop = useMemo(() => discoveries.slice(0, 6), [discoveries]);
 

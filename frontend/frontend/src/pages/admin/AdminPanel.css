@@ -164,6 +164,22 @@
   color: var(--muted);
 }
 
+.admin-page__head {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.admin-page__actions {
+  display: flex;
+  gap: 10px;
+  align-items: center;
+  flex-wrap: wrap;
+}
+
+
 .admin-alert {
   border-radius: 12px;
   padding: 10px 12px;
@@ -228,6 +244,102 @@
   padding: 12px 14px;
   border-bottom: 1px solid #ecf1f8;
   vertical-align: top;
+}
+
+.admin-table__muted {
+  color: var(--muted);
+  font-size: 0.8rem;
+  margin-top: 4px;
+}
+
+.admin-notif-details summary {
+  cursor: pointer;
+  font-weight: 700;
+  color: var(--primary);
+  list-style: none;
+  padding: 6px 10px;
+  border-radius: 999px;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  border: 1px solid #cfe3d9;
+  background: #f8fbff;
+}
+
+.admin-notif-details summary::-webkit-details-marker {
+  display: none;
+}
+
+.admin-notif-details[open] summary {
+  background: #0f766e;
+  color: #fff;
+  border-color: transparent;
+}
+
+.admin-notif-details__panel {
+  margin-top: 10px;
+  border: 1px solid #e2e8f0;
+  background: #f8fafc;
+  border-radius: 12px;
+  padding: 10px;
+  display: grid;
+  gap: 10px;
+}
+
+.admin-notif-details__grid {
+  margin-top: 0;
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 6px 10px;
+}
+
+.admin-notif-details__grid span {
+  display: block;
+  font-size: 0.7rem;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--muted);
+}
+
+.admin-notif-details__grid strong {
+  display: block;
+  font-weight: 700;
+  color: var(--ink);
+}
+
+.admin-notif-details__meta {
+  margin: 8px 0 0;
+  padding: 8px;
+  border-radius: 10px;
+  background: #f8fafc;
+  border: 1px solid #e2e8f0;
+  font-size: 0.78rem;
+  white-space: pre-wrap;
+}
+
+.admin-notif-details__meta-lines {
+  display: grid;
+  gap: 6px;
+}
+
+.admin-notif-details__meta-lines span {
+  display: block;
+  font-size: 0.7rem;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--muted);
+}
+
+.admin-notif-details__meta-lines strong {
+  display: block;
+  font-weight: 700;
+  color: var(--ink);
+  font-family: "JetBrains Mono", "SFMono-Regular", ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
+  font-size: 0.82rem;
+  max-width: 240px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .admin-table th {

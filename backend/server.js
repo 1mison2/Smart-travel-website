@@ -30,6 +30,7 @@ app.use("/api/listings", require("./routes/listingRoutes"));
 app.use("/api/admin/listings", require("./routes/adminListingRoutes"));
 app.use("/api/trip-packages", require("./routes/tripPackageRoutes"));
 app.use("/api/admin/trip-packages", require("./routes/adminTripPackageRoutes"));
+app.use("/", require("./routes/khaltiRoutes"));
 
 app.use((err, _req, res, next) => {
   if (!err) return next();

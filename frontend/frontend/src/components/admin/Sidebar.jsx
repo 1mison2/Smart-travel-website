@@ -12,7 +12,7 @@ const links = [
   { to: "/admin/trip-packages", label: "Trip Packages", icon: Briefcase },
   { to: "/admin/payments", label: "Payments", icon: CreditCard },
   { to: "/admin/posts", label: "Posts", icon: MessageSquare },
-  { to: "/notifications", label: "Notifications", icon: Bell },
+  { to: "/admin/notifications", label: "Notifications", icon: Bell },
 ];
 
 export default function Sidebar() {

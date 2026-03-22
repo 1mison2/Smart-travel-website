@@ -45,8 +45,8 @@ const BookingSchema = new mongoose.Schema(
     },
     paymentProvider: {
       type: String,
-      enum: ["mock", "stripe", "paypal"],
-      default: "mock",
+      enum: ["khalti"],
+      default: "khalti",
     },
     paymentId: {
       type: String,
@@ -58,6 +58,8 @@ const BookingSchema = new mongoose.Schema(
       enum: ["pending", "paid", "failed", "refunded"],
       default: "pending",
     },
+    khaltiToken: { type: String, trim: true, default: "" },
+    transactionId: { type: String, trim: true, default: "" },
     paidAt: { type: Date },
     cancelledAt: { type: Date },
     notes: { type: String, trim: true, default: "" },

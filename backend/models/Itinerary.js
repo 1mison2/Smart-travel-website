@@ -6,8 +6,10 @@ const ItineraryDaySchema = new mongoose.Schema(
     title: { type: String, required: true, trim: true },
     places: [
       {
+        placeId: { type: mongoose.Schema.Types.ObjectId, ref: "Location" },
         name: { type: String, required: true, trim: true },
         category: { type: String, default: "", trim: true },
+        image: { type: String, default: "", trim: true },
         estimatedCost: { type: Number, default: 0, min: 0 },
         notes: { type: String, default: "", trim: true },
       },

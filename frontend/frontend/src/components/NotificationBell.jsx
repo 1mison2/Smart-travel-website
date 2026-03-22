@@ -63,6 +63,10 @@ export default function NotificationBell({
       onClick();
       return;
     }
+    if (user?.role === "admin") {
+      navigate("/admin/notifications");
+      return;
+    }
     navigate("/notifications");
   };
 

@@ -25,7 +25,7 @@ export default function AdminPayments() {
   return (
     <section className="admin-page">
       <h1 className="admin-page__title">Payment Records</h1>
-      <p className="admin-page__subtitle">Monitor Khalti/eSewa sandbox transactions.</p>
+      <p className="admin-page__subtitle">Monitor Khalti transactions.</p>
       {error && <p className="admin-alert admin-alert--error">{error}</p>}
       {loading ? (
         <p className="admin-loading">Loading payments...</p>

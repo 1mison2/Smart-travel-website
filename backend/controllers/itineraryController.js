@@ -11,8 +11,10 @@ const buildDayPlan = ({ day, places, budgetPerDay }) => {
     day,
     title: `Day ${day} plan`,
     places: selected.map((place) => ({
+      placeId: place._id,
       name: place.name,
       category: place.category || "attraction",
+      image: place.image || "",
       estimatedCost: place.averageCost || Math.round(budgetPerDay / 3),
       notes: [place.district, place.province].filter(Boolean).join(", "),
     })),

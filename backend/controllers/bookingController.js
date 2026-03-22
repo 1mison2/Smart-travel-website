@@ -6,11 +6,12 @@ const { createNotification, notifyAdmins } = require("../utils/notificationServi
 
 const isValidObjectId = (id) => mongoose.Types.ObjectId.isValid(id);
 
-const canAccessBooking = (booking, user) =>
-  user?.role === "admin" || booking.userId?.toString() === user?._id?.toString();
-
-const createPaymentReference = () =>
-  `PAY-${Date.now()}-${Math.random().toString(36).slice(2, 10).toUpperCase()}`;
+const canAccessBooking = (booking, user) => {
+  if (user?.role === "admin") return true;
+  const bookingUserId =
+    booking?.userId?._id?.toString?.() || booking?.userId?.toString?.() || "";
+  return bookingUserId === user?._id?.toString?.();
+};
 
 const isSingleSessionBookingType = (type) => ["activity", "cafe", "restaurant"].includes(type);
 
@@ -145,7 +146,8 @@ exports.createBooking = async (req, res) => {
         amount: pricing.total,
         currency: listing.pricing?.currency || "NPR",
         pricingSnapshot: pricing,
-        bookingStatus: "confirmed",
+        bookingStatus: "awaiting_payment",
+        paymentStatus: "pending",
         notes: String(notes || "").trim(),
       });
 
@@ -153,7 +155,7 @@ exports.createBooking = async (req, res) => {
         recipient: req.user._id,
         type: "booking_created",
         title: "Booking created",
-        message: `Booking confirmed for ${listing.title}.`,
+        message: `Booking created for ${listing.title}. Complete payment to confirm.`,
         meta: { bookingId: booking._id, listingId: listing._id },
       });
       await notifyAdmins({
@@ -196,7 +198,8 @@ exports.createBooking = async (req, res) => {
       date: bookingDate,
       amount: numericAmount,
       bookingType: "legacy",
-      bookingStatus: "confirmed",
+      bookingStatus: "awaiting_payment",
+      paymentStatus: "pending",
       notes: String(notes || "").trim(),
       pricingSnapshot: {
         unitPrice: numericAmount,
@@ -212,7 +215,7 @@ exports.createBooking = async (req, res) => {
       recipient: req.user._id,
       type: "booking_created",
       title: "Booking created",
-      message: `Your booking for ${location.name} is confirmed.`,
+      message: `Your booking for ${location.name} is created. Complete payment to confirm.`,
       meta: { bookingId: legacyBooking._id, locationId: location._id },
     });
     await notifyAdmins({
@@ -312,140 +315,5 @@ exports.cancelBooking = async (req, res) => {
   } catch (err) {
     console.error(err);
     res.status(500).json({ message: "Failed to cancel booking" });
-  }
-};
-
-exports.initiateBookingPayment = async (req, res) => {
-  try {
-    const { id } = req.params;
-    const { paymentProvider = "mock", paymentReference } = req.body || {};
-
-    if (!isValidObjectId(id)) return res.status(400).json({ message: "Invalid booking id" });
-    const booking = await Booking.findById(id)
-      .populate("locationId", "name")
-      .populate("listingId", "title")
-      .populate("tripPackageId", "title");
-    if (!booking) return res.status(404).json({ message: "Booking not found" });
-    if (!canAccessBooking(booking, req.user)) return res.status(403).json({ message: "Forbidden" });
-    if (booking.bookingStatus === "cancelled") {
-      return res.status(400).json({ message: "Cannot pay for a cancelled booking" });
-    }
-    if (booking.paymentStatus === "paid") {
-      return res.status(409).json({ message: "Booking is already paid", booking });
-    }
-    if (!["mock", "khalti", "esewa", "stripe", "paypal"].includes(paymentProvider)) {
-      return res.status(400).json({ message: "Unsupported payment provider" });
-    }
-
-    const paymentId = String(paymentReference || createPaymentReference()).trim();
-    booking.paymentProvider = paymentProvider;
-    booking.paymentId = paymentId;
-    booking.paymentStatus = "pending";
-    booking.bookingStatus = "awaiting_payment";
-    await booking.save();
-
-    const bookingName =
-      booking.tripPackageId?.title ||
-      booking.listingId?.title ||
-      booking.locationId?.name ||
-      "selected place";
-    await createNotification({
-      recipient: booking.userId,
-      type: "payment_initiated",
-      title: "Payment initiated",
-      message: `Payment started for booking at ${bookingName}.`,
-      meta: { bookingId: booking._id, paymentId, provider: paymentProvider },
-    });
-    await notifyAdmins({
-      type: "payment_initiated",
-      title: "Payment initiated",
-      message: `${req.user.name || req.user.email} initiated booking payment.`,
-      meta: { bookingId: booking._id, paymentId, provider: paymentProvider },
-    });
-
-    res.json({
-      message: "Payment initiated",
-      payment: {
-        paymentId,
-        provider: paymentProvider,
-        amount: booking.amount,
-        currency: booking.currency || "NPR",
-      },
-      booking,
-    });
-  } catch (err) {
-    console.error(err);
-    res.status(500).json({ message: "Failed to initiate payment" });
-  }
-};
-
-exports.confirmBookingPayment = async (req, res) => {
-  try {
-    const { id } = req.params;
-    const { paymentId, success = true } = req.body || {};
-
-    if (!isValidObjectId(id)) return res.status(400).json({ message: "Invalid booking id" });
-    const booking = await Booking.findById(id)
-      .populate("locationId", "name")
-      .populate("listingId", "title")
-      .populate("tripPackageId", "title");
-    if (!booking) return res.status(404).json({ message: "Booking not found" });
-    if (!canAccessBooking(booking, req.user)) return res.status(403).json({ message: "Forbidden" });
-    if (booking.bookingStatus === "cancelled") {
-      return res.status(400).json({ message: "Cannot confirm payment for cancelled booking" });
-    }
-
-    const cleanPaymentId = String(paymentId || booking.paymentId || "").trim();
-    if (!cleanPaymentId) return res.status(400).json({ message: "paymentId is required" });
-
-    if (booking.paymentStatus === "paid") {
-      if (booking.paymentId === cleanPaymentId) {
-        return res.json({ message: "Payment already confirmed", booking });
-      }
-      return res.status(409).json({ message: "Booking already paid with a different payment id" });
-    }
-
-    booking.paymentId = cleanPaymentId;
-    if (success) {
-      booking.paymentStatus = "paid";
-      booking.paidAt = new Date();
-      booking.bookingStatus = "confirmed";
-    } else {
-      booking.paymentStatus = "failed";
-      booking.bookingStatus = "awaiting_payment";
-    }
-    await booking.save();
-
-    const bookingName =
-      booking.tripPackageId?.title ||
-      booking.listingId?.title ||
-      booking.locationId?.name ||
-      "selected place";
-    const type = success ? "payment_success" : "payment_failed";
-    const title = success ? "Payment successful" : "Payment failed";
-    const message = success
-      ? `Your booking for ${bookingName} is confirmed.`
-      : `Payment failed for booking at ${bookingName}.`;
-
-    await createNotification({
-      recipient: booking.userId,
-      type,
-      title,
-      message,
-      meta: { bookingId: booking._id, paymentId: cleanPaymentId },
-    });
-    await notifyAdmins({
-      type,
-      title,
-      message: success
-        ? `${req.user.name || req.user.email} completed a booking payment.`
-        : `${req.user.name || req.user.email} had a failed booking payment.`,
-      meta: { bookingId: booking._id, paymentId: cleanPaymentId },
-    });
-
-    res.json({ message: title, booking });
-  } catch (err) {
-    console.error(err);
-    res.status(500).json({ message: "Failed to confirm payment" });
   }
 };

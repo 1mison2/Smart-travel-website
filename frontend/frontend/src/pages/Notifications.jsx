@@ -1,16 +1,21 @@
 import React, { useEffect, useState } from "react";
 import api from "../utils/api";
+import { useAuth } from "../context/AuthContext";
 
 export default function Notifications() {
+  const { user } = useAuth();
+  const isAdmin = user?.role === "admin";
+  const [scope, setScope] = useState("mine");
   const [notifications, setNotifications] = useState([]);
   const [unreadCount, setUnreadCount] = useState(0);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
 
-  const loadNotifications = async () => {
+  const loadNotifications = async (activeScope) => {
     try {
       setLoading(true);
-      const { data } = await api.get("/api/notifications/me?limit=60");
+      const endpoint = activeScope === "all" ? "/api/notifications/all?limit=80" : "/api/notifications/me?limit=60";
+      const { data } = await api.get(endpoint);
       setNotifications(Array.isArray(data?.notifications) ? data.notifications : []);
       setUnreadCount(Number(data?.unreadCount || 0));
       setError("");
@@ -22,8 +27,8 @@ export default function Notifications() {
   };
 
   useEffect(() => {
-    loadNotifications();
-  }, []);
+    loadNotifications(scope);
+  }, [scope]);
 
   const onMarkRead = async (notificationId) => {
     try {
@@ -52,6 +57,8 @@ export default function Notifications() {
     }
   };
 
+  const canMarkRead = scope === "mine";
+
   return (
     <div className="notifications-page">
       <header className="notifications-page__hero">
@@ -61,7 +68,25 @@ export default function Notifications() {
           <p>{unreadCount} unread notification(s).</p>
         </div>
         <div className="notifications-page__actions">
-          <button onClick={onMarkAllRead} disabled={!notifications.length || unreadCount === 0}>
+          {isAdmin && (
+            <div className="notifications-page__toggle">
+              <button
+                type="button"
+                className={scope === "mine" ? "is-active" : ""}
+                onClick={() => setScope("mine")}
+              >
+                My notifications
+              </button>
+              <button
+                type="button"
+                className={scope === "all" ? "is-active" : ""}
+                onClick={() => setScope("all")}
+              >
+                All users
+              </button>
+            </div>
+          )}
+          <button onClick={onMarkAllRead} disabled={!notifications.length || unreadCount === 0 || !canMarkRead}>
             Mark All Read
           </button>
         </div>
@@ -80,10 +105,15 @@ export default function Notifications() {
             <div className="notification-card__body">
               <h2>{item.title}</h2>
               <p>{item.message}</p>
+              {scope === "all" && (
+                <p className="notification-card__meta">
+                  To: {item?.recipient?.name || item?.recipient?.email || "User"}
+                </p>
+              )}
               <small>{formatDateTime(item.createdAt)}</small>
             </div>
-            <button onClick={() => onMarkRead(item._id)} disabled={item.isRead}>
-              {item.isRead ? "Read" : "Mark Read"}
+            <button onClick={() => onMarkRead(item._id)} disabled={item.isRead || !canMarkRead}>
+              {item.isRead || !canMarkRead ? "Read" : "Mark Read"}
             </button>
           </article>
         ))}
@@ -119,7 +149,6 @@ export default function Notifications() {
         .notifications-page__hero h1 { margin: 0 0 6px; font-size: clamp(1.6rem, 3vw, 2.2rem); }
         .notifications-page__hero p { margin: 0; color: #475569; }
         .notifications-page__actions { display: grid; gap: 8px; justify-items: end; }
-        .notifications-page__actions a,
         .notifications-page__actions button {
           text-decoration: none;
           border: 1px solid rgba(15, 118, 110, 0.3);
@@ -132,6 +161,17 @@ export default function Notifications() {
           cursor: pointer;
         }
         .notifications-page__actions button:disabled { opacity: 0.5; cursor: not-allowed; }
+        .notifications-page__toggle {
+          display: flex;
+          gap: 8px;
+          flex-wrap: wrap;
+          justify-content: flex-end;
+        }
+        .notifications-page__toggle button.is-active {
+          background: #0f766e;
+          color: #fff;
+          border-color: transparent;
+        }
         .notifications-page__error { color: #b91c1c; margin: 0 0 10px; }
         .notifications-page__hint { color: #475569; margin: 0; }
         .notifications-list { margin-top: 12px; display: grid; gap: 10px; }
@@ -159,6 +199,11 @@ export default function Notifications() {
         .notification-card__body h2 { margin: 0 0 2px; font-size: 1rem; }
         .notification-card__body p { margin: 0 0 3px; color: #334155; }
         .notification-card__body small { color: #64748b; }
+        .notification-card__meta {
+          margin: 0 0 4px;
+          color: #64748b;
+          font-size: 0.82rem;
+        }
         .notification-card button {
           border: 1px solid rgba(15, 118, 110, 0.3);
           border-radius: 999px;
@@ -173,6 +218,7 @@ export default function Notifications() {
         @media (max-width: 760px) {
           .notifications-page__hero { flex-direction: column; align-items: flex-start; }
           .notifications-page__actions { justify-items: start; }
+          .notifications-page__toggle { justify-content: flex-start; }
           .notification-card { grid-template-columns: 1fr; }
           .notification-card__dot { display: none; }
         }
