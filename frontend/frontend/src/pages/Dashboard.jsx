@@ -1,8 +1,29 @@
 import React, { useCallback, useEffect, useRef, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
-import { MapPin, Calendar, Users, Mountain, Sparkles, Compass, Clock, Search, Bell, User, LogOut, Settings, UserCircle } from "lucide-react";
+import {
+  Bell,
+  Calendar,
+  ChevronRight,
+  Clock3,
+  Compass,
+  Hotel,
+  LogOut,
+  MapPin,
+  Mountain,
+  Search,
+  Settings,
+  Sun,
+  Sunrise,
+  Trees,
+  Umbrella,
+  User,
+  UserCircle,
+  Users,
+  Wallet,
+} from "lucide-react";
 import { useAuth } from "../context/AuthContext";
-import api from "../utils/api";
+import api, { resolveImageUrl } from "../utils/api";
+import "./Dashboard.css";
 
 const DESTINATIONS_CACHE_KEY = "st_dashboard_destinations";
 const NOTIFICATION_POLL_MS = 15000;
@@ -18,6 +39,32 @@ const readCachedDestinations = () => {
   }
 };
 
+const daysBetween = (from, to) => {
+  const start = new Date(from);
+  const end = new Date(to);
+  start.setHours(0, 0, 0, 0);
+  end.setHours(0, 0, 0, 0);
+  return Math.round((end - start) / (1000 * 60 * 60 * 24));
+};
+
+const formatDate = (value, options = { month: "short", day: "numeric", year: "numeric" }) => {
+  if (!value) return "TBD";
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return "TBD";
+  return new Intl.DateTimeFormat("en-US", options).format(date);
+};
+
+const initialsFromName = (name) =>
+  String(name || "Traveler")
+    .split(/\s+/)
+    .filter(Boolean)
+    .slice(0, 2)
+    .map((part) => part[0]?.toUpperCase())
+    .join("");
+
+const normalizeText = (value) => String(value || "").trim().toLowerCase();
+const hasRealImage = (value) => Boolean(resolveImageUrl(value));
+
 export default function Dashboard() {
   const { user, logout } = useAuth();
   const navigate = useNavigate();
@@ -29,12 +76,6 @@ export default function Dashboard() {
   const [searchLoading, setSearchLoading] = useState(false);
   const [searchError, setSearchError] = useState("");
   const [searchFocused, setSearchFocused] = useState(false);
-  const searchDebounceRef = useRef(null);
-  const searchBlurRef = useRef(null);
-  const unreadCountRef = useRef(0);
-  const pulseTimerRef = useRef(null);
-  const displayName = user?.name || user?.fullName || "Traveler";
-
   const [itinerary, setItinerary] = useState(null);
   const [itineraryLoading, setItineraryLoading] = useState(true);
   const [itineraryError, setItineraryError] = useState("");
@@ -44,25 +85,40 @@ export default function Dashboard() {
   const [trips, setTrips] = useState([]);
   const [tripsLoading, setTripsLoading] = useState(true);
   const [tripsError, setTripsError] = useState("");
+  const [bookings, setBookings] = useState([]);
+  const [bookingsLoading, setBookingsLoading] = useState(true);
+  const [bookingsError, setBookingsError] = useState("");
+  const [payments, setPayments] = useState([]);
+  const [paymentsLoading, setPaymentsLoading] = useState(true);
+  const [paymentsError, setPaymentsError] = useState("");
+
+  const searchDebounceRef = useRef(null);
+  const searchBlurRef = useRef(null);
+  const unreadCountRef = useRef(0);
+  const pulseTimerRef = useRef(null);
+
+  const displayName = user?.name || user?.fullName || "Traveler";
 
   const loadDestinations = useCallback(async () => {
     try {
       setDestinationsLoading(true);
       setDestinationsError("");
       const { data } = await api.get("/api/locations");
-
       const mapped = (Array.isArray(data) ? data : []).map((location, index) => ({
         id: location._id || `${location.name}-${index}`,
         locationId: location._id || "",
         name: location.name || "Destination",
+        district: location.district || "",
+        province: location.province || "",
+        category: location.category || "Travel Spot",
+        description:
+          location.description ||
+          "A beautiful stop for mountain views, local culture, and slow unforgettable moments.",
         tag:
-          [location.district, location.province, location.category].filter(Boolean).join(" - ") ||
+          [location.district, location.province, location.category].filter(Boolean).join(" • ") ||
           "Travel Spot",
-        image:
-          location.image ||
-          "https://images.unsplash.com/photo-1489515217757-5fd1be406fef?auto=format&fit=crop&w=1200&q=80",
+        image: resolveImageUrl(location.image || location.images?.[0] || ""),
       }));
-
       setLiveDestinations(mapped);
       sessionStorage.setItem(DESTINATIONS_CACHE_KEY, JSON.stringify(mapped));
     } catch (err) {
@@ -71,10 +127,6 @@ export default function Dashboard() {
       setDestinationsLoading(false);
     }
   }, []);
-
-  useEffect(() => {
-    loadDestinations();
-  }, [loadDestinations]);
 
   const loadTrips = useCallback(async () => {
     try {
@@ -89,10 +141,6 @@ export default function Dashboard() {
       setTripsLoading(false);
     }
   }, []);
-
-  useEffect(() => {
-    loadTrips();
-  }, [loadTrips]);
 
   const loadItinerary = useCallback(async () => {
     try {
@@ -109,18 +157,49 @@ export default function Dashboard() {
     }
   }, []);
 
+  const loadBookings = useCallback(async () => {
+    try {
+      setBookingsLoading(true);
+      setBookingsError("");
+      const { data } = await api.get("/api/bookings/me");
+      setBookings(Array.isArray(data?.bookings) ? data.bookings : []);
+    } catch (err) {
+      setBookingsError(err?.response?.data?.message || "Unable to load booking totals right now.");
+      setBookings([]);
+    } finally {
+      setBookingsLoading(false);
+    }
+  }, []);
+
+  const loadPayments = useCallback(async () => {
+    try {
+      setPaymentsLoading(true);
+      setPaymentsError("");
+      const { data } = await api.get("/api/payments/me");
+      setPayments(Array.isArray(data?.payments) ? data.payments : []);
+    } catch (err) {
+      setPaymentsError(err?.response?.data?.message || "Unable to load payment totals right now.");
+      setPayments([]);
+    } finally {
+      setPaymentsLoading(false);
+    }
+  }, []);
+
   useEffect(() => {
+    loadDestinations();
+    loadTrips();
     loadItinerary();
-  }, [loadItinerary]);
+    loadBookings();
+    loadPayments();
+  }, [loadDestinations, loadTrips, loadItinerary, loadBookings, loadPayments]);
 
   useEffect(() => {
     if (!user?._id) return undefined;
-
     let active = true;
 
     const fetchUnreadCount = async () => {
       try {
-        const { data } = await api.get("/api/notifications/me?limit=1");
+        const { data } = await api.get("/api/notifications/me?limit=4");
         if (!active) return;
         const count = Number(data?.unreadCount || 0);
         if (count > unreadCountRef.current) {
@@ -131,7 +210,7 @@ export default function Dashboard() {
         unreadCountRef.current = count;
         setUnreadCount(count);
       } catch {
-        // ignore notification polling errors
+        // ignore polling errors
       }
     };
 
@@ -141,77 +220,9 @@ export default function Dashboard() {
     return () => {
       active = false;
       clearInterval(intervalId);
-      if (pulseTimerRef.current) {
-        clearTimeout(pulseTimerRef.current);
-        pulseTimerRef.current = null;
-      }
+      if (pulseTimerRef.current) clearTimeout(pulseTimerRef.current);
     };
   }, [user?._id]);
-
-  const popularDestinations = liveDestinations;
-  const now = new Date();
-  const sortedTrips = [...trips].sort((a, b) => new Date(a.startDate) - new Date(b.startDate));
-  const upcomingTrip = sortedTrips.find((trip) => new Date(trip.startDate) >= now) || sortedTrips[0] || null;
-  const daysUntilNextTrip = upcomingTrip ? daysBetween(now, new Date(upcomingTrip.startDate)) : null;
-  const tripHistory = [...trips]
-    .sort((a, b) => new Date(b.startDate) - new Date(a.startDate))
-    .slice(0, 6);
-
-  const travelBuddies = [
-    { id: 1, name: "Aarav", destination: "Everest Region", dates: "Apr 10 - Apr 18" },
-    { id: 2, name: "Maya", destination: "Mustang", dates: "May 02 - May 08" },
-    { id: 3, name: "Rinzin", destination: "Pokhara", dates: "Mar 14 - Mar 18" },
-  ];
-
-  const normalizeText = (value) => String(value || "").trim().toLowerCase();
-
-  const getTripImage = (trip) => {
-    if (!trip) return "";
-    const tripTitle = normalizeText(trip.title);
-    if (!tripTitle) return "";
-    const match = liveDestinations.find((destination) => {
-      const name = normalizeText(destination.name);
-      return name && (tripTitle.includes(name) || name.includes(tripTitle));
-    });
-    return match?.image || "";
-  };
-
-  const handleLogout = () => {
-    logout();
-    navigate("/");
-  };
-
-  const goToDestinationHub = (locationId) => {
-    if (locationId) {
-      navigate(`/locations/${locationId}`);
-      return;
-    }
-    navigate("/destination-search");
-  };
-
-  const onDashboardSearch = (event) => {
-    event.preventDefault();
-    const term = searchTerm.trim();
-    if (!term) return;
-    // Keep user on dashboard; dropdown handles navigation.
-    if (searchResults.length === 1) {
-      goToDestinationHub(searchResults[0]?.id);
-    }
-  };
-
-  const handleSearchFocus = () => {
-    if (searchBlurRef.current) {
-      clearTimeout(searchBlurRef.current);
-      searchBlurRef.current = null;
-    }
-    setSearchFocused(true);
-  };
-
-  const handleSearchBlur = () => {
-    searchBlurRef.current = setTimeout(() => {
-      setSearchFocused(false);
-    }, 120);
-  };
 
   useEffect(() => {
     const term = searchTerm.trim();
@@ -220,7 +231,7 @@ export default function Dashboard() {
       setSearchResults([]);
       setSearchError("");
       setSearchLoading(false);
-      return;
+      return undefined;
     }
 
     searchDebounceRef.current = setTimeout(async () => {
@@ -228,75 +239,173 @@ export default function Dashboard() {
         setSearchLoading(true);
         setSearchError("");
         const { data } = await api.get(`/api/places/search?query=${encodeURIComponent(term)}`);
-        const results = Array.isArray(data?.results) ? data.results : [];
-        setSearchResults(results.slice(0, 6));
+        setSearchResults((Array.isArray(data?.results) ? data.results : []).slice(0, 6));
       } catch (err) {
         setSearchError(err?.response?.data?.message || "Search failed. Try again.");
         setSearchResults([]);
       } finally {
         setSearchLoading(false);
       }
-    }, 300);
+    }, 280);
 
     return () => {
       if (searchDebounceRef.current) clearTimeout(searchDebounceRef.current);
     };
   }, [searchTerm]);
 
+  const sortedTrips = [...trips].sort((a, b) => new Date(a.startDate) - new Date(b.startDate));
+  const now = new Date();
+  const upcomingTrip = sortedTrips.find((trip) => new Date(trip.startDate) >= now) || sortedTrips[0] || null;
+  const daysUntilNextTrip = upcomingTrip ? daysBetween(now, upcomingTrip.startDate) : null;
+  const tripHistory = [...trips].sort((a, b) => new Date(b.startDate) - new Date(a.startDate)).slice(0, 4);
+  const itineraryDays = Array.isArray(itinerary?.days) ? itinerary.days.slice(0, 4) : [];
+  const recommendedDestinations = liveDestinations.slice(0, 3);
+  const savedPlaces = liveDestinations.slice(0, 3).map((place, index) => ({
+    ...place,
+    note: ["Sunrise view", "Cultural stay", "Lake escape"][index] || "Must visit",
+  }));
+  const totalBookedAmount = bookings.reduce((sum, booking) => sum + Number(booking?.amount || 0), 0);
+  const totalPaidAmount = payments
+    .filter((payment) => payment?.status === "success")
+    .reduce((sum, payment) => sum + Number(payment?.amount || 0), 0);
+  const totalPendingAmount = bookings
+    .filter((booking) => booking?.paymentStatus === "pending")
+    .reduce((sum, booking) => sum + Number(booking?.amount || 0), 0);
+  const confirmedBookings = bookings.filter((booking) => booking?.bookingStatus === "confirmed").length;
+  const budgetBarPercent = totalBookedAmount > 0 ? Math.max(18, Math.min(100, Math.round((totalPaidAmount / totalBookedAmount) * 100))) : 24;
+  const budgetLoading = bookingsLoading || paymentsLoading;
+  const budgetError = bookingsError || paymentsError;
+
+  const getTripImage = (trip) => {
+    if (!trip) return "";
+    const title = normalizeText(trip.title);
+    const matched = liveDestinations.find((destination) => {
+      const placeName = normalizeText(destination.name);
+      return placeName && (title.includes(placeName) || placeName.includes(title));
+    });
+    return matched?.image || "";
+  };
+
+  const weather = {
+    label: upcomingTrip ? "Pokhara valley" : "Kathmandu",
+    temp: upcomingTrip ? "18°C" : "21°C",
+    summary: "Clear sky and mountain light",
+  };
+
+  const nearbyActivities = [
+    { icon: Trees, title: "Forest hikes", detail: "Shivapuri ridge trails and pine walks." },
+    { icon: Sunrise, title: "Sunrise points", detail: "Sarangkot and Nagarkot golden-hour stops." },
+    { icon: Umbrella, title: "Boating escapes", detail: "Phewa Lake and calm waterfront cafes." },
+    { icon: Sun, title: "Local food finds", detail: "Thakali kitchens, rooftop brunch, and momo spots." },
+  ];
+
+  const travelBuddies = [
+    { id: 1, name: "Aarav Tamang", plan: "Annapurna Base Camp", status: "Packing now" },
+    { id: 2, name: "Maya Shrestha", plan: "Pokhara getaway", status: "Open to shared cab" },
+    { id: 3, name: "Rinzin Lama", plan: "Upper Mustang road trip", status: "Looking for day hikers" },
+  ];
+
+  const notificationsPreview = [
+    unreadCount > 0 ? `${unreadCount} unread updates are waiting for you.` : "Your dashboard is calm and fully synced.",
+    upcomingTrip ? `Your ${upcomingTrip.title} plan is ready for the next review.` : "Start a new journey to unlock planning tips.",
+    itinerary ? "AI itinerary suggestions are prepared for your next travel day." : "Generate an itinerary to get smarter timing suggestions.",
+  ];
+
+  const heroImage = getTripImage(upcomingTrip);
+  const heroDestination =
+    recommendedDestinations.find((item) => hasRealImage(item?.image)) ||
+    liveDestinations.find((item) => hasRealImage(item?.image)) ||
+    recommendedDestinations[0] ||
+    liveDestinations[0] ||
+    null;
+  const heroVisualImage = heroImage || heroDestination?.image || "";
+  const heroLocationLabel =
+    heroDestination?.tag ||
+    [heroDestination?.district, heroDestination?.province].filter(Boolean).join(" • ") ||
+    "Nepal travel";
+
+  const goToDestinationHub = (locationId) => {
+    if (locationId) {
+      navigate(`/locations/${locationId}`);
+      return;
+    }
+    navigate("/explore");
+  };
+
+  const onDashboardSearch = (event) => {
+    event.preventDefault();
+    if (!searchTerm.trim()) return;
+    if (searchResults.length === 1) {
+      goToDestinationHub(searchResults[0]?.id);
+      return;
+    }
+    navigate("/destination-search");
+  };
+
+  const handleSearchFocus = () => {
+    if (searchBlurRef.current) clearTimeout(searchBlurRef.current);
+    setSearchFocused(true);
+  };
+
+  const handleSearchBlur = () => {
+    searchBlurRef.current = setTimeout(() => setSearchFocused(false), 120);
+  };
+
+  const handleLogout = () => {
+    logout();
+    navigate("/");
+  };
+
   return (
-    <div className="dashboard">
-      <div className="dashboard__bg" />
+    <div className="travel-dashboard">
+      <div className="travel-dashboard__ambient travel-dashboard__ambient--one" />
+      <div className="travel-dashboard__ambient travel-dashboard__ambient--two" />
 
-      <div className="dashboard__container">
-        <div className="dashboard__topbar">
-          <div className="topbar__brand">
-            <Mountain size={22} />
-            <span>Smart Travel Nepal</span>
-          </div>
+      <div className="travel-dashboard__shell">
+        <header className="travel-topbar">
+          <button type="button" className="travel-brand" onClick={() => navigate("/dashboard")}>
+            <span className="travel-brand__mark"><Mountain size={18} /></span>
+            <span>
+              <strong>Smart Travel Nepal</strong>
+              <small>Plan with calm confidence</small>
+            </span>
+          </button>
 
-          <nav className="topbar__menu" aria-label="Primary">
-            <button type="button" className="topbar__link" onClick={() => navigate("/dashboard")}>Dashboard</button>
-            <button type="button" className="topbar__link" onClick={() => navigate("/my-trips")}>My Trips</button>
-            <button type="button" className="topbar__link" onClick={() => navigate("/trip-packages")}>Trip Packages</button>
-            <button type="button" className="topbar__link" onClick={() => navigate("/explore")}>Explore</button>
-            <button type="button" className="topbar__link" onClick={() => navigate("/bookings")}>Bookings</button>
-            <button type="button" className="topbar__link" onClick={() => navigate("/destination-search")}>Find Stays</button>
-            <button type="button" className="topbar__link" onClick={() => navigate("/itinerary-planner")}>Itinerary</button>
-            <button type="button" className="topbar__link" onClick={() => navigate("/map-explorer")}>Map Explorer</button>
-            <button type="button" className="topbar__link" onClick={() => navigate("/buddy-finder")}>Buddy Chat</button>
+          <nav className="travel-topbar__nav" aria-label="Primary">
+            <button type="button" className="travel-topbar__link is-active" onClick={() => navigate("/dashboard")}>Dashboard</button>
+            <button type="button" className="travel-topbar__link" onClick={() => navigate("/my-trips")}>My Trips</button>
+            <button type="button" className="travel-topbar__link" onClick={() => navigate("/explore")}>Explore</button>
+            <button type="button" className="travel-topbar__link" onClick={() => navigate("/bookings")}>Bookings</button>
+            <button type="button" className="travel-topbar__link" onClick={() => navigate("/trip-packages")}>Packages</button>
           </nav>
 
-          <form className="topbar__search" onSubmit={onDashboardSearch}>
-            <Search size={18} />
+          <form className="travel-search" onSubmit={onDashboardSearch}>
+            <Search size={16} />
             <input
               type="text"
-              placeholder="Search destinations in Nepal"
+              placeholder="Search destinations, stays, sunrise spots..."
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
               onFocus={handleSearchFocus}
               onBlur={handleSearchBlur}
             />
             {searchFocused && (searchLoading || searchError || searchResults.length > 0) && (
-              <div className="topbar__search-results">
-                {searchLoading && <div className="topbar__search-row">Searching...</div>}
-                {!searchLoading && searchError && <div className="topbar__search-row">{searchError}</div>}
-                {!searchLoading && !searchError && searchResults.length === 0 && (
-                  <div className="topbar__search-row">No destinations found.</div>
-                )}
+              <div className="travel-search__dropdown">
+                {searchLoading && <div className="travel-search__row">Searching beautiful places...</div>}
+                {!searchLoading && searchError && <div className="travel-search__row">{searchError}</div>}
+                {!searchLoading && !searchError && searchResults.length === 0 && <div className="travel-search__row">No matching places found yet.</div>}
                 {!searchLoading && !searchError && searchResults.length > 0 && (
-                  <ul className="topbar__search-list" role="listbox">
+                  <ul className="travel-search__list">
                     {searchResults.map((result) => (
-                      <li key={result.id} className="topbar__search-item" role="option">
+                      <li key={result.id}>
                         <button
                           type="button"
-                          className="topbar__search-btn"
+                          className="travel-search__result"
                           onMouseDown={(e) => e.preventDefault()}
                           onClick={() => goToDestinationHub(result.id)}
                         >
-                          <span className="topbar__search-title">{result.name}</span>
-                          <span className="topbar__search-meta">
-                            {[result.district, result.province, result.category].filter(Boolean).join(" - ")}
-                          </span>
+                          <span>{result.name}</span>
+                          <small>{[result.district, result.province, result.category].filter(Boolean).join(" • ")}</small>
                         </button>
                       </li>
                     ))}
@@ -306,10 +415,10 @@ export default function Dashboard() {
             )}
           </form>
 
-          <div className="topbar__actions">
+          <div className="travel-topbar__actions">
             <button
               type="button"
-              className={`icon-btn ${notifPulse ? "icon-btn--pulse" : ""}`}
+              className={`travel-icon-btn ${notifPulse ? "travel-icon-btn--pulse" : ""}`}
               aria-label="Notifications"
               onClick={() => {
                 setNotifPulse(false);
@@ -317,1114 +426,329 @@ export default function Dashboard() {
               }}
             >
               <Bell size={18} />
-              {unreadCount > 0 && (
-                <span className="notif-badge" aria-label={`${unreadCount} unread notifications`}>
-                  {unreadCount > 99 ? "99+" : unreadCount}
-                </span>
-              )}
+              {unreadCount > 0 && <span className="travel-icon-btn__badge">{unreadCount > 99 ? "99+" : unreadCount}</span>}
             </button>
-            <div className="profile">
-              <button
-                type="button"
-                className="icon-btn"
-                aria-label="Profile"
-                onClick={() => setShowProfileMenu((prev) => !prev)}
-              >
-                <User size={18} />
+
+            <div className="travel-profile">
+              <button type="button" className="travel-profile__trigger" onClick={() => setShowProfileMenu((prev) => !prev)}>
+                <span className="travel-profile__avatar">{initialsFromName(displayName)}</span>
+                <span className="travel-profile__text">
+                  <strong>{displayName}</strong>
+                  <small>Explorer</small>
+                </span>
               </button>
+
               {showProfileMenu && (
-                <div className="profile__menu">
-                  <div className="profile__header">
-                    <div className="profile__avatar" aria-hidden>
-                      <UserCircle size={28} />
-                    </div>
+                <div className="travel-profile__menu">
+                  <div className="travel-profile__menu-head">
+                    <div className="travel-profile__menu-avatar"><UserCircle size={28} /></div>
                     <div>
-                      <p className="profile__name">{displayName}</p>
-                      <p className="profile__email">{user?.email || "traveler@smarttravel.com"}</p>
+                      <strong>{displayName}</strong>
+                      <small>{user?.email || "traveler@smarttravel.com"}</small>
                     </div>
                   </div>
-                  <button
-                    type="button"
-                    className="profile__item"
-                    onClick={() => {
-                      setShowProfileMenu(false);
-                      navigate("/profile");
-                    }}
-                  >
-                    <User size={16} />
-                    View Profile
-                  </button>
-                  <button
-                    type="button"
-                    className="profile__item"
-                    onClick={() => {
-                      setShowProfileMenu(false);
-                      navigate("/settings");
-                    }}
-                  >
-                    <Settings size={16} />
-                    Settings
-                  </button>
-                  <div className="profile__meta">
-                    <p>Membership: Explorer</p>
-                    <p>Next trip: Pokhara</p>
-                  </div>
-                  <button type="button" className="profile__item profile__logout" onClick={handleLogout}>
-                    <LogOut size={16} />
-                    Logout
-                  </button>
+                  <button type="button" className="travel-profile__item" onClick={() => navigate("/profile")}><User size={16} />Profile</button>
+                  <button type="button" className="travel-profile__item" onClick={() => navigate("/settings")}><Settings size={16} />Settings</button>
+                  <button type="button" className="travel-profile__item travel-profile__item--danger" onClick={handleLogout}><LogOut size={16} />Logout</button>
                 </div>
               )}
             </div>
-          </div>
-        </div>
 
-        <header className="dashboard__header">
-          <div>
-            <p className="dashboard__kicker">Smart Travel Nepal</p>
-            <h1 className="dashboard__title">
-              Namaste, {displayName} <span aria-hidden>👋</span>
-            </h1>
-            <p className="dashboard__subtitle">Ready for your next journey in Nepal?</p>
-          </div>
-
-          <div className="dashboard__badges">
-            <div className="dashboard__badge">
-              <Clock size={16} />
-              <span>Next Trip In</span>
-              <strong>{daysUntilNextTrip === null ? "-" : `${daysUntilNextTrip} days`}</strong>
-            </div>
-            <div className="dashboard__badge">
-              <Compass size={16} />
-              <span>Trips Planned</span>
-              <strong>{trips.length}</strong>
-            </div>
+            <button type="button" className="travel-cta" onClick={() => navigate("/itinerary-planner")}>Plan New Trip</button>
           </div>
         </header>
 
-        <div className="dashboard__grid">
-          <main className="dashboard__main">
-            <section className="card card--featured">
-              <div className="card__header">
-                <div className="card__title">
-                  <Mountain size={20} />
-                  <h2>Upcoming Trip</h2>
-                </div>
-                <span className="card__pill">Primary Focus</span>
+        <section className="hero">
+          <div className="hero__content">
+            <div className="hero__topline">
+              <div className="hero__eyebrow">Personal travel dashboard</div>
+              <div className="hero__guest">Curated for {displayName}</div>
+            </div>
+            <h1>
+              Discover Nepal with
+              <span> confidence, calm planning,</span>
+              and unforgettable journeys.
+            </h1>
+            <p>
+              Everything you need for a premium travel planning experience lives here: inspiration, itinerary flow,
+              weather awareness, budgets, and beautifully organized next steps.
+            </p>
+            <div className="hero__highlights">
+              <span>Trusted routes</span>
+              <span>Real booking visibility</span>
+              <span>AI trip planning</span>
+            </div>
+            <div className="hero__actions">
+              <button type="button" className="hero__primary" onClick={() => navigate("/explore")}>Explore Destinations</button>
+              <button type="button" className="hero__secondary" onClick={() => navigate("/my-trips")}>View My Trips</button>
+            </div>
+            <div className="hero__stats">
+              <div className="glass-card hero__stat"><span>Upcoming trip</span><strong>{upcomingTrip?.title || "No trip scheduled yet"}</strong></div>
+              <div className="glass-card hero__stat"><span>Countdown</span><strong>{daysUntilNextTrip === null ? "Start planning" : `${daysUntilNextTrip} days left`}</strong></div>
+              <div className="glass-card hero__stat"><span>Saved places</span><strong>{savedPlaces.length} ready to revisit</strong></div>
+            </div>
+          </div>
+
+          <div className="hero__visual">
+            <div className="hero__visual-shell" />
+            {heroVisualImage ? (
+              <img src={heroVisualImage} alt={upcomingTrip?.title || heroDestination?.name || "Scenic Nepal travel"} />
+            ) : (
+              <div className="hero__visual-empty">
+                <strong>No posted destination image yet</strong>
+                <span>Add a location image from admin to feature it here.</span>
+              </div>
+            )}
+            <div className="hero__image-tint" />
+            <div className="glass-card hero__overlay hero__overlay--location">
+              <span>Destination</span>
+              <strong>{heroDestination?.name || itinerary?.destination || "Nepal"}</strong>
+              <small>{heroLocationLabel}</small>
+            </div>
+            <div className="glass-card hero__visual-caption">
+              <div>
+                <span>Next journey</span>
+                <strong>{upcomingTrip?.title || itinerary?.destination || heroDestination?.name || "Pokhara"}</strong>
+              </div>
+              <small>
+                {itineraryDays[0]?.title ||
+                  heroDestination?.tag ||
+                  "Mountain views, lakeside calm, and easy next steps for planning."}
+              </small>
+            </div>
+          </div>
+        </section>
+
+        <div className="dashboard-grid">
+          <main className="dashboard-grid__main">
+            <section className="premium-card premium-card--trip">
+              <div className="section-head">
+                <div><p className="section-head__eyebrow">Upcoming Trip</p><h2>Your next escape</h2></div>
+                <button type="button" className="section-head__link" onClick={() => navigate("/my-trips")}>Open trips</button>
               </div>
 
               {tripsLoading ? (
-                <p className="dashboard__hint">Loading your latest trip...</p>
+                <p className="dashboard-note">Loading your latest adventure...</p>
               ) : upcomingTrip ? (
-                <div className="trip">
-                  <div className="trip__image">
-                    <img
-                      src={getTripImage(upcomingTrip) || "https://images.unsplash.com/photo-1500530855697-b586d89ba3ee?auto=format&fit=crop&w=1200&q=80"}
-                      alt={upcomingTrip.title}
-                    />
+                <div className="trip-focus">
+                  <div className="trip-focus__image">
+                    {getTripImage(upcomingTrip) ? (
+                      <img src={getTripImage(upcomingTrip)} alt={upcomingTrip.title} />
+                    ) : (
+                      <div className="trip-focus__image-empty">
+                        <strong>No posted trip image yet</strong>
+                        <span>This card will use your uploaded destination image when available.</span>
+                      </div>
+                    )}
                   </div>
-                  <div className="trip__info">
+                  <div className="trip-focus__body">
+                    <div className="trip-focus__chips">
+                      <span>{formatDate(upcomingTrip.startDate)}</span>
+                      <span>{daysUntilNextTrip >= 0 ? `${daysUntilNextTrip} days left` : "Trip in progress"}</span>
+                    </div>
                     <h3>{upcomingTrip.title}</h3>
-                    <p>
-                      <Calendar size={16} /> {formatDate(upcomingTrip.startDate)} - {formatDate(upcomingTrip.endDate)}
+                    <p className="trip-focus__summary">
+                      {upcomingTrip.summary || "A curated journey with scenic stays, memorable food stops, and enough breathing room to enjoy Nepal."}
                     </p>
-                    <p>
-                      <Users size={16} /> Budget: ${upcomingTrip.price || 0}
-                    </p>
-                    {upcomingTrip.summary && <p className="trip__summary">{upcomingTrip.summary}</p>}
-                    <div className="trip__actions">
-                      <Link
-                        className="btn btn--primary"
-                        to={itinerary?._id ? `/itineraries/${itinerary._id}` : "/itinerary-planner"}
-                      >
-                        View Itinerary
-                      </Link>
-                      <button className="btn btn--ghost" onClick={() => goToDestinationHub()}>Explore & Plan</button>
+                    <div className="trip-focus__meta">
+                      <div><Calendar size={16} /><span>{formatDate(upcomingTrip.startDate)} - {formatDate(upcomingTrip.endDate)}</span></div>
+                      <div><Wallet size={16} /><span>NPR {Number(upcomingTrip?.price || 0).toLocaleString()}</span></div>
+                    </div>
+                    <div className="trip-focus__actions">
+                      <Link className="action-btn action-btn--primary" to={itinerary?._id ? `/itineraries/${itinerary._id}` : "/itinerary-planner"}>Quick View</Link>
+                      <button type="button" className="action-btn action-btn--ghost" onClick={() => navigate("/itinerary-planner")}>Continue Planning</button>
                     </div>
                   </div>
                 </div>
               ) : (
-                <div className="empty">
-                  No upcoming trips — start planning your Nepal adventure <span aria-hidden>🇳🇵</span>
+                <div className="empty-state">
+                  <p>No upcoming trips yet.</p>
+                  <button type="button" className="action-btn action-btn--primary" onClick={() => navigate("/itinerary-planner")}>Plan your first journey</button>
                 </div>
               )}
-              {!tripsLoading && tripsError && <p className="dashboard__error">{tripsError}</p>}
+              {!tripsLoading && tripsError && <p className="dashboard-error">{tripsError}</p>}
             </section>
 
-            <section className="card">
-              <div className="card__header">
-                <div className="card__title">
-                  <Sparkles size={20} />
-                  <h2>Current Itinerary</h2>
-                </div>
-                <span className="card__pill card__pill--soft">AI Crafted</span>
+            <section className="premium-card">
+              <div className="section-head">
+                <div><p className="section-head__eyebrow">Current Itinerary</p><h2>Day-wise travel flow</h2></div>
+                <button type="button" className="section-head__link" onClick={() => navigate("/itinerary-planner")}>AI regenerate</button>
               </div>
 
-              {itineraryLoading && <p className="dashboard__hint">Loading your latest itinerary...</p>}
-              {!itineraryLoading && itineraryError && <p className="dashboard__error">{itineraryError}</p>}
-              {!itineraryLoading && !itineraryError && itinerary && (
-                <div className="itinerary">
-                  {(itinerary.days || []).map((day) => (
-                    <div key={day.day} className="itinerary__day">
-                      <div className="itinerary__badge">Day {day.day}</div>
-                      <div>
-                        <p className="itinerary__title">{day.title}</p>
-                        <p className="itinerary__meta">
-                          <MapPin size={14} /> {itinerary.destination}
-                        </p>
-                        <p className="itinerary__summary">
-                          {(day.places || []).map((place) => place.name).filter(Boolean).join(", ") || "No places yet."}
-                        </p>
-                        {(day.places || []).some((place) => place.image) && (
-                          <div className="itinerary__media">
-                            {(day.places || [])
-                              .filter((place) => place.image)
-                              .slice(0, 3)
-                              .map((place, index) => (
-                                <div key={`${place.name}-${index}`} className="itinerary__thumb">
-                                  <img src={place.image} alt={place.name} />
-                                </div>
-                              ))}
-                          </div>
-                        )}
+              {itineraryLoading ? (
+                <p className="dashboard-note">Loading your current itinerary...</p>
+              ) : itinerary ? (
+                <div className="timeline">
+                  {itineraryDays.map((day, index) => (
+                    <div key={day.day || index} className="timeline__item">
+                      <div className="timeline__rail">
+                        <span className="timeline__dot" />
+                        {index !== itineraryDays.length - 1 && <span className="timeline__line" />}
+                      </div>
+                      <div className="timeline__content">
+                        <div className="timeline__head">
+                          <div><strong>Day {day.day}</strong><h3>{day.title || "Explore at your own pace"}</h3></div>
+                          <span>{itinerary.destination || "Nepal"}</span>
+                        </div>
+                        <p>{(day.places || []).map((place) => place.name).filter(Boolean).join(", ") || "Add scenic stops, food breaks, and hotel details to complete this day."}</p>
+                        <div className="timeline__tags">
+                          <span><Hotel size={14} />Hotel</span>
+                          <span><Umbrella size={14} />Food</span>
+                          <span><Compass size={14} />Transport</span>
+                        </div>
                       </div>
                     </div>
                   ))}
                 </div>
-              )}
-              {!itineraryLoading && !itineraryError && !itinerary && (
-                <div className="empty">
-                  No itinerary generated yet. Start from the planner to create one.
-                  <div className="card__actions">
-                    <button className="btn btn--primary" onClick={() => navigate("/itinerary-planner")}>
-                      Create Itinerary
-                    </button>
-                  </div>
+              ) : (
+                <div className="empty-state empty-state--left">
+                  <p>No itinerary yet. Create one to unlock a smarter timeline.</p>
+                  <button type="button" className="action-btn action-btn--primary" onClick={() => navigate("/itinerary-planner")}>Create itinerary</button>
                 </div>
               )}
-
-              <div className="card__actions">
-                <button className="btn btn--primary" onClick={() => navigate("/my-trips")}>View Full Itinerary</button>
-                <button className="btn btn--ghost">Regenerate with AI</button>
-              </div>
+              {!itineraryLoading && itineraryError && <p className="dashboard-error">{itineraryError}</p>}
             </section>
 
-            <section className="card">
-              <div className="card__header">
-                <div className="card__title">
-                  <Compass size={20} />
-                  <h2>Popular & Community Destinations</h2>
-                </div>
-                <button type="button" className="card__pill card__pill--soft card__pill--button" onClick={() => navigate("/explore")}>
-                  Explore
-                </button>
+            <section className="premium-card">
+              <div className="section-head">
+                <div><p className="section-head__eyebrow">Recommended Destinations</p><h2>Beautiful places to consider next</h2></div>
+                <button type="button" className="section-head__link" onClick={() => navigate("/explore")}>See all</button>
               </div>
-              {destinationsLoading && <p className="dashboard__hint">Loading latest destinations...</p>}
-              {!destinationsLoading && destinationsError && (
-                <p className="dashboard__error">{destinationsError}</p>
-              )}
-
-              <div className="destinations">
-                {popularDestinations.map((destination) => (
-                  <article key={destination.id} className="destination">
-                    <div className="destination__image">
-                      <img src={destination.image} alt={destination.name} />
-                    </div>
-                    <div className="destination__content">
-                      <div>
-                        <h3>{destination.name}</h3>
-                        <p>{destination.tag}</p>
+              {destinationsLoading ? (
+                <p className="dashboard-note">Loading premium picks...</p>
+              ) : (
+                <div className="destination-grid">
+                  {recommendedDestinations.map((destination) => (
+                    <article key={destination.id} className="destination-card">
+                      <div className="destination-card__image">
+                        <img src={destination.image} alt={destination.name} />
+                        <span className="destination-card__tag">{destination.category}</span>
                       </div>
-                      <button className="btn btn--ghost" onClick={() => goToDestinationHub(destination.locationId)}>
-                        Open Destination
-                      </button>
-                    </div>
-                  </article>
-                ))}
-              </div>
-              {!destinationsLoading && liveDestinations.length === 0 && (
-                <div className="empty">
-                  No live destinations found. Please try again.
-                  <div className="card__actions">
-                    <button className="btn btn--ghost" onClick={loadDestinations}>Retry</button>
-                  </div>
+                      <div className="destination-card__body">
+                        <div>
+                          <h3>{destination.name}</h3>
+                          <p className="destination-card__location"><MapPin size={14} />{destination.tag}</p>
+                          <p className="destination-card__copy">{destination.description}</p>
+                        </div>
+                        <button type="button" className="action-btn action-btn--ghost" onClick={() => goToDestinationHub(destination.locationId)}>Explore destination</button>
+                      </div>
+                    </article>
+                  ))}
                 </div>
               )}
+              {!destinationsLoading && destinationsError && <p className="dashboard-error">{destinationsError}</p>}
+            </section>
+
+            <section className="premium-card">
+              <div className="section-head">
+                <div><p className="section-head__eyebrow">Nearby Activities</p><h2>Calm moments and adventure nearby</h2></div>
+              </div>
+              <div className="activity-grid">
+                {nearbyActivities.map((activity) => {
+                  const Icon = activity.icon;
+                  return (
+                    <article key={activity.title} className="activity-card">
+                      <span className="activity-card__icon"><Icon size={18} /></span>
+                      <h3>{activity.title}</h3>
+                      <p>{activity.detail}</p>
+                    </article>
+                  );
+                })}
+              </div>
             </section>
           </main>
 
-          <aside className="dashboard__sidebar">
-            <section className="card">
-              <div className="card__header">
-                <div className="card__title">
-                  <Calendar size={20} />
-                  <h2>Trip History</h2>
-                </div>
+          <aside className="dashboard-grid__sidebar">
+            <section className="premium-card premium-card--compact weather-widget">
+              <div className="section-head section-head--tight">
+                <div><p className="section-head__eyebrow">Weather Widget</p><h2>{weather.label}</h2></div>
+                <Sun size={18} />
               </div>
-              <div className="history">
-                {tripHistory.map((trip) => (
-                  <div key={trip._id} className="history__item">
-                    <div>
-                      <p className="history__name">{trip.title}</p>
-                      <p className="history__date">{formatDate(trip.startDate)}</p>
-                    </div>
-                    <span className="history__tag">{new Date(trip.endDate) < now ? "Completed" : "Upcoming"}</span>
-                  </div>
-                ))}
-                {!tripsLoading && tripHistory.length === 0 && (
-                  <div className="empty">No saved trips yet.</div>
-                )}
-              </div>
-              <button className="btn btn--ghost btn--full" onClick={() => navigate("/my-trips")}>View Full History</button>
+              <div className="weather-widget__hero"><strong>{weather.temp}</strong><span>{weather.summary}</span></div>
             </section>
 
-            <section className="card">
-              <div className="card__header">
-                <div className="card__title">
-                  <Users size={20} />
-                  <h2>Travel Buddies</h2>
-                </div>
+            <section className="premium-card premium-card--compact">
+              <div className="section-head section-head--tight">
+                <div><p className="section-head__eyebrow">Spending Overview</p><h2>Spend with clarity</h2></div>
               </div>
+              {budgetLoading ? (
+                <p className="dashboard-note">Loading booking and payment totals...</p>
+              ) : (
+                <div className="budget-stack">
+                  <div className="budget-stack__row"><span>Total booked</span><strong>NPR {totalBookedAmount.toLocaleString()}</strong></div>
+                  <div className="budget-stack__row"><span>Total paid</span><strong>NPR {totalPaidAmount.toLocaleString()}</strong></div>
+                  <div className="budget-stack__row"><span>Pending payment</span><strong>NPR {totalPendingAmount.toLocaleString()}</strong></div>
+                  <div className="budget-stack__row"><span>Confirmed bookings</span><strong>{confirmedBookings}</strong></div>
+                  <div className="budget-stack__bar"><span style={{ width: `${budgetBarPercent}%` }} /></div>
+                  <small>{totalBookedAmount > 0 ? `${budgetBarPercent}% of your booked value is already paid.` : "Book a stay or package to start tracking confirmed spend."}</small>
+                </div>
+              )}
+              {!budgetLoading && budgetError && <p className="dashboard-error">{budgetError}</p>}
+            </section>
 
-              <div className="buddies">
+            <section className="premium-card premium-card--compact">
+              <div className="section-head section-head--tight">
+                <div><p className="section-head__eyebrow">Saved Places</p><h2>Ready when you are</h2></div>
+              </div>
+              <div className="mini-list">
+                {savedPlaces.map((place) => (
+                  <button key={place.id} type="button" className="mini-list__item" onClick={() => goToDestinationHub(place.locationId)}>
+                    <img src={place.image} alt={place.name} />
+                    <div><strong>{place.name}</strong><small>{place.note}</small></div>
+                    <ChevronRight size={16} />
+                  </button>
+                ))}
+              </div>
+            </section>
+
+            <section className="premium-card premium-card--compact">
+              <div className="section-head section-head--tight">
+                <div><p className="section-head__eyebrow">Travel Buddies</p><h2>Companions nearby</h2></div>
+                <Users size={18} />
+              </div>
+              <div className="buddy-list">
                 {travelBuddies.map((buddy) => (
-                  <div key={buddy.id} className="buddy">
-                    <div className="buddy__avatar" aria-hidden />
-                    <div>
-                      <p className="buddy__name">{buddy.name}</p>
-                      <p className="buddy__meta">
-                        {buddy.destination} - {buddy.dates}
-                      </p>
-                    </div>
+                  <div key={buddy.id} className="buddy-list__item">
+                    <span className="buddy-list__avatar">{initialsFromName(buddy.name)}</span>
+                    <div><strong>{buddy.name}</strong><small>{buddy.plan}</small><p>{buddy.status}</p></div>
                   </div>
                 ))}
               </div>
+            </section>
 
-              <button className="btn btn--primary btn--full">Find Buddies</button>
-              <p className="trust">Verified Travelers Only</p>
+            <section className="premium-card premium-card--compact">
+              <div className="section-head section-head--tight">
+                <div><p className="section-head__eyebrow">Trip History</p><h2>Recent journeys</h2></div>
+                <Clock3 size={18} />
+              </div>
+              <div className="history-list">
+                {tripHistory.length > 0 ? (
+                  tripHistory.map((trip) => (
+                    <div key={trip._id} className="history-list__item">
+                      <div><strong>{trip.title}</strong><small>{formatDate(trip.startDate)}</small></div>
+                      <span>{new Date(trip.endDate) < now ? "Completed" : "Upcoming"}</span>
+                    </div>
+                  ))
+                ) : (
+                  <p className="dashboard-note">Your completed and upcoming trips will appear here.</p>
+                )}
+              </div>
+            </section>
+
+            <section className="premium-card premium-card--compact">
+              <div className="section-head section-head--tight">
+                <div><p className="section-head__eyebrow">Notifications</p><h2>What needs attention</h2></div>
+                <Bell size={18} />
+              </div>
+              <div className="notification-stack">
+                {notificationsPreview.map((item) => (
+                  <div key={item} className="notification-stack__item"><span /><p>{item}</p></div>
+                ))}
+              </div>
             </section>
           </aside>
         </div>
       </div>
-
-      <style>{`
-        :root {
-          --primary: #2f6b4f;
-          --primary-dark: #24543e;
-          --sky: #dce9e2;
-          --sky-deep: #2f6b4f;
-          --forest: #2f6b4f;
-          --snow: #f6f4ee;
-          --ink: #24313d;
-          --muted: #667085;
-          --card: #fffefb;
-          --border: #e3e7eb;
-          --shadow: 0 3px 12px rgba(15, 23, 42, 0.06);
-        }
-
-        .dashboard {
-          min-height: 100vh;
-          background: #f5f7fa;
-          font-family: "Plus Jakarta Sans", "Sora", "DM Sans", system-ui, sans-serif;
-          color: var(--ink);
-          position: relative;
-          overflow: hidden;
-        }
-
-        .dashboard__bg {
-          position: absolute;
-          inset: 0;
-          background:
-            radial-gradient(circle at 20% 10%, rgba(47, 107, 79, 0.1), transparent 44%),
-            linear-gradient(180deg, rgba(255, 255, 255, 0.6), rgba(255, 255, 255, 0.45));
-          pointer-events: none;
-        }
-
-        .dashboard__container {
-          position: relative;
-          max-width: 1280px;
-          margin: 0 auto;
-          padding: 20px 12px 32px;
-        }
-
-        .dashboard__topbar {
-          position: sticky;
-          top: 12px;
-          z-index: 5;
-          display: grid;
-          grid-template-columns: auto 1fr minmax(220px, 320px) auto;
-          align-items: center;
-          gap: 10px;
-          padding: 6px 10px;
-          border-radius: 16px;
-          background: rgba(255, 255, 255, 0.96);
-          box-shadow: var(--shadow);
-          border: 1px solid var(--border);
-          margin-bottom: 14px;
-          backdrop-filter: blur(4px);
-        }
-
-        .topbar__brand {
-          display: flex;
-          align-items: center;
-          gap: 10px;
-          font-weight: 700;
-          color: var(--forest);
-          white-space: nowrap;
-        }
-
-        .topbar__menu {
-          display: flex;
-          align-items: center;
-          gap: 10px;
-          flex-wrap: nowrap;
-          white-space: nowrap;
-          overflow-x: auto;
-          scrollbar-width: none;
-          width: 100%;
-          justify-content: space-between;
-        }
-
-        .topbar__menu::-webkit-scrollbar {
-          display: none;
-        }
-
-        .topbar__link {
-          background: transparent;
-          border: none;
-          color: var(--ink);
-          font-weight: 600;
-          font-size: 0.9rem;
-          cursor: pointer;
-          padding: 6px 10px;
-          border-radius: 10px;
-          transition: background 0.2s ease, color 0.2s ease;
-          white-space: nowrap;
-        }
-
-        .topbar__link:hover {
-          background: rgba(47, 107, 79, 0.12);
-          color: var(--primary);
-        }
-
-        .topbar__search {
-          display: flex;
-          align-items: center;
-          gap: 8px;
-          padding: 8px 12px;
-          background: var(--snow);
-          border-radius: 12px;
-          border: 1px solid var(--border);
-          position: relative;
-        }
-
-        .topbar__search input {
-          border: none;
-          outline: none;
-          background: transparent;
-          width: 100%;
-          font-size: 0.9rem;
-          color: var(--ink);
-        }
-
-        .topbar__search-results {
-          position: absolute;
-          top: calc(100% + 8px);
-          left: 0;
-          right: 0;
-          background: white;
-          border-radius: 12px;
-          border: 1px solid var(--border);
-          box-shadow: var(--shadow);
-          padding: 6px;
-          z-index: 30;
-        }
-
-        .topbar__search-row {
-          padding: 10px 12px;
-          font-size: 0.85rem;
-          color: var(--muted);
-        }
-
-        .topbar__search-list {
-          list-style: none;
-          margin: 0;
-          padding: 0;
-          display: grid;
-          gap: 4px;
-        }
-
-        .topbar__search-item {
-          margin: 0;
-        }
-
-        .topbar__search-btn {
-          width: 100%;
-          border: none;
-          background: var(--snow);
-          border-radius: 10px;
-          padding: 10px 12px;
-          display: grid;
-          gap: 4px;
-          text-align: left;
-          cursor: pointer;
-          transition: background 0.2s ease, transform 0.2s ease;
-        }
-
-        .topbar__search-btn:hover {
-          background: rgba(47, 107, 79, 0.12);
-          transform: translateY(-1px);
-        }
-
-        .topbar__search-title {
-          font-weight: 600;
-          color: var(--ink);
-          font-size: 0.9rem;
-        }
-
-        .topbar__search-meta {
-          font-size: 0.78rem;
-          color: var(--muted);
-        }
-
-        .topbar__actions {
-          display: flex;
-          align-items: center;
-          gap: 10px;
-        }
-
-        .profile {
-          position: relative;
-        }
-
-        .profile__menu {
-          position: absolute;
-          right: 0;
-          top: 48px;
-          width: 240px;
-          background: white;
-          border-radius: 14px;
-          box-shadow: var(--shadow);
-          border: 1px solid var(--border);
-          padding: 14px;
-          display: grid;
-          gap: 10px;
-          z-index: 20;
-        }
-
-        .profile__header {
-          display: flex;
-          gap: 10px;
-          align-items: center;
-          padding-bottom: 10px;
-          border-bottom: 1px solid var(--border);
-        }
-
-        .profile__avatar {
-          width: 44px;
-          height: 44px;
-          border-radius: 14px;
-          display: grid;
-          place-items: center;
-          background: var(--snow);
-          color: var(--forest);
-        }
-
-        .profile__name {
-          margin: 0;
-          font-weight: 600;
-        }
-
-        .profile__email {
-          margin: 2px 0 0;
-          font-size: 0.78rem;
-          color: var(--muted);
-        }
-
-        .profile__item {
-          background: var(--snow);
-          border: none;
-          border-radius: 12px;
-          padding: 10px 12px;
-          display: flex;
-          align-items: center;
-          gap: 8px;
-          cursor: pointer;
-          font-weight: 600;
-          font-size: 0.9rem;
-          color: var(--ink);
-          transition: background 0.2s ease, transform 0.2s ease;
-        }
-
-        .profile__item:hover {
-          background: rgba(47, 107, 79, 0.1);
-          transform: translateY(-1px);
-        }
-
-        .profile__meta {
-          font-size: 0.8rem;
-          color: var(--muted);
-          display: grid;
-          gap: 4px;
-          padding: 4px 2px;
-        }
-
-        .profile__logout {
-          background: rgba(239, 68, 68, 0.1);
-          color: #b91c1c;
-        }
-
-        .icon-btn {
-          border: none;
-          background: var(--snow);
-          width: 38px;
-          height: 38px;
-          border-radius: 10px;
-          display: grid;
-          place-items: center;
-          cursor: pointer;
-          color: var(--ink);
-          transition: transform 0.2s ease, background 0.2s ease;
-          position: relative;
-        }
-
-        .icon-btn:hover {
-          transform: translateY(-2px);
-          background: rgba(47, 107, 79, 0.12);
-        }
-
-        .icon-btn--pulse {
-          box-shadow: 0 0 0 0 rgba(47, 107, 79, 0.35);
-          animation: notifPulse 1.8s ease-out 1;
-        }
-
-        .notif-badge {
-          position: absolute;
-          top: -6px;
-          right: -6px;
-          min-width: 20px;
-          height: 20px;
-          padding: 0 6px;
-          border-radius: 999px;
-          background: linear-gradient(135deg, #ef4444, #f97316);
-          color: white;
-          font-size: 0.68rem;
-          font-weight: 700;
-          display: grid;
-          place-items: center;
-          border: 2px solid #fff;
-          box-shadow: 0 6px 12px rgba(239, 68, 68, 0.25);
-        }
-
-        @keyframes notifPulse {
-          0% {
-            box-shadow: 0 0 0 0 rgba(47, 107, 79, 0.35);
-          }
-          70% {
-            box-shadow: 0 0 0 10px rgba(47, 107, 79, 0);
-          }
-          100% {
-            box-shadow: 0 0 0 0 rgba(47, 107, 79, 0);
-          }
-        }
-
-        .dashboard__header {
-          display: flex;
-          justify-content: space-between;
-          align-items: flex-start;
-          gap: 12px;
-          margin-bottom: 14px;
-        }
-
-        .dashboard__kicker {
-          text-transform: uppercase;
-          letter-spacing: 0.2em;
-          font-size: 0.72rem;
-          color: var(--forest);
-          font-weight: 600;
-          margin-bottom: 6px;
-        }
-
-        .dashboard__title {
-          font-size: clamp(2rem, 3vw, 2.75rem);
-          margin: 0 0 6px;
-          font-weight: 700;
-          letter-spacing: -0.02em;
-        }
-
-        .dashboard__subtitle {
-          color: var(--muted);
-          margin: 0;
-          font-size: 1rem;
-        }
-
-        .dashboard__badges {
-          display: grid;
-          gap: 12px;
-          min-width: 220px;
-        }
-
-        .dashboard__badge {
-          background: rgba(255, 255, 255, 0.95);
-          border-radius: 16px;
-          padding: 12px 14px;
-          display: grid;
-          grid-template-columns: auto 1fr auto;
-          gap: 10px;
-          align-items: center;
-          box-shadow: var(--shadow);
-          border: 1px solid var(--border);
-        }
-
-        .dashboard__badge span {
-          font-size: 0.85rem;
-          color: var(--muted);
-        }
-
-        .dashboard__badge strong {
-          font-size: 0.95rem;
-          color: var(--ink);
-        }
-
-        .dashboard__grid {
-          display: grid;
-          grid-template-columns: 2.3fr 1fr;
-          gap: 12px;
-        }
-
-        .dashboard__main {
-          display: grid;
-          gap: 12px;
-        }
-
-        .dashboard__sidebar {
-          display: grid;
-          gap: 12px;
-        }
-
-        .card {
-          background: var(--card);
-          border-radius: 16px;
-          padding: 16px;
-          box-shadow: var(--shadow);
-          border: 1px solid var(--border);
-        }
-
-        .card--featured {
-          border: 1px solid #cfe3d9;
-          box-shadow: 0 4px 14px rgba(47, 107, 79, 0.12);
-        }
-
-        .card__header {
-          display: flex;
-          justify-content: space-between;
-          align-items: center;
-          margin-bottom: 16px;
-        }
-
-        .card__title {
-          display: flex;
-          align-items: center;
-          gap: 10px;
-          font-size: 1.1rem;
-        }
-
-        .card__title h2 {
-          margin: 0;
-          font-size: 1.15rem;
-          font-weight: 700;
-          letter-spacing: -0.01em;
-        }
-
-        .card__pill {
-          background: rgba(47, 107, 79, 0.12);
-          color: var(--forest);
-          font-size: 0.75rem;
-          padding: 6px 12px;
-          border-radius: 10px;
-          font-weight: 600;
-        }
-
-        .card__pill--soft {
-          background: rgba(47, 107, 79, 0.12);
-          color: var(--primary);
-        }
-
-        .card__pill--button {
-          border: none;
-          cursor: pointer;
-        }
-
-        .trip {
-          display: grid;
-          grid-template-columns: 1.2fr 1.4fr;
-          gap: 18px;
-          align-items: center;
-        }
-
-        .trip__image {
-          border-radius: 14px;
-          overflow: hidden;
-          height: 150px;
-        }
-
-        .trip__image img {
-          width: 100%;
-          height: 100%;
-          object-fit: cover;
-          transition: transform 0.4s ease;
-        }
-
-        .trip__image:hover img {
-          transform: scale(1.05);
-        }
-
-        .trip__info h3 {
-          margin: 0 0 10px;
-          font-size: 1.4rem;
-          font-weight: 600;
-          letter-spacing: -0.01em;
-        }
-
-        .trip__info p {
-          margin: 0 0 8px;
-          color: var(--muted);
-          display: flex;
-          align-items: center;
-          gap: 8px;
-          font-size: 0.95rem;
-        }
-
-        .trip__summary {
-          margin: 0 0 8px;
-          color: #475569;
-          line-height: 1.5;
-        }
-
-        .trip__actions {
-          display: flex;
-          gap: 10px;
-          margin-top: 12px;
-          flex-wrap: wrap;
-        }
-
-        .itinerary {
-          display: grid;
-          gap: 12px;
-        }
-
-        .itinerary__day {
-          display: grid;
-          grid-template-columns: auto 1fr;
-          gap: 12px;
-          padding: 12px;
-          border-radius: 14px;
-          background: var(--snow);
-          border: 1px solid var(--border);
-        }
-
-        .itinerary__badge {
-          background: rgba(47, 107, 79, 0.14);
-          color: var(--primary);
-          font-weight: 600;
-          padding: 6px 10px;
-          border-radius: 10px;
-          font-size: 0.8rem;
-          height: fit-content;
-        }
-
-        .itinerary__title {
-          font-weight: 600;
-          margin: 0 0 4px;
-        }
-
-        .itinerary__meta {
-          margin: 0;
-          color: var(--muted);
-          display: flex;
-          align-items: center;
-          gap: 6px;
-          font-size: 0.85rem;
-        }
-
-        .itinerary__summary {
-          margin: 6px 0 0;
-          color: #475569;
-          font-size: 0.85rem;
-          line-height: 1.5;
-        }
-
-        .itinerary__media {
-          display: flex;
-          gap: 6px;
-          margin-top: 8px;
-          flex-wrap: wrap;
-        }
-
-        .itinerary__thumb {
-          width: 54px;
-          height: 42px;
-          border-radius: 10px;
-          overflow: hidden;
-          border: 1px solid var(--border);
-          background: var(--snow);
-        }
-
-        .itinerary__thumb img {
-          width: 100%;
-          height: 100%;
-          object-fit: cover;
-          display: block;
-        }
-
-        .card__actions {
-          display: flex;
-          gap: 10px;
-          margin-top: 16px;
-          flex-wrap: wrap;
-        }
-
-        .destinations {
-          display: grid;
-          grid-template-columns: repeat(3, minmax(0, 1fr));
-          gap: 10px;
-        }
-
-        .destination {
-          background: var(--snow);
-          border-radius: 14px;
-          overflow: hidden;
-          display: grid;
-          grid-template-rows: 120px 1fr;
-          border: 1px solid var(--border);
-          transition: transform 0.25s ease, box-shadow 0.25s ease;
-        }
-
-        .destination:hover {
-          transform: translateY(-4px);
-          box-shadow: 0 6px 18px rgba(15, 23, 42, 0.1);
-        }
-
-        .destination__image img {
-          width: 100%;
-          height: 100%;
-          object-fit: cover;
-        }
-
-        .destination__content {
-          padding: 14px;
-          display: flex;
-          justify-content: space-between;
-          align-items: center;
-          gap: 10px;
-        }
-
-        .destination__content h3 {
-          margin: 0;
-          font-size: 1rem;
-        }
-
-        .destination__content p {
-          margin: 4px 0 0;
-          font-size: 0.8rem;
-          color: var(--muted);
-        }
-
-        .dashboard__hint {
-          margin: 0 0 10px;
-          color: var(--muted);
-          font-size: 0.85rem;
-        }
-
-        .dashboard__error {
-          margin: 0 0 10px;
-          color: #b91c1c;
-          background: #fef2f2;
-          border: 1px solid #fecaca;
-          padding: 10px 12px;
-          border-radius: 10px;
-          font-size: 0.85rem;
-        }
-
-        .history {
-          display: grid;
-          gap: 8px;
-        }
-
-        .history__item {
-          display: flex;
-          justify-content: space-between;
-          align-items: center;
-          padding: 12px;
-          background: var(--snow);
-          border-radius: 12px;
-          border: 1px solid var(--border);
-        }
-
-        .history__name {
-          margin: 0;
-          font-weight: 600;
-        }
-
-        .history__date {
-          margin: 4px 0 0;
-          color: var(--muted);
-          font-size: 0.85rem;
-        }
-
-        .history__tag {
-          background: rgba(47, 107, 79, 0.15);
-          color: var(--forest);
-          font-size: 0.75rem;
-          padding: 6px 10px;
-          border-radius: 10px;
-          font-weight: 600;
-        }
-
-        .buddies {
-          display: grid;
-          gap: 8px;
-          margin-bottom: 16px;
-        }
-
-        .buddy {
-          display: flex;
-          align-items: center;
-          gap: 12px;
-          background: var(--snow);
-          border-radius: 12px;
-          padding: 10px 12px;
-          border: 1px solid var(--border);
-        }
-
-        .buddy__avatar {
-          width: 36px;
-          height: 36px;
-          border-radius: 10px;
-          background: #cbd5e1;
-        }
-
-        .buddy__name {
-          margin: 0;
-          font-weight: 600;
-        }
-
-        .buddy__meta {
-          margin: 2px 0 0;
-          font-size: 0.8rem;
-          color: var(--muted);
-        }
-
-        .btn {
-          border: none;
-          border-radius: 11px;
-          padding: 10px 16px;
-          font-weight: 600;
-          cursor: pointer;
-          font-size: 0.9rem;
-          transition: transform 0.2s ease, background 0.2s ease, border-color 0.2s ease;
-        }
-
-        .btn--primary {
-          background: var(--primary);
-          color: white;
-          box-shadow: none;
-        }
-
-        .btn--primary:hover {
-          transform: translateY(-1px);
-          background: var(--primary-dark);
-        }
-
-        .btn--ghost {
-          background: white;
-          color: var(--primary);
-          border: 1px solid #cfe3d9;
-        }
-
-        .btn--ghost:hover {
-          background: #edf6f1;
-        }
-
-        .btn--full {
-          width: 100%;
-          margin-top: 8px;
-        }
-
-        .trust {
-          margin: 10px 0 0;
-          color: var(--muted);
-          font-size: 0.8rem;
-          text-align: center;
-        }
-
-        .empty {
-          padding: 18px;
-          border-radius: 12px;
-          background: var(--snow);
-          color: var(--muted);
-          font-weight: 500;
-          border: 1px solid var(--border);
-        }
-
-        @media (max-width: 1024px) {
-          .dashboard__topbar {
-            grid-template-columns: 1fr;
-            border-radius: 24px;
-          }
-
-          .topbar__menu {
-            order: 3;
-          }
-
-          .topbar__search {
-            order: 2;
-            width: 100%;
-          }
-
-          .dashboard__grid {
-            grid-template-columns: 1fr;
-          }
-
-          .dashboard__header {
-            flex-direction: column;
-          }
-
-          .destinations {
-            grid-template-columns: repeat(2, minmax(0, 1fr));
-          }
-
-          .trip {
-            grid-template-columns: 1fr;
-          }
-        }
-
-        @media (max-width: 720px) {
-          .destinations {
-            grid-template-columns: 1fr;
-          }
-
-          .dashboard__badges {
-            width: 100%;
-            grid-template-columns: 1fr 1fr;
-          }
-        }
-      `}</style>
     </div>
   );
-}
-
-function formatDate(value) {
-  if (!value) return "-";
-  const parsed = new Date(value);
-  if (Number.isNaN(parsed.getTime())) return "-";
-  return parsed.toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" });
-}
-
-function daysBetween(start, end) {
-  const startDate = new Date(start);
-  const endDate = new Date(end);
-  if (Number.isNaN(startDate.getTime()) || Number.isNaN(endDate.getTime())) return 0;
-  const ms = endDate.setHours(0, 0, 0, 0) - startDate.setHours(0, 0, 0, 0);
-  return Math.max(0, Math.ceil(ms / (1000 * 60 * 60 * 24)));
 }
