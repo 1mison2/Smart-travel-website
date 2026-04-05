@@ -4,6 +4,7 @@ const Listing = require("../models/Listing");
 const isValidObjectId = (id) => mongoose.Types.ObjectId.isValid(id);
 const buildImageUrl = (req, filename) =>
   `${req.protocol}://${req.get("host")}/uploads/${filename}`;
+const escapeRegex = (value) => String(value || "").replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 
 const parseJsonIfNeeded = (value) => {
   if (typeof value !== "string") return value;
@@ -106,6 +107,17 @@ exports.getListings = async (req, res) => {
   try {
     const query = {};
     if (req.query.type) query.type = String(req.query.type);
+    if (req.query.locationNames) {
+      const names = String(req.query.locationNames)
+        .split(",")
+        .map((item) => item.trim())
+        .filter(Boolean);
+      if (names.length) {
+        query["location.name"] = {
+          $in: names.map((name) => new RegExp(`^${escapeRegex(name)}$`, "i")),
+        };
+      }
+    }
     if (req.query.city) {
       const city = String(req.query.city);
       query.$or = [

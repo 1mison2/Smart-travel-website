@@ -3,6 +3,7 @@ const axios = require("axios");
 const Booking = require("../models/Booking");
 const Payment = require("../models/Payment");
 const { createNotification, notifyAdmins } = require("../utils/notificationService");
+const { canSendEmail, sendPaymentSuccessEmail } = require("../utils/emailService");
 
 const isValidObjectId = (id) => mongoose.Types.ObjectId.isValid(id);
 
@@ -222,6 +223,7 @@ exports.verifyKhaltiPayment = async (req, res) => {
 
     payment.rawResponse = responseData;
     payment.verifiedAt = new Date();
+    const wasAlreadyPaid = booking.paymentStatus === "paid" && booking.bookingStatus === "confirmed";
 
     const normalized = status.toLowerCase();
     if (normalized === "completed") {
@@ -241,19 +243,48 @@ exports.verifyKhaltiPayment = async (req, res) => {
         booking.listingId?.title ||
         booking.locationId?.name ||
         "selected place";
-      await createNotification({
-        recipient: booking.userId,
-        type: "payment_success",
-        title: "Payment successful",
-        message: `Your booking for ${bookingName} is confirmed.`,
-        meta: { bookingId: booking._id, paymentId: payment._id },
-      });
-      await notifyAdmins({
-        type: "payment_success",
-        title: "Booking paid",
-        message: `${req.user.name || req.user.email} completed a Khalti payment.`,
-        meta: { bookingId: booking._id, paymentId: payment._id },
-      });
+
+      if (!wasAlreadyPaid) {
+        await createNotification({
+          recipient: booking.userId,
+          type: "payment_success",
+          title: "Payment successful",
+          message: `Your booking for ${bookingName} is confirmed.`,
+          meta: { bookingId: booking._id, paymentId: payment._id },
+        });
+        await notifyAdmins({
+          type: "payment_success",
+          title: "Booking paid",
+          message: `${req.user.name || req.user.email} completed a Khalti payment.`,
+          meta: { bookingId: booking._id, paymentId: payment._id },
+        });
+      }
+
+      if (!payment.receiptEmailSentAt && canSendEmail(req.user)) {
+        try {
+          const emailResult = await sendPaymentSuccessEmail({
+            email: req.user.email,
+            customerName: req.user?.name,
+            bookingName,
+            bookingId: String(booking._id),
+            paymentId: String(payment._id),
+            transactionId: booking.transactionId,
+            amount: booking.amount,
+            currency: booking.currency || "NPR",
+            paymentProvider: "Khalti",
+            bookingDate: booking.date,
+            paidAt: booking.paidAt,
+            packageSnapshot: booking.packageSnapshot,
+          });
+
+          payment.receiptEmailSentAt = new Date();
+          if (emailResult?.previewURL) {
+            console.log("Payment success email preview URL:", emailResult.previewURL);
+          }
+        } catch (emailError) {
+          console.error("Payment succeeded, but email sending failed:", emailError);
+        }
+      }
     } else if (normalized === "pending" || normalized === "initiated") {
       payment.status = "initiated";
       booking.paymentProvider = "khalti";

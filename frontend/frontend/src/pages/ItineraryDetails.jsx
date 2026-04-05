@@ -163,13 +163,13 @@ export default function ItineraryDetails() {
 
         .itinerary-btn--primary {
           color: #fff;
-          background: linear-gradient(135deg, #0284c7, #0f766e);
+          background: linear-gradient(135deg, var(--primary), var(--primary-dark));
         }
 
         .itinerary-btn--ghost {
-          color: #0f766e;
+          color: var(--primary-dark);
           background: #fff;
-          border: 1px solid rgba(15, 118, 110, 0.3);
+          border: 1px solid var(--border);
         }
 
         .itinerary-page__hint,

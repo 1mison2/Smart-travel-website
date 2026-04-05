@@ -1,467 +1,1158 @@
-import React from "react";
-import { Link } from "react-router-dom";
+import React, { useEffect, useMemo, useState } from "react";
+import { Link, useNavigate } from "react-router-dom";
+import {
+  ArrowRight,
+  BedDouble,
+  Coffee,
+  Compass,
+  Map,
+  LoaderCircle,
+  Mountain,
+  UtensilsCrossed,
+  Search,
+  Star,
+} from "lucide-react";
+import api, { resolveImageUrl } from "../utils/api";
+import { useAuth } from "../context/AuthContext";
+
+const destinationKeywords = {
+  lake: "Lakeside",
+  trek: "Trekking",
+  mountain: "Mountain views",
+  heritage: "Heritage",
+  safari: "Wildlife",
+  temple: "Culture",
+  hill: "Hill escape",
+  adventure: "Adventure",
+};
+
+const currency = (value) => `NPR ${Number(value || 0).toLocaleString()}`;
+
+const destinationTag = (location) => {
+  const haystack = `${location?.category || ""} ${location?.description || ""}`.toLowerCase();
+  const hit = Object.entries(destinationKeywords).find(([keyword]) => haystack.includes(keyword));
+  return hit?.[1] || location?.category || "Featured destination";
+};
+
+const locationImage = (location) => {
+  const images = Array.isArray(location?.images) ? location.images : [];
+  return resolveImageUrl(location?.image || images[0] || "");
+};
+
+const listingImage = (listing) => {
+  const photos = Array.isArray(listing?.photos) ? listing.photos : [];
+  return resolveImageUrl(photos[0] || "");
+};
+
+const getParentId = (location) => {
+  if (!location?.parentLocationId) return "";
+  if (typeof location.parentLocationId === "string") return location.parentLocationId;
+  return location.parentLocationId?._id || "";
+};
 
 export default function Home() {
-  const features = [
-    { title: "AI Itinerary Generator", text: "Personalized routes crafted for Nepal’s terrain." },
-    { title: "Travel Buddy Finder", text: "Match with verified travelers on similar dates." },
-    { title: "Smart Booking", text: "Compare stays, rides, and local guides in one flow." },
+  const navigate = useNavigate();
+  const { user } = useAuth();
+  const [query, setQuery] = useState("");
+  const [activeCategory, setActiveCategory] = useState("all");
+  const [locations, setLocations] = useState([]);
+  const [listings, setListings] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState("");
+
+  useEffect(() => {
+    let active = true;
+
+    const loadHomeData = async () => {
+      try {
+        setLoading(true);
+        const [locationsRes, listingsRes] = await Promise.all([
+          api.get("/api/locations"),
+          api.get("/api/listings"),
+        ]);
+
+        if (!active) return;
+        setLocations(Array.isArray(locationsRes.data) ? locationsRes.data : []);
+        setListings(Array.isArray(listingsRes.data?.listings) ? listingsRes.data.listings : []);
+        setError("");
+      } catch (err) {
+        if (!active) return;
+        setError(err?.response?.data?.message || "Unable to load homepage data.");
+      } finally {
+        if (active) setLoading(false);
+      }
+    };
+
+    loadHomeData();
+    return () => {
+      active = false;
+    };
+  }, []);
+
+  const hubLocations = useMemo(
+    () => locations.filter((location) => !getParentId(location)),
+    [locations]
+  );
+
+  const placeLocations = useMemo(
+    () => locations.filter((location) => getParentId(location)),
+    [locations]
+  );
+
+  const featuredLocations = useMemo(
+    () => (placeLocations.length ? placeLocations.slice(0, 6) : hubLocations.slice(0, 6)),
+    [hubLocations, placeLocations]
+  );
+
+  const hotelListings = useMemo(
+    () => listings.filter((item) => String(item.type || "").toLowerCase() === "hotel").slice(0, 4),
+    [listings]
+  );
+
+  const listingCategories = useMemo(
+    () => [
+      { key: "all", label: "All Places", icon: Map },
+      { key: "hotel", label: "Hotels", icon: BedDouble },
+      { key: "restaurant", label: "Restaurants", icon: UtensilsCrossed },
+      { key: "cafe", label: "Cafes", icon: Coffee },
+      { key: "activity", label: "Activities", icon: Mountain },
+    ],
+    []
+  );
+
+  const filteredCategoryListings = useMemo(() => {
+    const base = activeCategory === "all"
+      ? listings
+      : listings.filter((item) => String(item.type || "").toLowerCase() === activeCategory);
+    return base.slice(0, 6);
+  }, [activeCategory, listings]);
+
+  const searchResults = useMemo(() => {
+    const keyword = query.trim().toLowerCase();
+    if (!keyword) return { locations: [], listings: [] };
+
+    const matchedLocations = locations.filter((location) =>
+      [location.name, location.description, location.district, location.province, location.category]
+        .filter(Boolean)
+        .join(" ")
+        .toLowerCase()
+        .includes(keyword)
+    ).slice(0, 4);
+
+    const matchedListings = listings.filter((listing) =>
+      [
+        listing.title,
+        listing.description,
+        listing.type,
+        listing.location?.name,
+        listing.location?.district,
+        listing.location?.province,
+      ]
+        .filter(Boolean)
+        .join(" ")
+        .toLowerCase()
+        .includes(keyword)
+    ).slice(0, 6);
+
+    return { locations: matchedLocations, listings: matchedListings };
+  }, [locations, listings, query]);
+
+  const heroLocation = hubLocations[0] || locations[0];
+  const marqueeLocations = featuredLocations.length > 1 ? [...featuredLocations, ...featuredLocations] : featuredLocations;
+
+  const stats = [
+    { label: "Admin-posted locations", value: locations.length || "0" },
+    { label: "Active stays & places", value: listings.length || "0" },
+    { label: "Travel tools", value: "Planner + Buddy" },
   ];
 
-  const destinations = [
-    { name: "Kathmandu", tag: "Culture & Heritage" },
-    { name: "Pokhara", tag: "Lakes & Adventure" },
-    { name: "Chitwan", tag: "Wildlife Safari" },
-  ];
+  const featuredSearch = (event) => {
+    event.preventDefault();
+    const next = query.trim();
+    if (!next) {
+      navigate(user ? "/explore" : "/login");
+      return;
+    }
+    const hasMatches = searchResults.locations.length > 0 || searchResults.listings.length > 0;
+    if (hasMatches) {
+      document.getElementById("home-search-results")?.scrollIntoView({ behavior: "smooth", block: "start" });
+      return;
+    }
+    navigate(user ? `/explore?search=${encodeURIComponent(next)}` : "/login");
+  };
 
   return (
     <div className="home">
-      <div className="home__bg" />
+      <div className="home__atmosphere" />
 
       <nav className="home__nav">
         <div className="home__brand">
-          <span className="home__logo">ST</span>
-          <span>Smart Travel Nepal</span>
+          <span className="home__brand-mark">ST</span>
+          <div>
+            <strong>Smart Travel Nepal</strong>
+            <small>Real locations, stays, and local places</small>
+          </div>
         </div>
+
         <div className="home__nav-actions">
-          <Link to="/login" className="home__link">Login</Link>
-          <Link to="/signup" className="home__cta">Sign Up</Link>
+          {user ? (
+            <>
+              <Link to="/dashboard" className="home__nav-link">Dashboard</Link>
+              <Link to="/explore" className="home__nav-cta">Explore</Link>
+            </>
+          ) : (
+            <>
+              <Link to="/login" className="home__nav-link">Login</Link>
+              <Link to="/signup" className="home__nav-cta">Create account</Link>
+            </>
+          )}
         </div>
       </nav>
 
-      <header className="home__hero">
-        <div className="home__hero-card">
-          <p className="home__eyebrow">Nepal-focused smart travel planning</p>
-          <h1>Where do you want to go in Nepal?</h1>
-          <p className="home__subtitle">
-            From Himalayan treks to peaceful lakes, build trips that fit your pace and budget.
-          </p>
-          <div className="home__search">
-            <input type="text" placeholder="Search destinations, routes, or activities" />
-            <button type="button">Search</button>
-          </div>
-          <div className="home__hero-actions">
-            <Link to="/signup" className="home__primary">Plan Trip</Link>
-            <Link to="/community" className="home__secondary">Find Buddy</Link>
-          </div>
-        </div>
-      </header>
+      <main className="home__main">
+        <section className="home__hero">
+          <div className="home__hero-copy">
+            <h1>Plan around real places in Nepal, not placeholder cards.</h1>
 
-      <section className="home__section">
-        <div className="home__section-title">
-          <h2>Features</h2>
-        </div>
-        <div className="home__grid">
-          {features.map((feature) => (
-            <article key={feature.title} className="home__card">
-              <h3>{feature.title}</h3>
-              <p>{feature.text}</p>
-            </article>
-          ))}
-        </div>
-      </section>
-
-      <section className="home__section home__section--alt">
-        <div className="home__section-title">
-          <h2>Popular Destinations</h2>
-          <p>Discover the most loved places by Nepal travelers.</p>
-        </div>
-        <div className="home__destinations">
-          {destinations.map((destination) => (
-            <article key={destination.name} className="home__destination">
-              <div className="home__destination-image" />
-              <div className="home__destination-body">
-                <h3>{destination.name}</h3>
-                <p>{destination.tag}</p>
-                <button type="button">Explore</button>
+            <form className="home__search" onSubmit={featuredSearch}>
+              <div className="home__search-field">
+                <Search size={18} />
+                <input
+                  type="text"
+                  value={query}
+                  onChange={(event) => setQuery(event.target.value)}
+                  placeholder="Search Kathmandu, Pokhara, Chitwan, hotels, cafes..."
+                />
               </div>
-            </article>
-          ))}
-        </div>
-      </section>
+              <button type="submit">Search</button>
+            </form>
 
-      <section className="home__section">
-        <div className="home__section-title">
-          <h2>Community Highlights</h2>
-          <p>Stories, photos, and local tips from verified explorers.</p>
-        </div>
-        <div className="home__community">
-          <div className="home__community-card">Travel Blog</div>
-          <div className="home__community-card">Travelers Photo</div>
-        </div>
-      </section>
+            <div className="home__hero-actions">
+              <Link to={user ? "/explore" : "/signup"} className="home__primary-btn">
+                Explore destinations
+              </Link>
+            </div>
+
+            <div className="home__stats">
+              {stats.map((item) => (
+                <article key={item.label} className="home__stat">
+                  <strong>{item.value}</strong>
+                  <span>{item.label}</span>
+                </article>
+              ))}
+            </div>
+          </div>
+
+          <div className="home__hero-panel">
+            {heroLocation ? (
+              <article className="home__hero-feature home__hero-feature--image">
+                <img
+                  src={locationImage(heroLocation) || "https://images.unsplash.com/photo-1501555088652-021faa106b9b?q=80&w=1400&auto=format&fit=crop"}
+                  alt={heroLocation.name}
+                  className="home__hero-feature-image"
+                />
+                <div className="home__hero-feature-overlay" />
+                <div className="home__hero-feature-content">
+                  <p className="home__hero-kicker">Featured Destination</p>
+                  <h2>{heroLocation.name}</h2>
+                  <div className="home__hero-meta">
+                    <span>{heroLocation.district || "District"}</span>
+                    <span>{heroLocation.province || "Province"}</span>
+                    <span>{destinationTag(heroLocation)}</span>
+                  </div>
+                  <p>{heroLocation.description || "Fresh destination from your admin panel."}</p>
+                  <Link to={user ? `/locations/${heroLocation._id}` : "/login"} className="home__inline-link">
+                    View destination
+                    <ArrowRight size={16} />
+                  </Link>
+                </div>
+              </article>
+            ) : (
+              <article className="home__hero-feature">
+                <p className="home__hero-kicker">Featured Destination</p>
+                <h2>Waiting for admin locations</h2>
+                <p>Add locations from the admin panel to populate the homepage.</p>
+              </article>
+            )}
+
+          </div>
+        </section>
+
+        {query.trim() ? (
+          <section className="home__section" id="home-search-results">
+            <div className="home__section-head">
+              <div>
+                <p className="home__section-kicker">Search Results</p>
+                <h2>Matches for “{query.trim()}”</h2>
+              </div>
+            </div>
+
+            {searchResults.locations.length === 0 && searchResults.listings.length === 0 ? (
+              <div className="home__empty">No homepage matches found. Try another keyword or open Explore.</div>
+            ) : (
+              <div className="home__search-results">
+                {searchResults.locations.map((location) => (
+                  <article key={`location-${location._id}`} className="home__search-card">
+                    <div>
+                      <span className="home__pill">Destination</span>
+                      <h3>{location.name}</h3>
+                      <p>{[location.district, location.province, location.category].filter(Boolean).join(", ")}</p>
+                    </div>
+                    <Link to={user ? `/locations/${location._id}` : "/login"} className="home__inline-link">
+                      Open location
+                      <ArrowRight size={15} />
+                    </Link>
+                  </article>
+                ))}
+
+                {searchResults.listings.map((listing) => (
+                  <article key={`listing-${listing._id}`} className="home__search-card">
+                    <div>
+                      <span className="home__pill">{listing.type || "Place"}</span>
+                      <h3>{listing.title}</h3>
+                      <p>{[listing.location?.name, listing.location?.district].filter(Boolean).join(", ")}</p>
+                    </div>
+                    <Link to={user ? `/places/${listing._id}` : "/login"} className="home__inline-link">
+                      View details
+                      <ArrowRight size={15} />
+                    </Link>
+                  </article>
+                ))}
+              </div>
+            )}
+          </section>
+        ) : null}
+
+        <section className="home__section">
+          <div className="home__section-head">
+            <div>
+                <p className="home__section-kicker">Places</p>
+                <h2>Explore places inside destinations</h2>
+            </div>
+            <Link to={user ? "/explore" : "/login"} className="home__section-link">See all</Link>
+          </div>
+
+          {loading ? (
+            <div className="home__loading">
+              <LoaderCircle size={20} className="home__spin" />
+              <span>Loading locations...</span>
+            </div>
+          ) : error ? (
+            <div className="home__empty">{error}</div>
+          ) : featuredLocations.length ? (
+            <div className="home__location-marquee">
+              <div className={`home__location-track ${featuredLocations.length > 1 ? "home__location-track--animated" : ""}`}>
+              {marqueeLocations.map((location, index) => (
+                <article key={`${location._id}-${index}`} className="home__location-card">
+                  <div className="home__location-media">
+                    {locationImage(location) ? (
+                      <img src={locationImage(location)} alt={location.name} />
+                    ) : (
+                      <div className="home__location-placeholder">{location.name}</div>
+                    )}
+                  </div>
+                  <div className="home__location-body">
+                    <div className="home__pill">{destinationTag(location)}</div>
+                    <h3>{location.name}</h3>
+                    <p>{location.description || "A location added from the admin dashboard."}</p>
+                    <div className="home__location-meta">
+                      <span>{location.district || "District"}</span>
+                      <span>{location.province || "Province"}</span>
+                    </div>
+                  </div>
+                </article>
+              ))}
+              </div>
+            </div>
+          ) : (
+            <div className="home__empty">No public locations yet. Add some in the admin panel.</div>
+          )}
+        </section>
+
+        <section className="home__section home__section--split">
+          <div className="home__section-block">
+            <div className="home__section-head">
+              <div>
+                <p className="home__section-kicker">Hotels</p>
+                <h2>Stay options from your listing data</h2>
+              </div>
+            </div>
+
+            {hotelListings.length ? (
+              <div className="home__listing-grid">
+                {hotelListings.map((listing) => (
+                  <article key={listing._id} className="home__listing-card">
+                    <div className="home__listing-image">
+                      {listingImage(listing) ? (
+                        <img src={listingImage(listing)} alt={listing.title} />
+                      ) : (
+                        <div className="home__listing-placeholder">Hotel</div>
+                      )}
+                    </div>
+                    <div className="home__listing-body">
+                      <div className="home__listing-top">
+                        <h3>{listing.title}</h3>
+                        <span>{currency(listing.pricePerUnit)}</span>
+                      </div>
+                      <p>{listing.location?.name || listing.location?.district || "Hotel listing"}</p>
+                      <div className="home__listing-meta">
+                        <span><Star size={14} /> {Number(listing.rating || 0).toFixed(1)}</span>
+                        <span>{listing.capacity || 1} guests</span>
+                      </div>
+                      <div className="home__card-actions">
+                        <Link to={user ? `/places/${listing._id}` : "/login"} className="home__card-link">
+                          View stay
+                        </Link>
+                      </div>
+                    </div>
+                  </article>
+                ))}
+              </div>
+            ) : (
+              <div className="home__empty">No active hotel listings yet.</div>
+            )}
+          </div>
+
+          <div className="home__section-block">
+            <div className="home__section-head">
+              <div>
+                <p className="home__section-kicker">Places</p>
+                <h2>Browse by category</h2>
+              </div>
+            </div>
+
+            <div className="home__category-tabs">
+              {listingCategories.map(({ key, label, icon: Icon }) => (
+                <button
+                  key={key}
+                  type="button"
+                  onClick={() => setActiveCategory(key)}
+                  className={`home__category-tab ${activeCategory === key ? "home__category-tab--active" : ""}`}
+                >
+                  <Icon size={15} />
+                  <span>{label}</span>
+                </button>
+              ))}
+            </div>
+
+            {filteredCategoryListings.length ? (
+              <div className="home__place-stack">
+                {filteredCategoryListings.map((listing) => (
+                  <article key={listing._id} className="home__place-card">
+                    <div>
+                      <p className="home__place-type">{listing.type || "Place"}</p>
+                      <h3>{listing.title}</h3>
+                      <p>{listing.location?.name || listing.location?.district || "Local listing"}</p>
+                    </div>
+                    <Link to={user ? `/places/${listing._id}` : "/login"} className="home__inline-link">
+                      View details
+                      <ArrowRight size={15} />
+                    </Link>
+                  </article>
+                ))}
+              </div>
+            ) : (
+              <div className="home__empty">No listings found for this category yet.</div>
+            )}
+          </div>
+        </section>
+
+        <section className="home__section">
+          <div className="home__cta-panel">
+            <div>
+              <p className="home__section-kicker">Next step</p>
+              <h2>Plan, match, and book from one system</h2>
+              <p>Move from discovery to buddy matching and trip planning without leaving the platform.</p>
+            </div>
+            <div className="home__cta-actions">
+              <Link to={user ? "/itinerary-planner" : "/signup"} className="home__primary-btn">AI planner</Link>
+            </div>
+          </div>
+        </section>
+      </main>
 
       <footer className="home__footer">
-        <div className="home__footer-links">
-          <span>About Us</span>
-          <span>Contact</span>
-          <span>Terms</span>
+        <div className="home__footer-brand">
+          <strong>Smart Travel Nepal</strong>
+          <span>Real places, stays, and travel tools</span>
         </div>
-        <span>© 2026 Smart Travel Nepal</span>
+        <div className="home__footer-links">
+          <Link to={user ? "/explore" : "/login"}>Explore</Link>
+          <Link to={user ? "/community" : "/login"}>Community</Link>
+          <Link to={user ? "/trip-packages" : "/login"}>Trip packages</Link>
+        </div>
       </footer>
 
       <style>{`
         .home {
-          --sky: #dce9e2;
-          --sky-deep: #2f6b4f;
-          --forest: #2f6b4f;
-          --snow: #f6f4ee;
-          --ink: #24313d;
-          --muted: #667085;
-          --card: #fffefb;
-          --sun: #c58b3b;
-          --shadow: 0 20px 45px rgba(31, 41, 51, 0.12);
+          --ink: #10213b;
+          --muted: #5e718b;
+          --line: rgba(148, 163, 184, 0.2);
+          --card: rgba(255, 255, 255, 0.84);
+          --card-strong: rgba(255, 255, 255, 0.96);
+          --brand: #0f766e;
+          --brand-deep: #0f4c81;
+          --accent: #f97316;
           min-height: 100vh;
-          background: linear-gradient(165deg, #eaf3ed 0%, #f8f5ee 45%, #e4efe8 100%);
-          font-family: "Sora", "Plus Jakarta Sans", "DM Sans", system-ui, sans-serif;
           color: var(--ink);
+          background:
+            radial-gradient(circle at top left, rgba(14, 165, 233, 0.16), transparent 28%),
+            radial-gradient(circle at top right, rgba(249, 115, 22, 0.14), transparent 24%),
+            linear-gradient(180deg, #edf6ff 0%, #f8fafc 30%, #fff7ed 100%);
+          font-family: "Sora", "Plus Jakarta Sans", system-ui, sans-serif;
           position: relative;
           overflow-x: hidden;
         }
 
-        .home__bg {
+        .home__atmosphere {
           position: absolute;
           inset: 0;
           background:
-            radial-gradient(circle at 85% 0%, rgba(47, 107, 79, 0.18), transparent 35%),
-            radial-gradient(circle at 0% 70%, rgba(47, 107, 79, 0.14), transparent 40%),
-            linear-gradient(0deg, rgba(255, 255, 255, 0.35), rgba(255, 255, 255, 0.35));
+            linear-gradient(rgba(255,255,255,0.18), rgba(255,255,255,0.18)),
+            radial-gradient(circle at 20% 20%, rgba(255,255,255,0.36), transparent 22%);
           pointer-events: none;
         }
 
+        .home__nav,
+        .home__main,
+        .home__footer {
+          position: relative;
+          z-index: 1;
+          max-width: 1260px;
+          margin: 0 auto;
+          padding-left: 18px;
+          padding-right: 18px;
+        }
+
         .home__nav {
-          position: sticky;
-          top: 0;
-          z-index: 5;
           display: flex;
-          justify-content: space-between;
           align-items: center;
-          padding: 18px 6vw;
-          background: rgba(255, 254, 251, 0.9);
-          backdrop-filter: blur(12px);
-          border-bottom: 1px solid rgba(148, 163, 184, 0.2);
-          animation: slideDown 0.55s ease;
+          justify-content: space-between;
+          padding-top: 22px;
         }
 
         .home__brand {
           display: flex;
           align-items: center;
-          gap: 12px;
-          font-weight: 700;
-          color: var(--forest);
-          font-size: 1.1rem;
-        }
-
-        .home__logo {
-          width: 38px;
-          height: 38px;
-          border-radius: 12px;
-          background: linear-gradient(135deg, #5e8572, var(--forest));
-          color: white;
-          display: grid;
-          place-items: center;
-          font-weight: 700;
-        }
-
-        .home__nav-actions {
-          display: flex;
-          align-items: center;
           gap: 14px;
         }
 
-        .home__link {
+        .home__brand-mark {
+          width: 46px;
+          height: 46px;
+          border-radius: 16px;
+          display: grid;
+          place-items: center;
+          color: #fff;
+          font-weight: 800;
+          background: linear-gradient(135deg, var(--brand-deep), var(--brand), #14b8a6);
+          box-shadow: 0 16px 34px rgba(15, 76, 129, 0.26);
+        }
+
+        .home__brand strong,
+        .home__footer-brand strong {
+          display: block;
+          font-size: 1rem;
+        }
+
+        .home__brand small,
+        .home__footer-brand span {
+          color: var(--muted);
+          font-size: 0.84rem;
+        }
+
+        .home__nav-actions,
+        .home__hero-actions,
+        .home__cta-actions,
+        .home__footer-links {
+          display: flex;
+          align-items: center;
+          gap: 12px;
+          flex-wrap: wrap;
+        }
+
+        .home__nav-link,
+        .home__footer-links a {
           color: var(--ink);
           text-decoration: none;
           font-weight: 600;
         }
 
-        .home__cta {
-          background: var(--forest);
-          color: white;
-          padding: 10px 18px;
+        .home__nav-cta,
+        .home__primary-btn {
+          display: inline-flex;
+          align-items: center;
+          justify-content: center;
+          padding: 12px 18px;
+          border-radius: 999px;
+          border: none;
+          text-decoration: none;
+          color: #fff;
+          font-weight: 700;
+          background: linear-gradient(135deg, var(--brand-deep), #0ea5e9);
+          box-shadow: 0 18px 36px rgba(14, 116, 144, 0.2);
+        }
+
+        .home__secondary-btn {
+          display: inline-flex;
+          align-items: center;
+          justify-content: center;
+          padding: 12px 18px;
           border-radius: 999px;
           text-decoration: none;
-          font-weight: 600;
-          box-shadow: 0 12px 24px rgba(47, 107, 79, 0.22);
+          font-weight: 700;
+          color: var(--ink);
+          background: rgba(255,255,255,0.84);
+          border: 1px solid var(--line);
+        }
+
+        .home__main {
+          padding-top: 22px;
+          padding-bottom: 34px;
         }
 
         .home__hero {
-          padding: 60px 6vw 40px;
-          display: flex;
-          justify-content: center;
+          display: grid;
+          grid-template-columns: minmax(0, 1.1fr) minmax(320px, 0.9fr);
+          gap: 24px;
+          align-items: stretch;
         }
 
-        .home__hero-card {
+        .home__hero-copy,
+        .home__hero-panel,
+        .home__cta-panel,
+        .home__section-block {
+          border: 1px solid rgba(255,255,255,0.72);
           background: var(--card);
-          padding: 40px;
-          border-radius: 28px;
-          box-shadow: var(--shadow);
-          max-width: 900px;
-          width: 100%;
-          text-align: center;
-          border: 1px solid rgba(148, 163, 184, 0.2);
-          animation: floatIn 0.7s ease;
+          backdrop-filter: blur(14px);
+          box-shadow: 0 24px 60px rgba(15, 23, 42, 0.08);
         }
 
-        .home__eyebrow {
+        .home__hero-copy {
+          padding: 34px;
+          border-radius: 36px;
+        }
+
+        .home__eyebrow,
+        .home__section-kicker,
+        .home__hero-kicker,
+        .home__place-type,
+        .home__pill {
+          display: inline-flex;
+          align-items: center;
+          gap: 8px;
+          font-size: 0.74rem;
+          font-weight: 800;
+          letter-spacing: 0.18em;
           text-transform: uppercase;
-          letter-spacing: 0.2em;
-          color: var(--forest);
-          font-size: 0.75rem;
-          margin: 0 0 12px;
-          font-weight: 600;
+        }
+
+        .home__eyebrow,
+        .home__section-kicker,
+        .home__hero-kicker {
+          color: var(--brand);
         }
 
         .home__hero h1 {
-          font-size: clamp(2rem, 3vw, 3.2rem);
-          margin: 0 0 12px;
+          margin: 16px 0 0;
+          font-size: clamp(2.8rem, 5vw, 5.3rem);
+          line-height: 0.95;
+          letter-spacing: -0.06em;
+          max-width: 11ch;
         }
 
-        .home__subtitle {
-          margin: 0 0 22px;
+        .home__hero-text,
+        .home__cta-panel p,
+        .home__location-body p,
+        .home__listing-body p {
           color: var(--muted);
-          font-size: 1rem;
+          line-height: 1.8;
+        }
+
+        .home__hero-text {
+          margin: 18px 0 0;
+          max-width: 48rem;
+          font-size: 1.02rem;
         }
 
         .home__search {
           display: grid;
           grid-template-columns: 1fr auto;
-          gap: 10px;
-          background: var(--snow);
-          border-radius: 999px;
-          padding: 8px 10px;
-          border: 1px solid rgba(148, 163, 184, 0.25);
-          margin-bottom: 18px;
-          box-shadow: inset 0 1px 2px rgba(15, 23, 42, 0.06);
-        }
-
-        .home__search input {
-          border: none;
-          background: transparent;
-          outline: none;
-          padding: 8px 12px;
-          font-size: 0.95rem;
-        }
-
-        .home__search button {
-          border: none;
-          background: var(--forest);
-          color: white;
-          padding: 10px 18px;
-          border-radius: 999px;
-          font-weight: 600;
-          cursor: pointer;
-          transition: transform 0.2s ease, box-shadow 0.2s ease;
-        }
-
-        .home__search button:hover {
-          transform: translateY(-1px);
-          box-shadow: 0 10px 20px rgba(47, 93, 80, 0.28);
-        }
-
-        .home__hero-actions {
-          display: flex;
-          justify-content: center;
           gap: 12px;
-          flex-wrap: wrap;
+          margin-top: 24px;
         }
 
-        .home__primary,
-        .home__secondary {
-          padding: 10px 20px;
-          border-radius: 999px;
-          text-decoration: none;
-          font-weight: 600;
-        }
-
-        .home__primary {
-          background: linear-gradient(135deg, var(--sky-deep), var(--forest));
-          color: white;
-        }
-
-        .home__secondary {
-          background: white;
-          color: var(--forest);
-          border: 1px solid rgba(31, 111, 91, 0.2);
-        }
-
-        .home__section {
-          padding: 40px 6vw;
-        }
-
-        .home__section--alt {
-          background: rgba(255, 255, 255, 0.7);
-          border-top: 1px solid rgba(148, 163, 184, 0.2);
-          border-bottom: 1px solid rgba(148, 163, 184, 0.2);
-        }
-
-        .home__section-title {
-          text-align: center;
-          margin-bottom: 24px;
-        }
-
-        .home__section-title h2 {
-          margin: 0 0 8px;
-          font-size: 2rem;
-        }
-
-        .home__section-title p {
-          margin: 0;
-          color: var(--muted);
-        }
-
-        .home__grid {
-          display: grid;
-          grid-template-columns: repeat(3, minmax(0, 1fr));
-          gap: 20px;
-        }
-
-        .home__card {
-          background: var(--card);
-          padding: 24px;
-          border-radius: 20px;
-          box-shadow: var(--shadow);
-          border: 1px solid rgba(148, 163, 184, 0.18);
-          transition: transform 0.25s ease, box-shadow 0.25s ease;
-        }
-
-        .home__card:hover {
-          transform: translateY(-4px);
-          box-shadow: 0 24px 48px rgba(15, 23, 42, 0.16);
-        }
-
-        .home__card h3 {
-          margin: 0 0 10px;
-        }
-
-        .home__card p {
-          margin: 0;
-          color: var(--muted);
-        }
-
-        .home__destinations {
-          display: grid;
-          grid-template-columns: repeat(3, minmax(0, 1fr));
-          gap: 20px;
-        }
-
-        .home__destination {
-          background: var(--card);
-          border-radius: 22px;
-          overflow: hidden;
-          box-shadow: var(--shadow);
-          display: grid;
-          border: 1px solid rgba(148, 163, 184, 0.18);
-          transition: transform 0.25s ease, box-shadow 0.25s ease;
-        }
-
-        .home__destination:hover {
-          transform: translateY(-5px);
-          box-shadow: 0 24px 48px rgba(15, 23, 42, 0.16);
-        }
-
-        .home__destination-image {
-          height: 160px;
-          background:
-            radial-gradient(circle at 78% 16%, rgba(197, 139, 59, 0.28), transparent 22%),
-            linear-gradient(135deg, #dfe9f2, #dfeadf);
-        }
-
-        .home__destination-body {
-          padding: 18px;
-          display: grid;
-          gap: 6px;
-        }
-
-        .home__destination-body p {
-          margin: 0;
-          color: var(--muted);
-          font-size: 0.9rem;
-        }
-
-        .home__destination-body button {
-          justify-self: flex-start;
-          border: none;
-          background: rgba(47, 93, 80, 0.12);
-          color: var(--forest);
-          padding: 6px 14px;
-          border-radius: 999px;
-          font-weight: 600;
-          cursor: pointer;
-          transition: background 0.2s ease;
-        }
-
-        .home__destination-body button:hover {
-          background: rgba(47, 93, 80, 0.2);
-        }
-
-        .home__community {
-          display: grid;
-          grid-template-columns: repeat(2, minmax(0, 1fr));
-          gap: 20px;
-        }
-
-        .home__community-card {
-          background: var(--card);
-          padding: 28px;
-          border-radius: 22px;
-          box-shadow: var(--shadow);
-          text-align: center;
-          font-weight: 600;
-        }
-
-        .home__footer {
-          padding: 24px 6vw 40px;
+        .home__search-field {
           display: flex;
-          justify-content: space-between;
           align-items: center;
-          color: var(--muted);
-          border-top: 1px solid rgba(148, 163, 184, 0.2);
-          margin-top: 20px;
+          gap: 10px;
+          padding: 0 16px;
+          border-radius: 999px;
+          background: rgba(255,255,255,0.92);
+          border: 1px solid var(--line);
+          min-height: 58px;
         }
 
-        .home__footer-links {
-          display: flex;
-          gap: 16px;
-          font-weight: 600;
+        .home__search-field input {
+          width: 100%;
+          border: none;
+          outline: none;
+          background: transparent;
+          font-size: 0.96rem;
           color: var(--ink);
         }
 
-        @keyframes floatIn {
-          from {
-            opacity: 0;
-            transform: translateY(24px);
-          }
+        .home__search button {
+          min-width: 126px;
+          border: none;
+          border-radius: 999px;
+          font-weight: 700;
+          color: #fff;
+          background: linear-gradient(135deg, #f97316, #ea580c);
+          cursor: pointer;
+        }
+
+        .home__stats {
+          display: grid;
+          grid-template-columns: repeat(3, minmax(0, 1fr));
+          gap: 14px;
+          margin-top: 24px;
+        }
+
+        .home__stat {
+          padding: 16px;
+          border-radius: 22px;
+          background: rgba(255,255,255,0.76);
+          border: 1px solid var(--line);
+        }
+
+        .home__stat strong {
+          display: block;
+          font-size: 1.35rem;
+        }
+
+        .home__stat span {
+          display: block;
+          margin-top: 6px;
+          color: var(--muted);
+          font-size: 0.85rem;
+        }
+
+        .home__hero-panel {
+          padding: 12px;
+          border-radius: 36px;
+          display: grid;
+          background:
+            linear-gradient(180deg, rgba(15,76,129,0.94), rgba(14,165,233,0.88) 50%, rgba(20,184,166,0.9)),
+            rgba(15, 23, 42, 0.8);
+          color: #fff;
+        }
+
+        .home__hero-feature {
+          position: relative;
+          min-height: 100%;
+          border-radius: 26px;
+          border: 1px solid rgba(255,255,255,0.14);
+          background: rgba(255,255,255,0.1);
+          padding: 22px;
+          overflow: hidden;
+        }
+
+        .home__hero-feature h2 {
+          margin: 10px 0 0;
+          font-size: clamp(2rem, 3vw, 3rem);
+          line-height: 0.95;
+          max-width: 10ch;
+        }
+
+        .home__hero-feature p {
+          color: rgba(255,255,255,0.86);
+        }
+
+        .home__hero-feature--image {
+          display: flex;
+          align-items: flex-end;
+          min-height: 100%;
+          padding: 0;
+          background: #0f172a;
+        }
+
+        .home__hero-feature-image,
+        .home__hero-feature-overlay {
+          position: absolute;
+          inset: 0;
+          width: 100%;
+          height: 100%;
+        }
+
+        .home__hero-feature-image {
+          object-fit: cover;
+        }
+
+        .home__hero-feature-overlay {
+          background:
+            linear-gradient(180deg, rgba(8,47,73,0.08), rgba(8,47,73,0.36) 38%, rgba(15,23,42,0.92) 100%),
+            linear-gradient(135deg, rgba(14,165,233,0.12), rgba(20,184,166,0.12));
+        }
+
+        .home__hero-feature-content {
+          position: relative;
+          z-index: 1;
+          width: 100%;
+          padding: 26px;
+        }
+
+        .home__hero-feature-content p:last-of-type {
+          max-width: 28rem;
+        }
+
+        .home__hero-meta,
+        .home__location-meta,
+        .home__listing-meta {
+          display: flex;
+          flex-wrap: wrap;
+          gap: 10px;
+        }
+
+        .home__hero-meta span,
+        .home__location-meta span,
+        .home__listing-meta span {
+          display: inline-flex;
+          align-items: center;
+          gap: 6px;
+          padding: 8px 12px;
+          border-radius: 999px;
+          background: rgba(255,255,255,0.12);
+          font-size: 0.82rem;
+        }
+
+        .home__inline-link,
+        .home__card-link,
+        .home__section-link {
+          display: inline-flex;
+          align-items: center;
+          gap: 8px;
+          font-weight: 700;
+          color: inherit;
+          text-decoration: none;
+        }
+
+        .home__inline-link,
+        .home__card-link {
+          margin-top: 16px;
+        }
+
+        .home__cta-panel {
+          margin-top: 26px;
+          border-radius: 34px;
+          padding: 22px;
+        }
+
+        .home__location-placeholder,
+        .home__listing-placeholder,
+        .home__empty,
+        .home__loading {
+          display: grid;
+          place-items: center;
+          text-align: center;
+          color: var(--muted);
+        }
+
+        .home__location-placeholder,
+        .home__listing-placeholder {
+          height: 100%;
+          min-height: 220px;
+          background: linear-gradient(135deg, #e0f2fe, #ecfeff);
+          padding: 20px;
+        }
+
+        .home__section {
+          margin-top: 28px;
+        }
+
+        .home__section-head {
+          display: flex;
+          align-items: end;
+          justify-content: space-between;
+          gap: 16px;
+          margin-bottom: 18px;
+        }
+
+        .home__section-head h2,
+        .home__cta-panel h2 {
+          margin: 10px 0 0;
+          font-size: clamp(2rem, 4vw, 3.2rem);
+          line-height: 1;
+          letter-spacing: -0.05em;
+        }
+
+        .home__listing-grid {
+          display: grid;
+          grid-template-columns: repeat(2, minmax(0, 1fr));
+          gap: 18px;
+        }
+
+        .home__location-marquee {
+          overflow: hidden;
+          mask-image: linear-gradient(90deg, transparent 0, rgba(0,0,0,1) 6%, rgba(0,0,0,1) 94%, transparent 100%);
+        }
+
+        .home__location-track {
+          display: flex;
+          gap: 18px;
+          width: max-content;
+        }
+
+        .home__location-track--animated {
+          animation: home-marquee 32s linear infinite;
+        }
+
+        .home__location-marquee:hover .home__location-track--animated {
+          animation-play-state: paused;
+        }
+
+        .home__location-card,
+        .home__listing-card,
+        .home__place-card {
+          border-radius: 28px;
+          overflow: hidden;
+          background: var(--card-strong);
+          border: 1px solid var(--line);
+          box-shadow: 0 18px 40px rgba(15, 23, 42, 0.06);
+        }
+
+        .home__location-card {
+          width: min(320px, calc(100vw - 56px));
+          flex: 0 0 min(320px, calc(100vw - 56px));
+        }
+
+        .home__location-media,
+        .home__listing-image {
+          height: 170px;
+          overflow: hidden;
+          background: linear-gradient(135deg, #e2e8f0, #dbeafe);
+        }
+
+        .home__location-media img,
+        .home__listing-image img {
+          width: 100%;
+          height: 100%;
+          object-fit: cover;
+          display: block;
+        }
+
+        .home__location-body,
+        .home__listing-body {
+          padding: 18px;
+        }
+
+        .home__pill,
+        .home__place-type {
+          color: #0f766e;
+        }
+
+        .home__location-body h3,
+        .home__listing-body h3,
+        .home__place-card h3 {
+          margin: 10px 0 0;
+          font-size: 1.18rem;
+        }
+
+        .home__section--split {
+          display: grid;
+          grid-template-columns: minmax(0, 1.1fr) minmax(320px, 0.9fr);
+          gap: 20px;
+          align-items: start;
+        }
+
+        .home__search-results {
+          display: grid;
+          grid-template-columns: repeat(2, minmax(0, 1fr));
+          gap: 16px;
+        }
+
+        .home__search-card {
+          display: flex;
+          align-items: center;
+          justify-content: space-between;
+          gap: 16px;
+          padding: 18px;
+          border-radius: 24px;
+          background: var(--card-strong);
+          border: 1px solid var(--line);
+          box-shadow: 0 18px 40px rgba(15, 23, 42, 0.06);
+        }
+
+        .home__section-block {
+          padding: 22px;
+          border-radius: 32px;
+        }
+
+        .home__listing-top {
+          display: flex;
+          align-items: start;
+          justify-content: space-between;
+          gap: 12px;
+        }
+
+        .home__listing-top span {
+          font-weight: 700;
+          color: var(--brand-deep);
+        }
+
+        .home__place-stack {
+          display: grid;
+          gap: 14px;
+        }
+
+        .home__category-tabs {
+          display: flex;
+          flex-wrap: wrap;
+          gap: 10px;
+          margin-bottom: 16px;
+        }
+
+        .home__category-tab {
+          display: inline-flex;
+          align-items: center;
+          gap: 8px;
+          padding: 10px 14px;
+          border-radius: 999px;
+          border: 1px solid var(--line);
+          background: rgba(255,255,255,0.84);
+          color: var(--ink);
+          cursor: pointer;
+          font-weight: 700;
+        }
+
+        .home__category-tab--active {
+          background: linear-gradient(135deg, #0f766e, #0ea5e9);
+          color: #fff;
+          border-color: transparent;
+        }
+
+        .home__place-card {
+          display: flex;
+          align-items: center;
+          justify-content: space-between;
+          gap: 16px;
+          padding: 18px;
+        }
+
+        .home__card-actions {
+          display: flex;
+          align-items: center;
+          gap: 14px;
+          flex-wrap: wrap;
+        }
+
+        .home__cta-panel {
+          display: flex;
+          align-items: center;
+          justify-content: space-between;
+          gap: 18px;
+          background:
+            linear-gradient(135deg, rgba(8,47,73,0.94), rgba(14,116,144,0.92) 55%, rgba(20,184,166,0.88)),
+            #0f172a;
+          color: #fff;
+        }
+
+        .home__cta-panel .home__section-kicker,
+        .home__cta-panel h2,
+        .home__cta-panel p {
+          color: #fff;
+        }
+
+        .home__empty,
+        .home__loading {
+          min-height: 170px;
+          padding: 24px;
+          border-radius: 28px;
+          border: 1px dashed rgba(148, 163, 184, 0.4);
+          background: rgba(255,255,255,0.6);
+        }
+
+        .home__spin {
+          animation: home-spin 1s linear infinite;
+        }
+
+        .home__footer {
+          margin-top: 10px;
+          padding-top: 18px;
+          padding-bottom: 24px;
+          display: flex;
+          align-items: center;
+          justify-content: space-between;
+          gap: 20px;
+          border-top: 1px solid rgba(148, 163, 184, 0.18);
+        }
+
+        @keyframes home-spin {
           to {
-            opacity: 1;
-            transform: translateY(0);
+            transform: rotate(360deg);
           }
         }
 
-        @keyframes slideDown {
+        @keyframes home-marquee {
           from {
-            opacity: 0;
-            transform: translateY(-12px);
+            transform: translateX(0);
           }
           to {
-            opacity: 1;
-            transform: translateY(0);
+            transform: translateX(calc(-50% - 9px));
           }
         }
 
-        @media (max-width: 900px) {
-          .home__grid,
-          .home__destinations {
+        @media (max-width: 1100px) {
+          .home__hero,
+          .home__section--split,
+          .home__cta-panel {
             grid-template-columns: 1fr;
+            display: grid;
           }
 
-          .home__community {
-            grid-template-columns: 1fr;
+          .home__location-grid,
+          .home__listing-grid {
+            grid-template-columns: repeat(2, minmax(0, 1fr));
           }
+        }
 
-          .home__footer {
+        @media (max-width: 720px) {
+          .home__nav,
+          .home__footer,
+          .home__section-head {
             flex-direction: column;
-            gap: 10px;
+            align-items: stretch;
+          }
+
+          .home__hero-copy,
+          .home__hero-panel,
+          .home__section-block,
+          .home__cta-panel {
+            padding: 18px;
+            border-radius: 24px;
+          }
+
+          .home__hero-panel {
+            padding: 10px;
+          }
+
+          .home__hero-feature-content {
+            padding: 18px;
+          }
+
+          .home__search {
+            grid-template-columns: 1fr;
+          }
+
+          .home__stats,
+          .home__listing-grid,
+          .home__search-results {
+            grid-template-columns: 1fr;
+          }
+
+          .home__place-card {
+            flex-direction: column;
+            align-items: flex-start;
           }
         }
       `}</style>

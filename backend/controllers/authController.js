@@ -3,7 +3,11 @@ const bcrypt = require("bcryptjs");
 const jwt = require("jsonwebtoken");
 const crypto = require("crypto");
 const { OAuth2Client } = require("google-auth-library");
-const { sendPasswordResetEmail } = require("../utils/emailService");
+const {
+  canSendEmail,
+  sendPasswordResetEmail,
+  sendWelcomeEmail,
+} = require("../utils/emailService");
 
 const normalizedRole = (role) => (role === "admin" ? "admin" : "user");
 const googleClient = new OAuth2Client(process.env.GOOGLE_CLIENT_ID);
@@ -22,11 +26,11 @@ const buildAuthResponse = (user, token) => ({
   },
 });
 
-// Generate reset token
-const generateResetToken = () => {
-  const resetToken = crypto.randomBytes(32).toString("hex");
-  const resetTokenHash = crypto.createHash("sha256").update(resetToken).digest("hex");
-  return { resetToken, resetTokenHash };
+// Generate 6-digit reset code
+const generateResetCode = () => {
+  const resetCode = String(Math.floor(100000 + Math.random() * 900000));
+  const resetCodeHash = crypto.createHash("sha256").update(resetCode).digest("hex");
+  return { resetCode, resetCodeHash };
 };
 
 exports.forgotPassword = async (req, res) => {
@@ -40,23 +44,17 @@ exports.forgotPassword = async (req, res) => {
     const user = await User.findOne({ email });
     if (!user) {
       // Don't reveal if user exists or not for security
-      return res.json({ message: "If an account exists with that email, a password reset link has been sent." });
+      return res.json({ message: "If an account exists with that email, a password reset code has been sent." });
     }
 
-    // Generate reset token
-    const { resetToken, resetTokenHash } = generateResetToken();
+    const { resetCode, resetCodeHash } = generateResetCode();
     
-    // Hash token and set to user document
-    user.resetPasswordToken = resetTokenHash;
+    user.resetPasswordToken = resetCodeHash;
     user.resetPasswordExpire = Date.now() + 10 * 60 * 1000; // 10 minutes
     await user.save();
-
-    // Create reset URL (you'll need to update this to your frontend URL)
-    const resetUrl = `${process.env.FRONTEND_URL || 'http://localhost:5173'}/reset-password?token=${resetToken}`;
     
     try {
-      // Send email
-      const emailResult = await sendPasswordResetEmail(email, resetToken, resetUrl);
+      const emailResult = await sendPasswordResetEmail(email, resetCode);
       console.log("Email sent successfully:", emailResult.messageId);
       
       // For development, you can access the email preview URL
@@ -64,7 +62,7 @@ exports.forgotPassword = async (req, res) => {
         console.log("Email preview URL:", emailResult.previewURL);
       }
       
-      res.json({ message: "If an account exists with that email, a password reset link has been sent." });
+      res.json({ message: "If an account exists with that email, a password reset code has been sent." });
     } catch (emailError) {
       console.error("Failed to send email:", emailError);
       // Still save the token but let user know there was an issue
@@ -79,27 +77,26 @@ exports.forgotPassword = async (req, res) => {
 
 exports.resetPassword = async (req, res) => {
   try {
-    const { token, password } = req.body;
+    const { email, code, password } = req.body;
 
-    if (!token || !password) {
-      return res.status(400).json({ message: "Please provide token and new password" });
+    if (!email || !code || !password) {
+      return res.status(400).json({ message: "Please provide email, code and new password" });
     }
 
     if (password.length < 6) {
       return res.status(400).json({ message: "Password must be at least 6 characters" });
     }
 
-    // Hash token to compare with stored hash
-    const resetTokenHash = crypto.createHash("sha256").update(token).digest("hex");
+    const resetCodeHash = crypto.createHash("sha256").update(String(code)).digest("hex");
 
-    // Find user with valid reset token
     const user = await User.findOne({
-      resetPasswordToken: resetTokenHash,
+      email,
+      resetPasswordToken: resetCodeHash,
       resetPasswordExpire: { $gt: Date.now() }
     });
 
     if (!user) {
-      return res.status(400).json({ message: "Invalid or expired reset token" });
+      return res.status(400).json({ message: "Invalid or expired reset code" });
     }
 
     // Hash new password
@@ -144,6 +141,15 @@ exports.register = async (req, res) => {
       authProvider: "local",
       role: "user",
     });
+
+    if (canSendEmail(user)) {
+      sendWelcomeEmail({
+        email: user.email,
+        customerName: user.name,
+      }).catch((error) => {
+        console.error("Failed to send welcome email:", error);
+      });
+    }
 
     const token = createJwt(user);
     res.status(201).json(buildAuthResponse(user, token));
@@ -213,6 +219,7 @@ exports.googleAuth = async (req, res) => {
 
     const email = payload.email.toLowerCase();
     let user = await User.findOne({ email });
+    const isNewUser = !user;
 
     if (!user) {
       user = await User.create({
@@ -226,6 +233,15 @@ exports.googleAuth = async (req, res) => {
       if (!user.googleId) user.googleId = payload.sub;
       if (!user.authProvider || user.authProvider === "local") user.authProvider = "google";
       await user.save();
+    }
+
+    if (isNewUser && canSendEmail(user)) {
+      sendWelcomeEmail({
+        email: user.email,
+        customerName: user.name,
+      }).catch((error) => {
+        console.error("Failed to send welcome email:", error);
+      });
     }
 
     if (user.isBlocked) {

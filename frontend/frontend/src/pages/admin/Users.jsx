@@ -51,54 +51,61 @@ export default function AdminUsers() {
       {loading ? (
         <p className="admin-loading">Loading users...</p>
       ) : (
-        <div className="admin-card admin-table-wrap">
-          <table className="admin-table">
-            <thead>
-              <tr>
-                <th>Name</th>
-                <th>Email</th>
-                <th>Role</th>
-                <th>Status</th>
-                <th>Actions</th>
-              </tr>
-            </thead>
-            <tbody>
-              {users.map((user) => (
-                <tr key={user._id}>
-                  <td>{user.name}</td>
-                  <td>{user.email}</td>
-                  <td>{user.role}</td>
-                  <td>
-                    {user.isBlocked ? (
-                      <span className="admin-badge admin-badge--danger">Blocked</span>
-                    ) : (
-                      <span className="admin-badge admin-badge--success">Active</span>
-                    )}
-                  </td>
-                  <td>
-                    <div className="admin-actions">
-                    <button
-                      type="button"
-                      onClick={() => onToggleBlock(user)}
-                      className="admin-btn admin-btn--warning"
-                    >
-                      {user.isBlocked ? "Unblock" : "Block"}
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => onDelete(user._id)}
-                      className="admin-btn admin-btn--danger"
-                    >
-                      Delete
-                    </button>
-                    </div>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
+        <div className="admin-users-grid">
+          {users.map((user) => (
+            <article key={user._id} className="admin-card admin-card--padded admin-user-card">
+              <div className="admin-user-card__head">
+                <div className="admin-avatar-chip">{initials(user.name || user.email)}</div>
+                <div className="admin-user-card__identity">
+                  <h2>{user.name || "Traveler"}</h2>
+                  <p>{user.email}</p>
+                </div>
+              </div>
+
+              <div className="admin-user-card__meta">
+                <div className="admin-user-card__meta-item">
+                  <span>Role</span>
+                  <strong>{user.role}</strong>
+                </div>
+                <div className="admin-user-card__meta-item">
+                  <span>Status</span>
+                  {user.isBlocked ? (
+                    <span className="admin-badge admin-badge--danger">Blocked</span>
+                  ) : (
+                    <span className="admin-badge admin-badge--success">Active</span>
+                  )}
+                </div>
+              </div>
+
+              <div className="admin-user-card__actions">
+                <button
+                  type="button"
+                  onClick={() => onToggleBlock(user)}
+                  className="admin-btn admin-btn--warning"
+                >
+                  {user.isBlocked ? "Unblock" : "Block"}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => onDelete(user._id)}
+                  className="admin-btn admin-btn--danger"
+                >
+                  Delete
+                </button>
+              </div>
+            </article>
+          ))}
         </div>
       )}
     </section>
   );
+}
+
+function initials(value) {
+  return String(value || "U")
+    .split(/\s+/)
+    .filter(Boolean)
+    .slice(0, 2)
+    .map((part) => part[0]?.toUpperCase())
+    .join("");
 }

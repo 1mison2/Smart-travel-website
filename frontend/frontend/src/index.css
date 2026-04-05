@@ -6,12 +6,12 @@
 @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Poppins:wght@400;500;600;700&display=swap');
 
 :root {
-  /* Modern travel-tech color palette */
-  --primary: #0EA5E9;
-  --primary-dark: #0284C7;
-  --primary-light: #38BDF8;
-  --secondary: #14B8A6;
-  --accent: #10B981;
+  /* Dashboard-aligned color palette */
+  --primary: #ff6f61;
+  --primary-dark: #e25a4f;
+  --primary-light: #ff8a7f;
+  --secondary: #f59e0b;
+  --accent: #fb7185;
   --dark: #1E293B;
   --light: #F8FAFC;
   --gray-50: #F8FAFC;
@@ -29,7 +29,7 @@
   --shadow-soft: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
   --shadow-medium: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05);
   --shadow-large: 0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04);
-  --shadow-glow: 0 0 20px rgba(14, 165, 233, 0.3);
+  --shadow-glow: 0 0 20px rgba(255, 111, 97, 0.3);
 
   font-family: 'Inter', system-ui, -apple-system, sans-serif;
   line-height: 1.6;
@@ -46,18 +46,14 @@
 /* Typography */
 h1, h2, h3, h4, h5, h6 { 
   font-family: 'Poppins', 'Inter', sans-serif; 
-  color: var(--dark);
+  color: inherit;
   font-weight: 600;
   line-height: 1.2;
   letter-spacing: -0.025em;
+  margin: 0;
 }
 
-h1 { font-size: 3.5rem; font-weight: 700; }
-h2 { font-size: 2.5rem; }
-h3 { font-size: 2rem; }
-h4 { font-size: 1.5rem; }
-h5 { font-size: 1.25rem; }
-h6 { font-size: 1.125rem; }
+h1 { font-weight: 700; }
 
 /* Modern skeleton loading */
 .skeleton { 
@@ -81,7 +77,6 @@ a {
 }
 a:hover {
   color: var(--primary-dark);
-  transform: translateY(-1px);
 }
 a:focus {
   outline: 2px solid var(--primary-light);

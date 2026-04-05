@@ -2,13 +2,13 @@
 @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap');
 
 :root {
-  --bg: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  --bg: linear-gradient(135deg, #ff6f61 0%, #ff8a7f 100%);
   --card-bg: rgba(255, 255, 255, 0.95);
   --card-backdrop: blur(20px);
-  --primary: #667eea;
-  --primary-dark: #5a67d8;
-  --primary-light: #9f7aea;
-  --accent: #48bb78;
+  --primary: #ff6f61;
+  --primary-dark: #e25a4f;
+  --primary-light: #ff8a7f;
+  --accent: #fb7185;
   --text: #2d3748;
   --text-secondary: #718096;
   --border: rgba(255, 255, 255, 0.2);
@@ -197,7 +197,7 @@ body {
   outline: none;
   border-color: var(--primary);
   background: rgba(255, 255, 255, 0.95);
-  box-shadow: 0 0 0 4px rgba(102, 126, 234, 0.1);
+  box-shadow: 0 0 0 4px rgba(255, 111, 97, 0.12);
 }
 
 .row {
@@ -247,12 +247,12 @@ body {
   font-weight: 600;
   font-size: 16px;
   transition: all 0.3s ease;
-  box-shadow: 0 4px 14px rgba(102, 126, 234, 0.3);
+  box-shadow: 0 4px 14px rgba(255, 111, 97, 0.3);
 }
 
 .btn-small:hover {
   transform: translateY(-2px);
-  box-shadow: 0 8px 20px rgba(102, 126, 234, 0.4);
+  box-shadow: 0 8px 20px rgba(255, 111, 97, 0.4);
 }
 
 .btn-small:active {

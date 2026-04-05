@@ -1,6 +1,74 @@
 const Location = require("../models/Location");
 
 const EARTH_RADIUS_KM = 6371;
+const TYPE_KEYWORDS = {
+  tourist_attraction: [
+    "tourist",
+    "attraction",
+    "landmark",
+    "sightseeing",
+    "heritage",
+    "religious",
+    "site",
+    "temple",
+    "stupa",
+    "monastery",
+    "museum",
+    "lake",
+    "cave",
+    "waterfall",
+    "view",
+    "viewpoint",
+    "hill",
+    "pagoda",
+    "adventure",
+    "park",
+  ],
+  lodging: [
+    "hotel",
+    "hotels",
+    "stay",
+    "stays",
+    "lodging",
+    "resort",
+    "guest house",
+    "guesthouse",
+    "homestay",
+    "hostel",
+    "inn",
+    "villa",
+    "accommodation",
+    "lodge",
+    "mountain lodge",
+  ],
+  restaurant: [
+    "restaurant",
+    "restaurants",
+    "food",
+    "dining",
+    "eatery",
+    "bbq",
+    "kitchen",
+    "thakali",
+    "khaja",
+    "bhojanalaya",
+    "food court",
+    "rooftop restaurant",
+  ],
+  cafe: [
+    "cafe",
+    "cafes",
+    "coffee",
+    "coffee shop",
+    "bakery",
+    "tea",
+    "tea house",
+    "espresso",
+    "bistro",
+  ],
+};
+
+const normalizeText = (value) => String(value || "").trim().toLowerCase();
 
 const toRadians = (degrees) => (degrees * Math.PI) / 180;
 
@@ -46,18 +114,59 @@ const mapGooglePlace = (place, lat, lng) => {
   };
 };
 
-const fallbackNearbyFromLocations = async ({ lat, lng, query, type, limit = 20 }) => {
-  const keyword = `${query || type || ""}`.trim().toLowerCase();
+const fetchGooglePlacesByText = async ({ apiKey, lat, lng, radius, query, maxResultCount }) => {
+  const endpoint = "https://places.googleapis.com/v1/places:searchText";
+  const response = await fetch(endpoint, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      "X-Goog-Api-Key": apiKey,
+      "X-Goog-FieldMask":
+        "places.id,places.displayName,places.formattedAddress,places.location,places.rating,places.photos,places.googleMapsUri,places.types",
+    },
+    body: JSON.stringify({
+      textQuery: query,
+      maxResultCount,
+      locationBias: {
+        circle: {
+          center: { latitude: lat, longitude: lng },
+          radius,
+        },
+      },
+    }),
+  });
+
+  if (!response.ok) return null;
+  const data = await response.json();
+  return (data.places || []).map((place) => mapGooglePlace(place, lat, lng));
+};
+
+const getLocalNearbyFromLocations = async ({ lat, lng, query, type, limit = 20, radiusKm }) => {
+  const tokens = `${query || ""}`
+    .toLowerCase()
+    .split(/[^a-z0-9]+/i)
+    .map((token) => token.trim())
+    .filter(Boolean)
+    .filter((token) => !["in", "near", "around", "the"].includes(token));
+
+  const typeKeywords = TYPE_KEYWORDS[type] || [type];
   const allLocations = await Location.find().lean();
 
   const filtered = allLocations
     .filter((location) => {
-      if (!keyword) return true;
       const text = [location.name, location.description, location.category, location.district, location.province]
         .filter(Boolean)
         .join(" ")
         .toLowerCase();
-      return text.includes(keyword);
+
+      const distanceKm =
+        typeof lat === "number" && typeof lng === "number"
+          ? haversineDistanceKm(lat, lng, location.latitude, location.longitude)
+          : null;
+      const withinRadius = distanceKm === null || !Number.isFinite(radiusKm) ? true : distanceKm <= radiusKm;
+      const matchesType = typeKeywords.length ? typeKeywords.some((token) => text.includes(token)) : true;
+
+      return withinRadius && matchesType;
     })
     .map((location) => ({
       placeId: String(location._id),
@@ -77,6 +186,22 @@ const fallbackNearbyFromLocations = async ({ lat, lng, query, type, limit = 20 }
     .slice(0, limit);
 
   return filtered;
+};
+
+const mergePlaces = ({ localPlaces = [], remotePlaces = [], limit = 20 }) => {
+  const seen = new Set();
+  const merged = [];
+
+  [...localPlaces, ...remotePlaces].forEach((place) => {
+    const key = normalizeText(place.placeId || `${place.name}-${place.location?.lat}-${place.location?.lng}`);
+    if (!key || seen.has(key)) return;
+    seen.add(key);
+    merged.push(place);
+  });
+
+  return merged
+    .sort((a, b) => (a.distanceKm ?? Number.MAX_SAFE_INTEGER) - (b.distanceKm ?? Number.MAX_SAFE_INTEGER))
+    .slice(0, limit);
 };
 
 exports.searchPlaces = async (req, res) => {
@@ -129,24 +254,32 @@ exports.getNearbyPlaces = async (req, res) => {
       return res.status(400).json({ message: "lat and lng are required numeric values" });
     }
 
+    const radiusKm = radius / 1000;
+    const localPlaces = await getLocalNearbyFromLocations({
+      lat,
+      lng,
+      query,
+      type,
+      limit: maxResultCount,
+      radiusKm,
+    });
+
     const apiKey = process.env.GOOGLE_MAPS_API_KEY;
     if (!apiKey) {
-      const fallbackPlaces = await fallbackNearbyFromLocations({ lat, lng, query, type, limit: maxResultCount });
-      return res.json({ source: "local_fallback", places: fallbackPlaces });
+      return res.json({ source: "local_fallback", places: localPlaces });
+    }
+
+    if (query) {
+      const textPlaces = await fetchGooglePlacesByText({ apiKey, lat, lng, radius, query, maxResultCount });
+      if (textPlaces?.length) {
+        return res.json({
+          source: localPlaces.length ? "local_and_google_places_text" : "google_places_text",
+          places: mergePlaces({ localPlaces, remotePlaces: textPlaces, limit: maxResultCount }),
+        });
+      }
     }
 
     const endpoint = "https://places.googleapis.com/v1/places:searchNearby";
-    const body = {
-      includedTypes: [type],
-      maxResultCount,
-      locationRestriction: {
-        circle: {
-          center: { latitude: lat, longitude: lng },
-          radius,
-        },
-      },
-    };
-
     const response = await fetch(endpoint, {
       method: "POST",
       headers: {
@@ -155,17 +288,28 @@ exports.getNearbyPlaces = async (req, res) => {
         "X-Goog-FieldMask":
           "places.id,places.displayName,places.formattedAddress,places.location,places.rating,places.photos,places.googleMapsUri,places.types",
       },
-      body: JSON.stringify(body),
+      body: JSON.stringify({
+        includedTypes: [type],
+        maxResultCount,
+        locationRestriction: {
+          circle: {
+            center: { latitude: lat, longitude: lng },
+            radius,
+          },
+        },
+      }),
     });
 
     if (!response.ok) {
-      const fallbackPlaces = await fallbackNearbyFromLocations({ lat, lng, query, type, limit: maxResultCount });
-      return res.json({ source: "local_fallback", places: fallbackPlaces });
+      return res.json({ source: "local_fallback", places: localPlaces });
     }
 
     const data = await response.json();
     const places = (data.places || []).map((place) => mapGooglePlace(place, lat, lng));
-    res.json({ source: "google_places", places });
+    res.json({
+      source: localPlaces.length ? "local_and_google_places" : "google_places",
+      places: mergePlaces({ localPlaces, remotePlaces: places, limit: maxResultCount }),
+    });
   } catch (err) {
     console.error(err);
     res.status(500).json({ message: "Failed to fetch nearby places" });

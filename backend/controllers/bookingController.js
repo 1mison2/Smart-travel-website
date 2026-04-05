@@ -3,6 +3,11 @@ const Booking = require("../models/Booking");
 const Location = require("../models/Location");
 const Listing = require("../models/Listing");
 const { createNotification, notifyAdmins } = require("../utils/notificationService");
+const {
+  canSendEmail,
+  sendBookingCancelledEmail,
+  sendBookingCreatedEmail,
+} = require("../utils/emailService");
 
 const isValidObjectId = (id) => mongoose.Types.ObjectId.isValid(id);
 
@@ -165,6 +170,21 @@ exports.createBooking = async (req, res) => {
         meta: { bookingId: booking._id, userId: req.user._id, listingId: listing._id },
       });
 
+      if (canSendEmail(req.user)) {
+        sendBookingCreatedEmail({
+          email: req.user.email,
+          customerName: req.user.name,
+          bookingName: listing.title,
+          bookingId: String(booking._id),
+          amount: booking.amount,
+          currency: booking.currency || "NPR",
+          checkIn: booking.checkIn,
+          checkOut: booking.checkOut,
+        }).catch((error) => {
+          console.error("Failed to send booking created email:", error);
+        });
+      }
+
       const populatedBooking = await Booking.findById(booking._id).populate(
         "listingId",
         "title type location pricePerUnit photos rating"
@@ -224,6 +244,21 @@ exports.createBooking = async (req, res) => {
       message: `${req.user.name || req.user.email} created a booking for ${location.name}.`,
       meta: { bookingId: legacyBooking._id, userId: req.user._id, locationId: location._id },
     });
+
+    if (canSendEmail(req.user)) {
+      sendBookingCreatedEmail({
+        email: req.user.email,
+        customerName: req.user.name,
+        bookingName: location.name,
+        bookingId: String(legacyBooking._id),
+        amount: legacyBooking.amount,
+        currency: legacyBooking.currency || "NPR",
+        checkIn: legacyBooking.checkIn || legacyBooking.date,
+        checkOut: legacyBooking.checkOut || legacyBooking.date,
+      }).catch((error) => {
+        console.error("Failed to send booking created email:", error);
+      });
+    }
 
     const populatedBooking = await Booking.findById(legacyBooking._id).populate(
       "locationId",
@@ -310,6 +345,18 @@ exports.cancelBooking = async (req, res) => {
       message: `A booking was cancelled by ${req.user.name || req.user.email}.`,
       meta: { bookingId: booking._id, userId: req.user._id },
     });
+
+    if (canSendEmail(req.user)) {
+      sendBookingCancelledEmail({
+        email: req.user.email,
+        customerName: req.user.name,
+        bookingName,
+        bookingId: String(booking._id),
+        cancelledAt: booking.cancelledAt,
+      }).catch((error) => {
+        console.error("Failed to send booking cancelled email:", error);
+      });
+    }
 
     res.json({ booking });
   } catch (err) {

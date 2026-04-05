@@ -5,6 +5,7 @@ const emptyForm = {
   name: "",
   province: "",
   district: "",
+  parentLocationId: "",
   description: "",
   category: "",
   averageCost: "",
@@ -29,6 +30,12 @@ const getApiErrorMessage = (err, fallback) => {
   return err?.message || fallback;
 };
 
+const getParentId = (location) => {
+  if (!location?.parentLocationId) return "";
+  if (typeof location.parentLocationId === "string") return location.parentLocationId;
+  return location.parentLocationId?._id || "";
+};
+
 export default function AdminLocations() {
   const [locations, setLocations] = useState([]);
   const [form, setForm] = useState(emptyForm);
@@ -38,6 +45,9 @@ export default function AdminLocations() {
   const [saving, setSaving] = useState(false);
   const [currentImage, setCurrentImage] = useState("");
   const [currentImages, setCurrentImages] = useState([]);
+  const parentCandidates = locations.filter(
+    (location) => location._id !== editingId && !getParentId(location)
+  );
 
   const loadLocations = async () => {
     try {
@@ -84,6 +94,7 @@ export default function AdminLocations() {
       payload.append("name", form.name);
       payload.append("province", form.province);
       payload.append("district", form.district);
+      payload.append("parentLocationId", form.parentLocationId);
       payload.append("description", form.description);
       payload.append("category", form.category);
       payload.append("averageCost", form.averageCost);
@@ -117,6 +128,10 @@ export default function AdminLocations() {
       name: location.name || "",
       province: location.province || "",
       district: location.district || "",
+      parentLocationId:
+        typeof location.parentLocationId === "string"
+          ? location.parentLocationId
+          : location.parentLocationId?._id || "",
       description: location.description || "",
       category: location.category || "",
       averageCost: location.averageCost || 0,
@@ -155,11 +170,22 @@ export default function AdminLocations() {
           <input className="admin-input" name="name" placeholder="Location Name" value={form.name} onChange={onChange} required />
           <input className="admin-input" name="province" placeholder="Province (e.g. Bagmati)" value={form.province} onChange={onChange} required />
           <input className="admin-input" name="district" placeholder="District (e.g. Lalitpur)" value={form.district} onChange={onChange} required />
+          <select className="admin-input" name="parentLocationId" value={form.parentLocationId} onChange={onChange}>
+            <option value="">Top-level destination / hub</option>
+            {parentCandidates.map((location) => (
+              <option key={location._id} value={location._id}>
+                {location.name}
+              </option>
+            ))}
+          </select>
           <input className="admin-input" name="category" placeholder="Category" value={form.category} onChange={onChange} required />
           <input className="admin-input" name="averageCost" type="number" min="0" placeholder="Average Cost" value={form.averageCost} onChange={onChange} required />
           <input className="admin-input" name="latitude" type="number" step="any" placeholder="Latitude" value={form.latitude} onChange={onChange} required />
           <input className="admin-input" name="longitude" type="number" step="any" placeholder="Longitude" value={form.longitude} onChange={onChange} required />
         </div>
+        <p className="admin-page__subtitle">
+          Leave parent empty for a main city or destination. Choose a parent only for a place inside that destination.
+        </p>
         <textarea className="admin-textarea" name="description" placeholder="Description" value={form.description} onChange={onChange} rows={3} required />
         <div>
           <label className="admin-page__subtitle">Cover Image</label>
@@ -209,6 +235,7 @@ export default function AdminLocations() {
                 <th>Name</th>
                 <th>Province</th>
                 <th>District</th>
+                <th>Parent</th>
                 <th>Category</th>
                 <th>Avg. Cost</th>
                 <th>Coordinates</th>
@@ -222,6 +249,7 @@ export default function AdminLocations() {
                   <td>{location.name}</td>
                   <td>{location.province || "-"}</td>
                   <td>{location.district || "-"}</td>
+                  <td>{location.parentLocationId?.name || "-"}</td>
                   <td>{location.category}</td>
                   <td>${location.averageCost}</td>
                   <td>{location.latitude}, {location.longitude}</td>

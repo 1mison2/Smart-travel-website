@@ -41,13 +41,13 @@ export default function MyTrips() {
       <header className="trips-page__hero">
         <div>
           <p className="trips-page__kicker">My Trips</p>
-          <h1>Your travel plans</h1>
-          <p>{upcomingCount} upcoming trip(s) out of {trips.length} total saved plan(s).</p>
+          <h1>Your AI itineraries</h1>
+          <p>{upcomingCount} upcoming trip(s) out of {trips.length} saved itinerary(ies).</p>
         </div>
         <div className="trips-page__actions">
           <Link to="/explore" className="trips-btn trips-btn--ghost">Explore</Link>
           <Link to="/trip-packages" className="trips-btn trips-btn--ghost">Trip Packages</Link>
-          <Link to="/plan-trip" className="trips-btn trips-btn--primary">New Trip Plan</Link>
+          <Link to="/itinerary-planner" className="trips-btn trips-btn--primary">AI Trip Planner</Link>
         </div>
       </header>
 
@@ -58,8 +58,8 @@ export default function MyTrips() {
         {!loading && trips.length === 0 && (
           <div className="trips-empty">
             <h2>No saved trips yet</h2>
-            <p>Start from Explore and create your first plan.</p>
-            <Link to="/explore" className="trips-btn trips-btn--primary">Explore Locations</Link>
+            <p>Start from the AI planner to create your first itinerary.</p>
+            <Link to="/itinerary-planner" className="trips-btn trips-btn--primary">AI Trip Planner</Link>
           </div>
         )}
 
@@ -79,23 +79,27 @@ export default function MyTrips() {
 
       <style>{`
         .trips-page {
-          max-width: 920px;
+          max-width: 1080px;
           margin: 0 auto;
           padding: 28px 20px 60px;
-          font-family: "Plus Jakarta Sans", "Sora", "DM Sans", system-ui, sans-serif;
-          color: #0f172a;
+          font-family: "Manrope", "Plus Jakarta Sans", "DM Sans", system-ui, sans-serif;
+          color: #1f2937;
         }
 
         .trips-page__hero {
-          background: linear-gradient(135deg, rgba(56, 189, 248, 0.16), rgba(34, 197, 94, 0.1));
-          border: 1px solid rgba(148, 163, 184, 0.26);
-          border-radius: 24px;
-          padding: 20px;
+          background:
+            linear-gradient(180deg, rgba(255, 255, 255, 0.95), rgba(255, 248, 244, 0.9)),
+            linear-gradient(135deg, rgba(255, 160, 122, 0.08), rgba(125, 211, 252, 0.08));
+          border: 1px solid rgba(255, 255, 255, 0.82);
+          border-radius: 28px;
+          padding: 24px;
           display: flex;
           justify-content: space-between;
           gap: 12px;
           align-items: center;
           margin-bottom: 16px;
+          box-shadow: 0 22px 40px rgba(15, 23, 42, 0.07);
+          backdrop-filter: blur(14px);
         }
 
         .trips-page__kicker {
@@ -103,13 +107,15 @@ export default function MyTrips() {
           text-transform: uppercase;
           letter-spacing: 0.18em;
           font-size: 0.72rem;
-          color: #0f766e;
-          font-weight: 600;
+          color: #64748b;
+          font-weight: 700;
         }
 
         .trips-page__hero h1 {
           margin: 0 0 6px;
-          font-size: clamp(1.8rem, 3vw, 2.4rem);
+          font-size: clamp(2rem, 3vw, 3rem);
+          font-family: "Playfair Display", serif;
+          letter-spacing: -0.04em;
         }
 
         .trips-page__hero p {
@@ -133,13 +139,13 @@ export default function MyTrips() {
 
         .trips-btn--primary {
           color: #fff;
-          background: linear-gradient(135deg, #0284c7, #0f766e);
+          background: linear-gradient(135deg, var(--primary), var(--primary-dark));
         }
 
         .trips-btn--ghost {
-          color: #0f766e;
+          color: var(--primary-dark);
           background: #fff;
-          border: 1px solid rgba(15, 118, 110, 0.3);
+          border: 1px solid var(--border);
         }
 
         .trips-page__error,
@@ -158,13 +164,14 @@ export default function MyTrips() {
         }
 
         .trip-card {
-          background: #fff;
-          border: 1px solid rgba(148, 163, 184, 0.22);
-          border-radius: 16px;
-          padding: 16px;
-          box-shadow: 0 10px 24px rgba(15, 23, 42, 0.07);
+          background: rgba(255, 255, 255, 0.9);
+          border: 1px solid rgba(255, 255, 255, 0.82);
+          border-radius: 22px;
+          padding: 18px;
+          box-shadow: 0 16px 30px rgba(15, 23, 42, 0.06);
           display: grid;
           gap: 6px;
+          backdrop-filter: blur(14px);
         }
 
         .trip-card__head {
@@ -181,7 +188,7 @@ export default function MyTrips() {
 
         .trip-card__price {
           font-weight: 700;
-          color: #0f766e;
+          color: var(--primary-dark);
         }
 
         .trip-card__dates {
@@ -198,11 +205,11 @@ export default function MyTrips() {
         }
 
         .trips-empty {
-          border: 1px dashed rgba(148, 163, 184, 0.55);
-          border-radius: 18px;
+          border: 1px dashed rgba(148, 163, 184, 0.42);
+          border-radius: 22px;
           padding: 28px;
           text-align: center;
-          background: #fff;
+          background: rgba(255, 255, 255, 0.86);
           display: grid;
           gap: 10px;
           justify-items: center;

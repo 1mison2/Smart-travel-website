@@ -17,6 +17,7 @@ const PaymentSchema = new mongoose.Schema(
     rawRequest: { type: mongoose.Schema.Types.Mixed, default: {} },
     rawResponse: { type: mongoose.Schema.Types.Mixed, default: {} },
     verifiedAt: { type: Date },
+    receiptEmailSentAt: { type: Date },
   },
   { timestamps: true }
 );

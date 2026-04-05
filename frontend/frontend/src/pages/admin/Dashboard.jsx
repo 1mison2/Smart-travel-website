@@ -1,11 +1,9 @@
 import React, { useEffect, useMemo, useState } from "react";
 import {
-  Activity,
   BriefcaseBusiness,
   CreditCard,
   Globe2,
   MapPinned,
-  MessageSquareText,
   TrendingDown,
   TrendingUp,
   UserRound,
@@ -318,29 +316,6 @@ export default function AdminDashboard() {
     const recentBookings = bookings.slice(0, 5);
     const latestUsers = users.slice(0, 5);
     const recentPayments = payments.slice(0, 5);
-    const packagePerformance = packages.slice(0, 4).map((pkg) => {
-      const reservations = bookings.filter((booking) => String(booking.tripPackageId?._id || "") === String(pkg._id || "")).length;
-      return {
-        id: pkg._id,
-        title: pkg.title,
-        reservations,
-        status: pkg.isActive === false ? "Inactive" : pkg.isFeatured ? "Featured" : "Live",
-      };
-    });
-    const latestPosts = posts.slice(0, 4);
-    const pendingApprovals = [
-      ...posts.filter((item) => item.status !== "approved").slice(0, 3).map((item) => ({
-        id: item._id,
-        title: item.title || "Community post",
-        type: "Post approval",
-      })),
-      ...bookings.filter((item) => item.bookingStatus === "pending").slice(0, 2).map((item) => ({
-        id: item._id,
-        title: item.tripPackageId?.title || item.listingId?.title || item.locationId?.name || "Booking request",
-        type: "Booking review",
-      })),
-    ].slice(0, 5);
-
     return {
       statCards,
       bookingTrend,
@@ -351,9 +326,6 @@ export default function AdminDashboard() {
       recentBookings,
       latestUsers,
       recentPayments,
-      packagePerformance,
-      latestPosts,
-      pendingApprovals,
       notificationsUnread: state.notifications.filter((item) => !item.isRead).length,
       totalPosts: stats.totalPosts,
     };
@@ -375,26 +347,6 @@ export default function AdminDashboard() {
 
   return (
     <section className="admin-dashboard">
-      <div className="admin-dashboard__hero">
-        <div>
-          <p className="admin-page__title-kicker">Smart Travel Nepal Admin</p>
-          <h1 className="admin-page__title">Control room for growth, operations, and traveler experience.</h1>
-          <p className="admin-page__subtitle">
-            Monitor bookings, payments, destinations, packages, and community activity from one premium analytics view.
-          </p>
-        </div>
-        <div className="admin-dashboard__hero-meta">
-          <div className="admin-dashboard__hero-pill">
-            <Activity size={16} />
-            Live analytics synced with the platform
-          </div>
-          <div className="admin-dashboard__hero-pill">
-            <MessageSquareText size={16} />
-            {overview.notificationsUnread} unread admin notifications
-          </div>
-        </div>
-      </div>
-
       <div className="admin-kpi-grid">
         {overview.statCards.map((card) => {
           const Icon = card.icon;
@@ -532,11 +484,11 @@ export default function AdminDashboard() {
           <div className="admin-table-lite">
             {overview.recentBookings.map((booking) => (
               <div key={booking._id} className="admin-table-lite__row">
-                <div>
+                <div className="admin-table-lite__main">
                   <strong>{booking.tripPackageId?.title || booking.listingId?.title || booking.locationId?.name || "Booking"}</strong>
                   <small>{booking.userId?.name || booking.userId?.email || "Traveler"}</small>
                 </div>
-                <div>
+                <div className="admin-table-lite__meta">
                   <strong>{currency(booking.amount)}</strong>
                   <small className={`admin-badge admin-badge--${resolveBadgeTone(booking.bookingStatus)}`}>{booking.bookingStatus}</small>
                 </div>
@@ -556,7 +508,7 @@ export default function AdminDashboard() {
             {overview.latestUsers.map((user) => (
               <div key={user._id} className="admin-list-lite__row">
                 <div className="admin-avatar-chip">{initials(user.name || user.email)}</div>
-                <div>
+                <div className="admin-list-lite__main">
                   <strong>{user.name || "Traveler"}</strong>
                   <small>{user.email}</small>
                 </div>
@@ -578,11 +530,11 @@ export default function AdminDashboard() {
           <div className="admin-list-lite">
             {overview.recentPayments.map((payment) => (
               <div key={payment._id} className="admin-list-lite__row">
-                <div>
+                <div className="admin-list-lite__main">
                   <strong>{payment.provider || "Khalti"}</strong>
                   <small>{payment.gatewayRef || "Awaiting gateway ref"}</small>
                 </div>
-                <div>
+                <div className="admin-list-lite__meta">
                   <strong>{currency(payment.amount)}</strong>
                   <small className={`admin-badge admin-badge--${resolvePaymentTone(payment.status)}`}>{payment.status}</small>
                 </div>
@@ -591,100 +543,8 @@ export default function AdminDashboard() {
           </div>
         </section>
 
-        <section className="admin-card admin-card--padded">
-          <div className="admin-section-head">
-            <div>
-              <p className="admin-section-head__kicker">Trip package performance</p>
-              <h2>Route traction</h2>
-            </div>
-          </div>
-          <div className="admin-list-lite">
-            {overview.packagePerformance.map((pkg) => (
-              <div key={pkg.id} className="admin-list-lite__row">
-                <div>
-                  <strong>{pkg.title}</strong>
-                  <small>{pkg.reservations} reservations</small>
-                </div>
-                <span className={`admin-badge admin-badge--${pkg.status === "Inactive" ? "danger" : pkg.status === "Featured" ? "warning" : "success"}`}>
-                  {pkg.status}
-                </span>
-              </div>
-            ))}
-          </div>
-        </section>
-
-        <section className="admin-card admin-card--padded">
-          <div className="admin-section-head">
-            <div>
-              <p className="admin-section-head__kicker">Latest posts</p>
-              <h2>Community content</h2>
-            </div>
-          </div>
-          <div className="admin-list-lite">
-            {overview.latestPosts.map((post) => (
-              <div key={post._id} className="admin-list-lite__row">
-                <div>
-                  <strong>{post.title || "Community update"}</strong>
-                  <small>{post.userId?.name || post.userId?.email || "Community member"}</small>
-                </div>
-                <span className={`admin-badge admin-badge--${post.status === "approved" ? "success" : "warning"}`}>
-                  {post.status || "pending"}
-                </span>
-              </div>
-            ))}
-          </div>
-        </section>
-
-        <section className="admin-card admin-card--padded">
-          <div className="admin-section-head">
-            <div>
-              <p className="admin-section-head__kicker">Pending approvals</p>
-              <h2>Needs attention</h2>
-            </div>
-          </div>
-          <div className="admin-list-lite">
-            {overview.pendingApprovals.length ? (
-              overview.pendingApprovals.map((item) => (
-                <div key={`${item.type}-${item.id}`} className="admin-list-lite__row">
-                  <div>
-                    <strong>{item.title}</strong>
-                    <small>{item.type}</small>
-                  </div>
-                  <button type="button" className="admin-btn admin-btn--muted admin-btn--xs">Review</button>
-                </div>
-              ))
-            ) : (
-              <p className="admin-loading">Everything is approved and up to date.</p>
-            )}
-          </div>
-        </section>
       </div>
 
-      <section className="admin-quick-panel admin-card admin-card--padded">
-        <div className="admin-section-head">
-          <div>
-            <p className="admin-section-head__kicker">Quick actions</p>
-            <h2>Manage the platform faster</h2>
-          </div>
-        </div>
-        <div className="admin-quick-panel__grid">
-          {[
-            "Add new destination",
-            "Create package",
-            "Approve booking",
-            "Send notification",
-            "Manage users",
-          ].map((label, index) => (
-            <button
-              key={label}
-              type="button"
-              className={`admin-quick-panel__btn admin-quick-panel__btn--${index === 0 ? "primary" : "soft"}`}
-            >
-              {label}
-            </button>
-          ))}
-        </div>
-      </section>
     </section>
   );
 }

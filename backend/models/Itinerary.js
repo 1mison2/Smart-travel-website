@@ -1,5 +1,14 @@
 const mongoose = require("mongoose");
 
+const ItineraryTimelineItemSchema = new mongoose.Schema(
+  {
+    time: { type: String, default: "", trim: true },
+    title: { type: String, default: "", trim: true },
+    details: { type: String, default: "", trim: true },
+  },
+  { _id: false }
+);
+
 const ItineraryDaySchema = new mongoose.Schema(
   {
     day: { type: Number, required: true, min: 1 },
@@ -12,10 +21,13 @@ const ItineraryDaySchema = new mongoose.Schema(
         image: { type: String, default: "", trim: true },
         estimatedCost: { type: Number, default: 0, min: 0 },
         notes: { type: String, default: "", trim: true },
+        latitude: { type: Number, default: null },
+        longitude: { type: Number, default: null },
       },
     ],
     estimatedCost: { type: Number, default: 0, min: 0 },
     notes: { type: String, default: "", trim: true },
+    timeline: { type: [ItineraryTimelineItemSchema], default: [] },
   },
   { _id: false }
 );

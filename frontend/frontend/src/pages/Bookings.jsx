@@ -213,7 +213,7 @@ export default function Bookings() {
 
       <style>{`
         .bookings-page {
-          background: linear-gradient(140deg, rgba(14, 116, 144, 0.08), rgba(15, 23, 42, 0.06));
+          background: transparent;
         }
 
         .bookings-filter {
@@ -228,18 +228,19 @@ export default function Bookings() {
 
         .bookings-chip {
           border-radius: 999px;
-          border: 1px solid rgba(148, 163, 184, 0.45);
-          padding: 6px 12px;
-          background: #fff;
-          color: #0f172a;
+          border: 1px solid rgba(255, 255, 255, 0.82);
+          padding: 7px 13px;
+          background: rgba(255, 255, 255, 0.88);
+          color: #334155;
           font-weight: 600;
           font-size: 0.8rem;
+          box-shadow: 0 10px 20px rgba(15, 23, 42, 0.05);
         }
 
         .bookings-chip--active {
-          background: #0f172a;
-          color: #f8fafc;
-          border-color: #0f172a;
+          background: linear-gradient(135deg, var(--primary), var(--primary-dark));
+          color: #fff;
+          border-color: transparent;
         }
 
         .booking-table__actions {

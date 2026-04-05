@@ -12,8 +12,14 @@ const {
   updateBookingStatus,
   deleteBooking,
   getAllPosts,
+  updatePostStatus,
   approvePost,
   deletePost,
+  getAllReviews,
+  updateReviewStatus,
+  deleteReview,
+  sendAnnouncementEmailToUsers,
+  sendUpcomingTripReminders,
 } = require("../controllers/adminController");
 const { verifyToken, isAdmin } = require("../middleware/authMiddleware");
 const upload = require("../middleware/uploadMiddleware");
@@ -52,7 +58,14 @@ router.put("/bookings/:id/status", updateBookingStatus);
 router.delete("/bookings/:id", deleteBooking);
 
 router.get("/posts", getAllPosts);
+router.put("/posts/:id/status", updatePostStatus);
 router.put("/posts/:id/approve", approvePost);
 router.delete("/posts/:id", deletePost);
+router.get("/reviews", getAllReviews);
+router.put("/reviews/:id/status", updateReviewStatus);
+router.delete("/reviews/:id", deleteReview);
+
+router.post("/emails/announcements", sendAnnouncementEmailToUsers);
+router.post("/emails/trip-reminders", sendUpcomingTripReminders);
 
 module.exports = router;

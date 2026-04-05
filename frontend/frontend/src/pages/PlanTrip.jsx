@@ -1,18 +1,6 @@
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useEffect, useState } from "react";
 import { Link, useSearchParams } from "react-router-dom";
-import api, { resolveImageUrl } from "../utils/api";
-
-const tomorrow = () => {
-  const d = new Date();
-  d.setDate(d.getDate() + 1);
-  return d.toISOString().slice(0, 10);
-};
-
-const dayAfter = () => {
-  const d = new Date();
-  d.setDate(d.getDate() + 2);
-  return d.toISOString().slice(0, 10);
-};
+import api from "../utils/api";
 
 const emptyForm = {
   title: "",
@@ -29,30 +17,9 @@ export default function PlanTrip() {
   const [form, setForm] = useState(emptyForm);
   const [location, setLocation] = useState(null);
   const [loadingLocation, setLoadingLocation] = useState(false);
-  const [loadingListings, setLoadingListings] = useState(false);
-  const [listings, setListings] = useState([]);
-  const [selectedIds, setSelectedIds] = useState([]);
-  const [bookingForm, setBookingForm] = useState({
-    checkIn: tomorrow(),
-    checkOut: dayAfter(),
-    guests: 1,
-  });
-  const [bookingMessage, setBookingMessage] = useState("");
-  const [bookingError, setBookingError] = useState("");
-  const [bookingSaving, setBookingSaving] = useState(false);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
   const [message, setMessage] = useState("");
-
-  const eligibleTypes = useMemo(
-    () => new Set(["activity", "hotel", "restaurant", "cafe"]),
-    []
-  );
-
-  const eligibleListings = useMemo(
-    () => listings.filter((item) => eligibleTypes.has(item.type)),
-    [listings, eligibleTypes]
-  );
 
   useEffect(() => {
     let active = true;
@@ -82,104 +49,9 @@ export default function PlanTrip() {
     };
   }, [locationId]);
 
-  useEffect(() => {
-    let active = true;
-    const fetchListings = async () => {
-      if (!location) return;
-      try {
-        setLoadingListings(true);
-        const searchCity = location.district || location.name || "";
-        const { data } = await api.get(`/api/listings?city=${encodeURIComponent(searchCity)}`);
-        if (!active) return;
-        const next = Array.isArray(data?.listings) ? data.listings : [];
-        setListings(next);
-      } catch (_err) {
-        if (!active) return;
-        setListings([]);
-      } finally {
-        if (active) setLoadingListings(false);
-      }
-    };
-    fetchListings();
-    return () => {
-      active = false;
-    };
-  }, [location]);
-
-  const minDate = useMemo(() => new Date().toISOString().slice(0, 10), []);
-
   const onChange = (e) => {
     const { name, value } = e.target;
     setForm((prev) => ({ ...prev, [name]: value }));
-  };
-
-  const onBookingChange = (e) => {
-    const { name, value } = e.target;
-    setBookingError("");
-    setBookingForm((prev) => ({
-      ...prev,
-      [name]: name === "guests" ? Number(value) : value,
-    }));
-  };
-
-  const toggleSelect = (id) => {
-    setSelectedIds((prev) =>
-      prev.includes(id) ? prev.filter((item) => item !== id) : [...prev, id]
-    );
-  };
-
-  const onBookSelected = async () => {
-    setBookingMessage("");
-    setBookingError("");
-
-    if (!selectedIds.length) {
-      setBookingError("Select at least one activity, hotel, restaurant, or cafe.");
-      return;
-    }
-
-    if (!bookingForm.checkIn || !bookingForm.checkOut) {
-      setBookingError("Select check-in and check-out dates.");
-      return;
-    }
-
-    if (bookingForm.checkOut < bookingForm.checkIn) {
-      setBookingError("Check-out cannot be before check-in.");
-      return;
-    }
-
-    try {
-      setBookingSaving(true);
-      const payloadBase = {
-        checkIn: bookingForm.checkIn,
-        checkOut: bookingForm.checkOut,
-        guests: bookingForm.guests || 1,
-      };
-      const results = await Promise.allSettled(
-        selectedIds.map((listingId) =>
-          api.post("/api/bookings", {
-            listingId,
-            ...payloadBase,
-          })
-        )
-      );
-      const successCount = results.filter((r) => r.status === "fulfilled").length;
-      const failCount = results.length - successCount;
-      if (successCount) {
-        setBookingMessage(
-          `Booked ${successCount} item${successCount === 1 ? "" : "s"}. You can pay later from the Bookings page.`
-        );
-        setSelectedIds([]);
-      }
-      if (failCount) {
-        setBookingError(
-          `${failCount} booking${failCount === 1 ? "" : "s"} failed. Try again or reduce your selection.`
-        );
-      }
-    } catch (_err) {
-      setBookingError("Failed to complete bookings. Please try again.");
-    } finally {
-      setBookingSaving(false);
-    }
   };
 
   const onSubmit = async (e) => {
@@ -246,93 +118,7 @@ export default function PlanTrip() {
         </div>
       )}
 
-      <section className="plan-book">
-        <div className="plan-book__head">
-          <div>
-            <h2>Plan & book your activities</h2>
-            <p>Select multiple activities, hotels, cafes, and restaurants — then book them all at once.</p>
-          </div>
-          <Link to="/bookings" className="plan-book__link">Go to Bookings</Link>
-        </div>
-
-        <div className="plan-book__form">
-          <input
-            className="plan-input"
-            type="date"
-            name="checkIn"
-            min={minDate}
-            value={bookingForm.checkIn}
-            onChange={onBookingChange}
-          />
-          <input
-            className="plan-input"
-            type="date"
-            name="checkOut"
-            min={bookingForm.checkIn || minDate}
-            value={bookingForm.checkOut}
-            onChange={onBookingChange}
-          />
-          <input
-            className="plan-input"
-            type="number"
-            min="1"
-            name="guests"
-            value={bookingForm.guests}
-            onChange={onBookingChange}
-            placeholder="Guests"
-          />
-          <button
-            type="button"
-            className="plan-book__cta"
-            onClick={onBookSelected}
-            disabled={bookingSaving}
-          >
-            {bookingSaving ? "Booking..." : "Book selected"}
-          </button>
-        </div>
-
-        {bookingError && <p className="plan-book__error">{bookingError}</p>}
-        {bookingMessage && <p className="plan-book__success">{bookingMessage}</p>}
-
-        {loadingListings && <p className="plan-book__hint">Loading listings for this destination...</p>}
-        {!loadingListings && !eligibleListings.length && (
-          <p className="plan-book__hint">No bookable listings found for this destination yet.</p>
-        )}
-
-        <div className="plan-book__grid">
-          {eligibleListings.map((listing) => (
-            <article key={listing._id} className={`plan-card ${selectedIds.includes(listing._id) ? "plan-card--selected" : ""}`}>
-              <label className="plan-card__check">
-                <input
-                  type="checkbox"
-                  checked={selectedIds.includes(listing._id)}
-                  onChange={() => toggleSelect(listing._id)}
-                />
-                <span>Select</span>
-              </label>
-              <div className="plan-card__media">
-                <img
-                  src={
-                    resolveImageUrl(listing.photos?.[0]) ||
-                    "https://images.unsplash.com/photo-1500530855697-b586d89ba3ee?q=80&w=1200&auto=format&fit=crop"
-                  }
-                  alt={listing.title}
-                />
-              </div>
-              <div className="plan-card__body">
-                <div className="plan-card__head">
-                  <h3>{listing.title}</h3>
-                  <span>{listing.type}</span>
-                </div>
-                <p>NPR {listing.pricePerUnit} / {listing.type === "hotel" ? "night" : "booking"}</p>
-                <Link to={`/places/${listing._id}`} className="plan-card__link">View details</Link>
-              </div>
-            </article>
-          ))}
-        </div>
-      </section>
-
-      <form className="plan-form" onSubmit={onSubmit}>
+            <form className="plan-form" onSubmit={onSubmit}>
         <div className="plan-form__row">
           <label>
             Trip title *
@@ -464,160 +250,6 @@ export default function PlanTrip() {
           font-size: 0.86rem;
         }
 
-        .plan-book {
-          background: #0f172a;
-          color: #e2e8f0;
-          border-radius: 24px;
-          padding: 20px;
-          margin-bottom: 18px;
-          display: grid;
-          gap: 16px;
-          box-shadow: 0 18px 40px rgba(15, 23, 42, 0.2);
-        }
-
-        .plan-book__head {
-          display: flex;
-          justify-content: space-between;
-          align-items: center;
-          gap: 12px;
-        }
-
-        .plan-book__head h2 {
-          margin: 0 0 6px;
-          font-size: clamp(1.3rem, 2.6vw, 1.9rem);
-        }
-
-        .plan-book__head p {
-          margin: 0;
-          color: rgba(226, 232, 240, 0.8);
-        }
-
-        .plan-book__link {
-          color: #38bdf8;
-          text-decoration: none;
-          font-weight: 600;
-          font-size: 0.9rem;
-        }
-
-        .plan-book__form {
-          display: grid;
-          grid-template-columns: repeat(4, minmax(0, 1fr));
-          gap: 10px;
-        }
-
-        .plan-input {
-          border-radius: 12px;
-          border: 1px solid rgba(148, 163, 184, 0.3);
-          padding: 10px 12px;
-          background: rgba(15, 23, 42, 0.4);
-          color: #e2e8f0;
-        }
-
-        .plan-input::placeholder {
-          color: rgba(226, 232, 240, 0.6);
-        }
-
-        .plan-book__cta {
-          border: none;
-          border-radius: 12px;
-          background: linear-gradient(135deg, #38bdf8, #14b8a6);
-          color: #0f172a;
-          font-weight: 700;
-          cursor: pointer;
-          padding: 10px 12px;
-        }
-
-        .plan-book__cta[disabled] {
-          opacity: 0.65;
-          cursor: not-allowed;
-        }
-
-        .plan-book__hint {
-          margin: 0;
-          color: rgba(226, 232, 240, 0.7);
-          font-size: 0.9rem;
-        }
-
-        .plan-book__error {
-          margin: 0;
-          color: #fecaca;
-          font-size: 0.9rem;
-        }
-
-        .plan-book__success {
-          margin: 0;
-          color: #a7f3d0;
-          font-size: 0.9rem;
-        }
-
-        .plan-book__grid {
-          display: grid;
-          grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
-          gap: 12px;
-        }
-
-        .plan-card {
-          background: rgba(15, 23, 42, 0.55);
-          border: 1px solid rgba(148, 163, 184, 0.2);
-          border-radius: 18px;
-          overflow: hidden;
-          display: grid;
-          gap: 8px;
-          padding-bottom: 10px;
-        }
-
-        .plan-card--selected {
-          border-color: rgba(56, 189, 248, 0.8);
-          box-shadow: 0 0 0 2px rgba(56, 189, 248, 0.25);
-        }
-
-        .plan-card__check {
-          display: flex;
-          align-items: center;
-          gap: 8px;
-          padding: 10px 12px 0;
-          font-size: 0.85rem;
-          color: rgba(226, 232, 240, 0.8);
-        }
-
-        .plan-card__media img {
-          width: 100%;
-          height: 140px;
-          object-fit: cover;
-          display: block;
-        }
-
-        .plan-card__body {
-          padding: 0 12px 10px;
-          display: grid;
-          gap: 6px;
-        }
-
-        .plan-card__head {
-          display: flex;
-          justify-content: space-between;
-          align-items: center;
-          gap: 6px;
-        }
-
-        .plan-card__head h3 {
-          margin: 0;
-          font-size: 1rem;
-        }
-
-        .plan-card__head span {
-          text-transform: capitalize;
-          font-size: 0.75rem;
-          color: rgba(226, 232, 240, 0.7);
-        }
-
-        .plan-card__link {
-          color: #38bdf8;
-          text-decoration: none;
-          font-size: 0.85rem;
-          font-weight: 600;
-        }
-
         .plan-form {
           background: #fff;
           border: 1px solid rgba(148, 163, 184, 0.24);
@@ -706,15 +338,6 @@ export default function PlanTrip() {
 
           .plan-page__hero-links {
             text-align: left;
-          }
-
-          .plan-book__head {
-            flex-direction: column;
-            align-items: flex-start;
-          }
-
-          .plan-book__form {
-            grid-template-columns: 1fr;
           }
 
           .plan-form__row {

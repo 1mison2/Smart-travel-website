@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from "react";
 import { Link, useParams } from "react-router-dom";
+import DestinationReviewPanel from "../components/DestinationReviewPanel";
 import api, { resolveImageUrl } from "../utils/api";
 
 export default function PlaceDetails() {
@@ -192,6 +193,13 @@ export default function PlaceDetails() {
             </p>
           )}
         </section>
+
+        <DestinationReviewPanel
+          destination={listing.title}
+          title={`Reviews for ${listing.title}`}
+          subtitle="Share feedback for this specific place right from the details page."
+          emptyText={`No community reviews for ${listing.title} yet. Be the first to post one.`}
+        />
       </div>
     </div>
   );

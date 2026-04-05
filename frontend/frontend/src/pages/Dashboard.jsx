@@ -3,15 +3,27 @@ import { Link, useNavigate } from "react-router-dom";
 import {
   Bell,
   Calendar,
+  CheckCircle2,
   ChevronRight,
   Clock3,
   Compass,
+  CreditCard,
+  Droplets,
+  Flame,
+  Heart,
   Hotel,
   LogOut,
   MapPin,
   Mountain,
+  MountainSnow,
+  Navigation,
+  Pin,
+  PlaneTakeoff,
   Search,
   Settings,
+  ShieldCheck,
+  Sparkles,
+  Star,
   Sun,
   Sunrise,
   Trees,
@@ -20,6 +32,7 @@ import {
   UserCircle,
   Users,
   Wallet,
+  Wind,
 } from "lucide-react";
 import { useAuth } from "../context/AuthContext";
 import api, { resolveImageUrl } from "../utils/api";
@@ -64,6 +77,40 @@ const initialsFromName = (name) =>
 
 const normalizeText = (value) => String(value || "").trim().toLowerCase();
 const hasRealImage = (value) => Boolean(resolveImageUrl(value));
+const safeNumber = (value, fallback = 0) => {
+  const next = Number(value);
+  return Number.isFinite(next) ? next : fallback;
+};
+const scenicGradients = [
+  "linear-gradient(135deg, rgba(14, 53, 88, 0.95), rgba(64, 131, 181, 0.72))",
+  "linear-gradient(135deg, rgba(12, 72, 94, 0.94), rgba(111, 179, 167, 0.74))",
+  "linear-gradient(135deg, rgba(59, 68, 119, 0.94), rgba(227, 146, 102, 0.74))",
+];
+const fallbackDestinationMeta = [
+  { rating: 4.9, tags: ["Viewpoint", "Boating", "Lakeside"], blurb: "Golden light, reflective waters, and serene premium escapes that feel effortless to plan." },
+  { rating: 4.8, tags: ["Temple", "Culture", "Sunrise"], blurb: "Historic landmarks, atmospheric streets, and meaningful local moments in every direction." },
+  { rating: 4.7, tags: ["Wildlife", "Safari", "Nature"], blurb: "Immersive landscapes, warm stays, and memorable outdoor experiences worth saving for later." },
+];
+const mapFallbackAttractions = ["Sarangkot", "World Peace Pagoda", "Phewa Lake"];
+const savedPlaceNotes = ["Sunrise view", "Cultural stay", "Lake escape"];
+
+const mapLocationSummary = (location, index = 0) => ({
+  id: location?._id || `${location?.name || "destination"}-${index}`,
+  locationId: location?._id || "",
+  name: location?.name || "Destination",
+  district: location?.district || "",
+  province: location?.province || "",
+  latitude: location?.latitude || location?.lat || "",
+  longitude: location?.longitude || location?.lng || "",
+  category: location?.category || "Travel Spot",
+  description:
+    location?.description ||
+    "A beautiful stop for mountain views, local culture, and slow unforgettable moments.",
+  tag:
+    [location?.district, location?.province, location?.category].filter(Boolean).join(" / ") ||
+    "Travel Spot",
+  image: resolveImageUrl(location?.image || location?.images?.[0] || ""),
+});
 
 export default function Dashboard() {
   const { user, logout } = useAuth();
@@ -91,6 +138,13 @@ export default function Dashboard() {
   const [payments, setPayments] = useState([]);
   const [paymentsLoading, setPaymentsLoading] = useState(true);
   const [paymentsError, setPaymentsError] = useState("");
+  const [savedPlaces, setSavedPlaces] = useState([]);
+  const [savedPlacesLoading, setSavedPlacesLoading] = useState(true);
+  const [savedPlacesError, setSavedPlacesError] = useState("");
+  const [savingLocationIds, setSavingLocationIds] = useState([]);
+  const [buddyCards, setBuddyCards] = useState([]);
+  const [buddyCardsLoading, setBuddyCardsLoading] = useState(true);
+  const [buddyCardsError, setBuddyCardsError] = useState("");
 
   const searchDebounceRef = useRef(null);
   const searchBlurRef = useRef(null);
@@ -110,6 +164,8 @@ export default function Dashboard() {
         name: location.name || "Destination",
         district: location.district || "",
         province: location.province || "",
+        latitude: location.latitude || location.lat || "",
+        longitude: location.longitude || location.lng || "",
         category: location.category || "Travel Spot",
         description:
           location.description ||
@@ -127,6 +183,31 @@ export default function Dashboard() {
       setDestinationsLoading(false);
     }
   }, []);
+
+  const loadSavedPlaces = useCallback(async () => {
+    if (!user?._id) {
+      setSavedPlaces([]);
+      setSavedPlacesLoading(false);
+      setSavedPlacesError("");
+      return;
+    }
+
+    try {
+      setSavedPlacesLoading(true);
+      setSavedPlacesError("");
+      const { data } = await api.get("/api/locations/saved/me");
+      const mapped = (Array.isArray(data?.savedLocations) ? data.savedLocations : []).map((location, index) => ({
+        ...mapLocationSummary(location, index),
+        note: savedPlaceNotes[index] || location?.category || "Must visit",
+      }));
+      setSavedPlaces(mapped);
+    } catch (err) {
+      setSavedPlaces([]);
+      setSavedPlacesError(err?.response?.data?.message || "Unable to load saved places right now.");
+    } finally {
+      setSavedPlacesLoading(false);
+    }
+  }, [user?._id]);
 
   const loadTrips = useCallback(async () => {
     try {
@@ -185,6 +266,76 @@ export default function Dashboard() {
     }
   }, []);
 
+  const loadBuddyCards = useCallback(async () => {
+    if (!user?._id) {
+      setBuddyCards([]);
+      setBuddyCardsLoading(false);
+      setBuddyCardsError("");
+      return;
+    }
+
+    const makeStatusLabel = (request, isReceiver) => {
+      if (request?.status === "accepted") return "Chat ready";
+      if (request?.status === "rejected") return "Request declined";
+      if (request?.status === "cancelled") return "Request cancelled";
+      if (isReceiver) return "Request waiting for you";
+      return "Request pending";
+    };
+
+    try {
+      setBuddyCardsLoading(true);
+      setBuddyCardsError("");
+      const { data } = await api.get("/api/buddy/requests");
+      const next = new Map();
+
+      (Array.isArray(data?.chatRooms) ? data.chatRooms : []).forEach((room, index) => {
+        const other = (room?.participants || []).find((participant) => participant?._id !== user._id);
+        if (!other?._id) return;
+        next.set(other._id, {
+          id: other._id,
+          name: other.name || "Traveler",
+          plan: room?.travelPlanId?.destination || "Travel chat",
+          status: "Chat available",
+          priority: 3,
+          order: index,
+        });
+      });
+
+      (Array.isArray(data?.buddyRequests) ? data.buddyRequests : []).forEach((request, index) => {
+        const isReceiver = request?.receiverId?._id === user._id;
+        const other = isReceiver ? request?.senderId : request?.receiverId;
+        if (!other?._id) return;
+        const existing = next.get(other._id);
+        const candidate = {
+          id: other._id,
+          name: other.name || "Traveler",
+          plan:
+            request?.travelPlanId?.destination ||
+            request?.receiverPlanId?.destination ||
+            request?.senderPlanId?.destination ||
+            "Travel plan",
+          status: makeStatusLabel(request, isReceiver),
+          priority: request?.status === "accepted" ? 2 : 1,
+          order: index,
+        };
+        if (!existing || candidate.priority > existing.priority) {
+          next.set(other._id, candidate);
+        }
+      });
+
+      setBuddyCards(
+        [...next.values()]
+          .sort((a, b) => b.priority - a.priority || a.order - b.order)
+          .slice(0, 3)
+      );
+    } catch (err) {
+      setBuddyCards([]);
+      setBuddyCardsError(err?.response?.data?.message || "Unable to load travel buddies right now.");
+    } finally {
+      setBuddyCardsLoading(false);
+    }
+  }, [user?._id]);
+
   useEffect(() => {
     loadDestinations();
     loadTrips();
@@ -192,6 +343,14 @@ export default function Dashboard() {
     loadBookings();
     loadPayments();
   }, [loadDestinations, loadTrips, loadItinerary, loadBookings, loadPayments]);
+
+  useEffect(() => {
+    loadSavedPlaces();
+  }, [loadSavedPlaces]);
+
+  useEffect(() => {
+    loadBuddyCards();
+  }, [loadBuddyCards]);
 
   useEffect(() => {
     if (!user?._id) return undefined;
@@ -259,11 +418,21 @@ export default function Dashboard() {
   const daysUntilNextTrip = upcomingTrip ? daysBetween(now, upcomingTrip.startDate) : null;
   const tripHistory = [...trips].sort((a, b) => new Date(b.startDate) - new Date(a.startDate)).slice(0, 4);
   const itineraryDays = Array.isArray(itinerary?.days) ? itinerary.days.slice(0, 4) : [];
-  const recommendedDestinations = liveDestinations.slice(0, 3);
-  const savedPlaces = liveDestinations.slice(0, 3).map((place, index) => ({
-    ...place,
-    note: ["Sunrise view", "Cultural stay", "Lake escape"][index] || "Must visit",
-  }));
+  const recommendedDestinations = liveDestinations.slice(0, 3).map((destination, index) => {
+    const fallback = fallbackDestinationMeta[index % fallbackDestinationMeta.length];
+    return {
+      ...destination,
+      rating: fallback.rating,
+      tags: destination.category ? [destination.category, ...fallback.tags].slice(0, 3) : fallback.tags,
+      shortLocation: [destination.district, destination.province].filter(Boolean).join(", ") || "Nepal",
+      blurb:
+        destination.description && destination.description.length <= 150
+          ? destination.description
+          : fallback.blurb,
+      scenicBackground: scenicGradients[index % scenicGradients.length],
+    };
+  });
+  const savedLocationIds = new Set(savedPlaces.map((place) => place.locationId || place.id));
   const totalBookedAmount = bookings.reduce((sum, booking) => sum + Number(booking?.amount || 0), 0);
   const totalPaidAmount = payments
     .filter((payment) => payment?.status === "success")
@@ -272,6 +441,10 @@ export default function Dashboard() {
     .filter((booking) => booking?.paymentStatus === "pending")
     .reduce((sum, booking) => sum + Number(booking?.amount || 0), 0);
   const confirmedBookings = bookings.filter((booking) => booking?.bookingStatus === "confirmed").length;
+  const upcomingBookings = bookings.filter((booking) => {
+    const bookingDate = new Date(booking?.checkIn || booking?.travelDate || booking?.createdAt || 0);
+    return !Number.isNaN(bookingDate.getTime()) && bookingDate >= now;
+  }).length;
   const budgetBarPercent = totalBookedAmount > 0 ? Math.max(18, Math.min(100, Math.round((totalPaidAmount / totalBookedAmount) * 100))) : 24;
   const budgetLoading = bookingsLoading || paymentsLoading;
   const budgetError = bookingsError || paymentsError;
@@ -292,23 +465,17 @@ export default function Dashboard() {
     summary: "Clear sky and mountain light",
   };
 
+  const weatherDetails = {
+    humidity: upcomingTrip ? "65%" : "58%",
+    wind: upcomingTrip ? "6 km/h" : "9 km/h",
+    icon: upcomingTrip ? Sun : MountainSnow,
+  };
+
   const nearbyActivities = [
     { icon: Trees, title: "Forest hikes", detail: "Shivapuri ridge trails and pine walks." },
     { icon: Sunrise, title: "Sunrise points", detail: "Sarangkot and Nagarkot golden-hour stops." },
     { icon: Umbrella, title: "Boating escapes", detail: "Phewa Lake and calm waterfront cafes." },
-    { icon: Sun, title: "Local food finds", detail: "Thakali kitchens, rooftop brunch, and momo spots." },
-  ];
-
-  const travelBuddies = [
-    { id: 1, name: "Aarav Tamang", plan: "Annapurna Base Camp", status: "Packing now" },
-    { id: 2, name: "Maya Shrestha", plan: "Pokhara getaway", status: "Open to shared cab" },
-    { id: 3, name: "Rinzin Lama", plan: "Upper Mustang road trip", status: "Looking for day hikers" },
-  ];
-
-  const notificationsPreview = [
-    unreadCount > 0 ? `${unreadCount} unread updates are waiting for you.` : "Your dashboard is calm and fully synced.",
-    upcomingTrip ? `Your ${upcomingTrip.title} plan is ready for the next review.` : "Start a new journey to unlock planning tips.",
-    itinerary ? "AI itinerary suggestions are prepared for your next travel day." : "Generate an itinerary to get smarter timing suggestions.",
+    { icon: Flame, title: "Local food finds", detail: "Thakali kitchens, rooftop brunch, and momo spots." },
   ];
 
   const heroImage = getTripImage(upcomingTrip);
@@ -323,6 +490,33 @@ export default function Dashboard() {
     heroDestination?.tag ||
     [heroDestination?.district, heroDestination?.province].filter(Boolean).join(" • ") ||
     "Nepal travel";
+  const heroMapHref =
+    heroDestination?.latitude && heroDestination?.longitude
+      ? `/map-explorer?lat=${encodeURIComponent(heroDestination.latitude)}&lng=${encodeURIComponent(heroDestination.longitude)}&type=tourist_attraction`
+      : "/map-explorer";
+  const statsCards = [
+    { icon: PlaneTakeoff, label: "Trips Planned", value: trips.length, accent: "sky" },
+    { icon: Star, label: "Saved Destinations", value: savedPlaces.length, accent: "gold" },
+    { icon: CreditCard, label: "Upcoming Bookings", value: upcomingBookings, accent: "coral" },
+    {
+      icon: Compass,
+      label: "Activities Completed",
+      value: Math.max(
+        tripHistory.filter((trip) => new Date(trip?.endDate) < now).length * 2,
+        safeNumber(itinerary?.days?.reduce((sum, day) => sum + (day?.places?.length || 0), 0), 0)
+      ),
+      accent: "mint",
+    },
+  ];
+  const tripPreviewMeta = [
+    { label: "Trip pace", value: itineraryDays.length > 2 ? "Balanced" : "Easy" },
+    { label: "Best window", value: upcomingTrip ? formatDate(upcomingTrip.startDate, { month: "short", day: "numeric" }) : "Anytime" },
+    { label: "Travel style", value: "Scenic premium" },
+  ];
+  const mapHighlights =
+    normalizeText(heroDestination?.name).includes("pokhara")
+      ? mapFallbackAttractions
+      : [heroDestination?.name, heroDestination?.district, "Nearby viewpoints"].filter(Boolean).slice(0, 3);
 
   const goToDestinationHub = (locationId) => {
     if (locationId) {
@@ -356,6 +550,30 @@ export default function Dashboard() {
     navigate("/");
   };
 
+  const toggleSavedPlace = async (locationId, shouldSave) => {
+    if (!locationId) return;
+
+    try {
+      setSavingLocationIds((current) => [...current, locationId]);
+      setSavedPlacesError("");
+      if (shouldSave) {
+        await api.post(`/api/locations/${locationId}/save`);
+      } else {
+        await api.delete(`/api/locations/${locationId}/save`);
+      }
+      await loadSavedPlaces();
+    } catch (err) {
+      setSavedPlacesError(
+        err?.response?.data?.message ||
+          `Unable to ${shouldSave ? "save" : "remove"} this place right now.`
+      );
+    } finally {
+      setSavingLocationIds((current) => current.filter((id) => id !== locationId));
+    }
+  };
+
+  const WeatherIcon = weatherDetails.icon;
+
   return (
     <div className="travel-dashboard">
       <div className="travel-dashboard__ambient travel-dashboard__ambient--one" />
@@ -367,16 +585,14 @@ export default function Dashboard() {
             <span className="travel-brand__mark"><Mountain size={18} /></span>
             <span>
               <strong>Smart Travel Nepal</strong>
-              <small>Plan with calm confidence</small>
             </span>
           </button>
 
           <nav className="travel-topbar__nav" aria-label="Primary">
-            <button type="button" className="travel-topbar__link is-active" onClick={() => navigate("/dashboard")}>Dashboard</button>
-            <button type="button" className="travel-topbar__link" onClick={() => navigate("/my-trips")}>My Trips</button>
-            <button type="button" className="travel-topbar__link" onClick={() => navigate("/explore")}>Explore</button>
-            <button type="button" className="travel-topbar__link" onClick={() => navigate("/bookings")}>Bookings</button>
-            <button type="button" className="travel-topbar__link" onClick={() => navigate("/trip-packages")}>Packages</button>
+            <button type="button" className="travel-topbar__link" onClick={() => navigate("/my-trips")}><Calendar size={15} />My Trips</button>
+            <button type="button" className="travel-topbar__link" onClick={() => navigate("/explore")}><Mountain size={15} />Explore</button>
+            <button type="button" className="travel-topbar__link" onClick={() => navigate("/bookings")}><Wallet size={15} />Bookings</button>
+            <button type="button" className="travel-topbar__link" onClick={() => navigate("/trip-packages")}><Sparkles size={15} />Packages</button>
           </nav>
 
           <form className="travel-search" onSubmit={onDashboardSearch}>
@@ -460,23 +676,14 @@ export default function Dashboard() {
 
         <section className="hero">
           <div className="hero__content">
-            <div className="hero__topline">
-              <div className="hero__eyebrow">Personal travel dashboard</div>
-              <div className="hero__guest">Curated for {displayName}</div>
-            </div>
             <h1>
-              Discover Nepal with
-              <span> confidence, calm planning,</span>
-              and unforgettable journeys.
+              Design your next Nepal escape with
+              <span> calm planning and confident next steps.</span>
             </h1>
-            <p>
-              Everything you need for a premium travel planning experience lives here: inspiration, itinerary flow,
-              weather awareness, budgets, and beautifully organized next steps.
-            </p>
             <div className="hero__highlights">
-              <span>Trusted routes</span>
-              <span>Real booking visibility</span>
-              <span>AI trip planning</span>
+              <span><ShieldCheck size={14} />Trusted routes</span>
+              <span><Sparkles size={14} />AI trip planning</span>
+              <span><CheckCircle2 size={14} />Verified stays</span>
             </div>
             <div className="hero__actions">
               <button type="button" className="hero__primary" onClick={() => navigate("/explore")}>Explore Destinations</button>
@@ -505,22 +712,37 @@ export default function Dashboard() {
               <strong>{heroDestination?.name || itinerary?.destination || "Nepal"}</strong>
               <small>{heroLocationLabel}</small>
             </div>
-            <div className="glass-card hero__visual-caption">
-              <div>
-                <span>Next journey</span>
-                <strong>{upcomingTrip?.title || itinerary?.destination || heroDestination?.name || "Pokhara"}</strong>
-              </div>
-              <small>
-                {itineraryDays[0]?.title ||
-                  heroDestination?.tag ||
-                  "Mountain views, lakeside calm, and easy next steps for planning."}
-              </small>
+            <div className="glass-card hero__overlay hero__overlay--preview">
+              <span>Trip preview</span>
+              <strong>{upcomingTrip?.title || "Slow adventure itinerary"}</strong>
+              <small>{daysUntilNextTrip === null ? "Ready when you are" : `${daysUntilNextTrip} days until departure`}</small>
+            </div>
+            <div className="glass-card hero__trip-preview">
+              {tripPreviewMeta.map((item) => (
+                <div key={item.label}>
+                  <span>{item.label}</span>
+                  <strong>{item.value}</strong>
+                </div>
+              ))}
             </div>
           </div>
         </section>
 
         <div className="dashboard-grid">
           <main className="dashboard-grid__main">
+            <section className="stats-strip">
+              {statsCards.map((card) => {
+                const Icon = card.icon;
+                return (
+                  <article key={card.label} className={`stats-card stats-card--${card.accent}`}>
+                    <span className="stats-card__icon"><Icon size={18} /></span>
+                    <strong>{card.value}</strong>
+                    <small>{card.label}</small>
+                  </article>
+                );
+              })}
+            </section>
+
             <section className="premium-card premium-card--trip">
               <div className="section-head">
                 <div><p className="section-head__eyebrow">Upcoming Trip</p><h2>Your next escape</h2></div>
@@ -619,18 +841,53 @@ export default function Dashboard() {
               ) : (
                 <div className="destination-grid">
                   {recommendedDestinations.map((destination) => (
-                    <article key={destination.id} className="destination-card">
+                    <article
+                      key={destination.id}
+                      className="destination-card destination-card--interactive"
+                      role="button"
+                      tabIndex={0}
+                      onClick={() => goToDestinationHub(destination.locationId)}
+                      onKeyDown={(event) => {
+                        if (event.key === "Enter" || event.key === " ") {
+                          event.preventDefault();
+                          goToDestinationHub(destination.locationId);
+                        }
+                      }}
+                    >
                       <div className="destination-card__image">
-                        <img src={destination.image} alt={destination.name} />
+                        {destination.image ? (
+                          <img src={destination.image} alt={destination.name} />
+                        ) : (
+                          <div className="destination-card__fallback" style={{ background: destination.scenicBackground }}>
+                            <strong>{destination.name}</strong>
+                            <span>{destination.shortLocation}</span>
+                          </div>
+                        )}
+                        <div className="destination-card__gradient" />
                         <span className="destination-card__tag">{destination.category}</span>
+                        <div className="destination-card__rating"><Star size={14} fill="currentColor" />{destination.rating}</div>
+                        <button
+                          type="button"
+                          className={`destination-card__save ${savedLocationIds.has(destination.locationId) ? "is-active" : ""}`}
+                          onClick={(event) => {
+                            event.stopPropagation();
+                            toggleSavedPlace(destination.locationId, !savedLocationIds.has(destination.locationId));
+                          }}
+                          disabled={savingLocationIds.includes(destination.locationId)}
+                          aria-label={savedLocationIds.has(destination.locationId) ? `Remove ${destination.name} from saved places` : `Save ${destination.name}`}
+                        >
+                          <Heart size={16} fill={savedLocationIds.has(destination.locationId) ? "currentColor" : "none"} />
+                        </button>
                       </div>
                       <div className="destination-card__body">
                         <div>
                           <h3>{destination.name}</h3>
-                          <p className="destination-card__location"><MapPin size={14} />{destination.tag}</p>
-                          <p className="destination-card__copy">{destination.description}</p>
+                          <p className="destination-card__location"><MapPin size={14} />{destination.shortLocation}</p>
+                          <div className="destination-card__chips">
+                            {destination.tags.map((tag) => <span key={tag}>{tag}</span>)}
+                          </div>
+                          <p className="destination-card__copy">{destination.blurb}</p>
                         </div>
-                        <button type="button" className="action-btn action-btn--ghost" onClick={() => goToDestinationHub(destination.locationId)}>Explore destination</button>
                       </div>
                     </article>
                   ))}
@@ -651,6 +908,7 @@ export default function Dashboard() {
                       <span className="activity-card__icon"><Icon size={18} /></span>
                       <h3>{activity.title}</h3>
                       <p>{activity.detail}</p>
+                      <small>Discover more</small>
                     </article>
                   );
                 })}
@@ -658,62 +916,50 @@ export default function Dashboard() {
             </section>
           </main>
 
-          <aside className="dashboard-grid__sidebar">
-            <section className="premium-card premium-card--compact weather-widget">
-              <div className="section-head section-head--tight">
-                <div><p className="section-head__eyebrow">Weather Widget</p><h2>{weather.label}</h2></div>
-                <Sun size={18} />
-              </div>
-              <div className="weather-widget__hero"><strong>{weather.temp}</strong><span>{weather.summary}</span></div>
-            </section>
-
-            <section className="premium-card premium-card--compact">
-              <div className="section-head section-head--tight">
-                <div><p className="section-head__eyebrow">Spending Overview</p><h2>Spend with clarity</h2></div>
-              </div>
-              {budgetLoading ? (
-                <p className="dashboard-note">Loading booking and payment totals...</p>
-              ) : (
-                <div className="budget-stack">
-                  <div className="budget-stack__row"><span>Total booked</span><strong>NPR {totalBookedAmount.toLocaleString()}</strong></div>
-                  <div className="budget-stack__row"><span>Total paid</span><strong>NPR {totalPaidAmount.toLocaleString()}</strong></div>
-                  <div className="budget-stack__row"><span>Pending payment</span><strong>NPR {totalPendingAmount.toLocaleString()}</strong></div>
-                  <div className="budget-stack__row"><span>Confirmed bookings</span><strong>{confirmedBookings}</strong></div>
-                  <div className="budget-stack__bar"><span style={{ width: `${budgetBarPercent}%` }} /></div>
-                  <small>{totalBookedAmount > 0 ? `${budgetBarPercent}% of your booked value is already paid.` : "Book a stay or package to start tracking confirmed spend."}</small>
-                </div>
-              )}
-              {!budgetLoading && budgetError && <p className="dashboard-error">{budgetError}</p>}
-            </section>
-
+        <aside className="dashboard-grid__sidebar">
             <section className="premium-card premium-card--compact">
               <div className="section-head section-head--tight">
                 <div><p className="section-head__eyebrow">Saved Places</p><h2>Ready when you are</h2></div>
               </div>
-              <div className="mini-list">
-                {savedPlaces.map((place) => (
-                  <button key={place.id} type="button" className="mini-list__item" onClick={() => goToDestinationHub(place.locationId)}>
-                    <img src={place.image} alt={place.name} />
-                    <div><strong>{place.name}</strong><small>{place.note}</small></div>
-                    <ChevronRight size={16} />
-                  </button>
-                ))}
-              </div>
-            </section>
-
-            <section className="premium-card premium-card--compact">
-              <div className="section-head section-head--tight">
-                <div><p className="section-head__eyebrow">Travel Buddies</p><h2>Companions nearby</h2></div>
-                <Users size={18} />
-              </div>
-              <div className="buddy-list">
-                {travelBuddies.map((buddy) => (
-                  <div key={buddy.id} className="buddy-list__item">
-                    <span className="buddy-list__avatar">{initialsFromName(buddy.name)}</span>
-                    <div><strong>{buddy.name}</strong><small>{buddy.plan}</small><p>{buddy.status}</p></div>
-                  </div>
-                ))}
-              </div>
+              {savedPlacesLoading ? (
+                <p className="dashboard-note">Loading saved places...</p>
+              ) : savedPlaces.length > 0 ? (
+                <div className="mini-list">
+                  {savedPlaces.map((place) => (
+                    <article key={place.id} className="mini-list__item">
+                      {place.image ? (
+                        <img src={place.image} alt={place.name} />
+                      ) : (
+                        <div className="mini-list__fallback" style={{ background: scenicGradients[0] }}>
+                          <MapPin size={18} />
+                        </div>
+                      )}
+                      <button type="button" className="mini-list__content" onClick={() => goToDestinationHub(place.locationId)}>
+                        <div><strong>{place.name}</strong><small>{place.note}</small></div>
+                      </button>
+                      <span className="mini-list__actions">
+                        <button
+                          type="button"
+                          className="mini-list__save"
+                          onClick={() => toggleSavedPlace(place.locationId, false)}
+                          disabled={savingLocationIds.includes(place.locationId)}
+                          aria-label={`Remove ${place.name} from saved places`}
+                        >
+                          <Heart size={16} fill="currentColor" />
+                        </button>
+                        <button type="button" className="mini-list__open" onClick={() => goToDestinationHub(place.locationId)} aria-label={`Open ${place.name}`}>
+                          <ChevronRight size={16} />
+                        </button>
+                      </span>
+                    </article>
+                  ))}
+                </div>
+              ) : (
+                <div className="empty-state empty-state--left">
+                  <p>Save places from the destination cards to see them here.</p>
+                </div>
+              )}
+              {!savedPlacesLoading && savedPlacesError && <p className="dashboard-error">{savedPlacesError}</p>}
             </section>
 
             <section className="premium-card premium-card--compact">
@@ -724,26 +970,119 @@ export default function Dashboard() {
               <div className="history-list">
                 {tripHistory.length > 0 ? (
                   tripHistory.map((trip) => (
-                    <div key={trip._id} className="history-list__item">
-                      <div><strong>{trip.title}</strong><small>{formatDate(trip.startDate)}</small></div>
+                    <button
+                      key={trip._id}
+                      type="button"
+                      className="history-list__item history-list__item--interactive"
+                      onClick={() => navigate("/my-trips")}
+                    >
+                      <div className="history-list__content">
+                        <strong>{trip.title}</strong>
+                        <small>{formatDate(trip.startDate)}{trip.endDate ? ` - ${formatDate(trip.endDate)}` : ""}</small>
+                      </div>
                       <span>{new Date(trip.endDate) < now ? "Completed" : "Upcoming"}</span>
-                    </div>
+                    </button>
                   ))
                 ) : (
-                  <p className="dashboard-note">Your completed and upcoming trips will appear here.</p>
+                  <div className="empty-state empty-state--left">
+                    <p>Your recent trips will show up here once you start planning.</p>
+                    <button type="button" className="action-btn action-btn--ghost" onClick={() => navigate("/itinerary-planner")}>
+                      Plan a trip
+                    </button>
+                  </div>
                 )}
               </div>
             </section>
 
             <section className="premium-card premium-card--compact">
               <div className="section-head section-head--tight">
-                <div><p className="section-head__eyebrow">Notifications</p><h2>What needs attention</h2></div>
-                <Bell size={18} />
+                <div><p className="section-head__eyebrow">Spending Overview</p><h2>Spend with clarity</h2></div>
               </div>
-              <div className="notification-stack">
-                {notificationsPreview.map((item) => (
-                  <div key={item} className="notification-stack__item"><span /><p>{item}</p></div>
+              {budgetLoading ? (
+                <p className="dashboard-note">Loading booking and payment totals...</p>
+              ) : (
+                <div className="budget-stack">
+                  <div className="budget-stack__hero">
+                    <strong>NPR {totalPaidAmount.toLocaleString()}</strong>
+                    <span>already secured for upcoming travel</span>
+                  </div>
+                  <div className="budget-stack__row"><span><Wallet size={15} />Total booked</span><strong>NPR {totalBookedAmount.toLocaleString()}</strong></div>
+                  <div className="budget-stack__row"><span><CheckCircle2 size={15} />Total paid</span><strong>NPR {totalPaidAmount.toLocaleString()}</strong></div>
+                  <div className="budget-stack__row"><span><CreditCard size={15} />Pending payment</span><strong>NPR {totalPendingAmount.toLocaleString()}</strong></div>
+                  <div className="budget-stack__row"><span><ShieldCheck size={15} />Confirmed bookings</span><strong>{confirmedBookings}</strong></div>
+                  <div className="budget-stack__bar"><span style={{ width: `${budgetBarPercent}%` }} /></div>
+                  <small>{totalBookedAmount > 0 ? `${budgetBarPercent}% of your booked value is already paid.` : "Book a stay or package to start tracking confirmed spend."}</small>
+                </div>
+              )}
+              {!budgetLoading && budgetError && <p className="dashboard-error">{budgetError}</p>}
+            </section>
+
+            <section className="premium-card premium-card--compact map-card">
+              <div className="section-head section-head--tight">
+                <div><p className="section-head__eyebrow">Nearby Attractions Map</p><h2>Preview what is around you</h2></div>
+                <Navigation size={18} />
+              </div>
+              <div className="map-card__preview">
+                <div className="map-card__glow map-card__glow--one" />
+                <div className="map-card__glow map-card__glow--two" />
+                <div className="map-card__grid" />
+                <div className="map-card__route" />
+                <div className="map-card__preview-head">
+                  <span className="map-card__compass"><Navigation size={14} /></span>
+                </div>
+                {mapHighlights.slice(0, 3).map((item, index) => (
+                  <div
+                    key={item}
+                    className={`map-card__marker map-card__marker--${["one", "two", "three"][index] || "one"}`}
+                  >
+                    <span className="map-card__pin"><Pin size={14} /></span>
+                    <small>{item}</small>
+                  </div>
                 ))}
+              </div>
+              <div className="map-card__list">
+                {mapHighlights.map((item) => (
+                  <span key={item}>{item}</span>
+                ))}
+              </div>
+              <button type="button" className="action-btn action-btn--ghost map-card__cta" onClick={() => navigate(heroMapHref)}>
+                Open full map
+              </button>
+            </section>
+
+            <section className="premium-card premium-card--compact">
+              <div className="section-head section-head--tight">
+                <div><p className="section-head__eyebrow">Travel Buddies</p><h2>Companions nearby</h2></div>
+                <Users size={18} />
+              </div>
+              {buddyCardsLoading ? (
+                <p className="dashboard-note">Loading your travel connections...</p>
+              ) : buddyCards.length > 0 ? (
+                <div className="buddy-list">
+                  {buddyCards.map((buddy) => (
+                    <div key={buddy.id} className="buddy-list__item">
+                      <span className="buddy-list__avatar">{initialsFromName(buddy.name)}</span>
+                      <div className="buddy-list__content">
+                        <strong>{buddy.name}</strong>
+                        <small>{buddy.plan}</small>
+                        <p>{buddy.status}</p>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <div className="empty-state empty-state--left">
+                  <p>No buddy connections yet. Start with Buddy Finder to see travelers here.</p>
+                </div>
+              )}
+              {!buddyCardsLoading && buddyCardsError && <p className="dashboard-error">{buddyCardsError}</p>}
+              <div className="mt-4 flex flex-wrap gap-2">
+                <Link to="/buddy-finder#finder" className="action-btn action-btn--primary">
+                  Open Buddy Finder
+                </Link>
+                <Link to="/buddy-finder#community" className="action-btn action-btn--ghost">
+                  Open Community
+                </Link>
               </div>
             </section>
           </aside>

@@ -1,4 +1,5 @@
 const Trip = require('../models/Trip');
+const Itinerary = require('../models/Itinerary');
 const User = require("../models/User");
 const bcrypt = require("bcryptjs");
 
@@ -27,8 +28,45 @@ exports.getStats = async (req, res) => {
 exports.getRecentTrips = async (req, res) => {
   try {
     const userId = req.user._id;
-    const trips = await Trip.find({ user: userId }).sort({ startDate: -1 }).limit(6).lean();
-    res.json({ trips });
+    const [trips, itineraries] = await Promise.all([
+      Trip.find({ user: userId }).sort({ startDate: -1 }).limit(12).lean(),
+      Itinerary.find({ userId }).sort({ createdAt: -1 }).limit(12).lean(),
+    ]);
+
+    const mappedTrips = trips.map((trip) => ({
+      ...trip,
+      sourceType: "trip",
+      displayPrice: trip.price || 0,
+    }));
+
+    const mappedItineraries = itineraries.map((itinerary) => {
+      const anchorDate = itinerary.startDate ? new Date(itinerary.startDate) : new Date(itinerary.createdAt);
+      const safeStartDate = Number.isNaN(anchorDate.getTime()) ? new Date() : anchorDate;
+      const safeEndDate = new Date(safeStartDate);
+      safeEndDate.setDate(safeStartDate.getDate() + Math.max(Number(itinerary.durationDays || 1) - 1, 0));
+
+      return {
+        _id: itinerary._id,
+        title: itinerary.destination || "AI itinerary",
+        startDate: safeStartDate,
+        endDate: safeEndDate,
+        price: itinerary.totalEstimatedCost || itinerary.budget || 0,
+        displayPrice: itinerary.totalEstimatedCost || itinerary.budget || 0,
+        summary:
+          `AI-generated ${itinerary.durationDays || 1}-day itinerary for ${itinerary.destination || "your destination"}.`,
+        durationDays: itinerary.durationDays || 1,
+        budget: itinerary.budget || 0,
+        totalEstimatedCost: itinerary.totalEstimatedCost || 0,
+        sourceType: "itinerary",
+        createdAt: itinerary.createdAt,
+      };
+    });
+
+    const merged = [...mappedTrips, ...mappedItineraries]
+      .sort((a, b) => new Date(b.startDate || b.createdAt || 0) - new Date(a.startDate || a.createdAt || 0))
+      .slice(0, 6);
+
+    res.json({ trips: merged });
   } catch (err) {
     console.error(err);
     res.status(500).json({ message: 'Server error' });

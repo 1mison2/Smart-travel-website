@@ -5,6 +5,12 @@ const LocationSchema = new mongoose.Schema(
     name: { type: String, required: true, trim: true },
     province: { type: String, required: true, trim: true },
     district: { type: String, required: true, trim: true },
+    parentLocationId: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "Location",
+      default: null,
+      index: true,
+    },
     description: { type: String, required: true, trim: true },
     category: { type: String, required: true, trim: true },
     averageCost: { type: Number, required: true, min: 0 },

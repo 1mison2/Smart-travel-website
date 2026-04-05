@@ -8,7 +8,6 @@ import ResetPassword from "./pages/ResetPassword";
 import Dashboard from "./pages/Dashboard";
 import ExploreLocations from "./pages/ExploreLocations";
 import LocationDetails from "./pages/LocationDetails";
-import PlanTrip from "./pages/PlanTrip";
 import MyTrips from "./pages/MyTrips";
 import Bookings from "./pages/Bookings";
 import Notifications from "./pages/Notifications";
@@ -24,6 +23,15 @@ import BookingCheckout from "./pages/BookingCheckout";
 import TripPackages from "./pages/TripPackages";
 import Profile from "./pages/Profile";
 import Settings from "./pages/Settings";
+import CreateTripPlan from "./pages/CreateTripPlan";
+import BrowseTripPlans from "./pages/BrowseTripPlans";
+import BuddyMatches from "./pages/BuddyMatches";
+import BuddyRequestsPage from "./pages/BuddyRequestsPage";
+import BuddyChatPage from "./pages/BuddyChatPage";
+import CommunityFeed from "./pages/CommunityFeed";
+import CreatePostPage from "./pages/CreatePostPage";
+import PostDetailsPage from "./pages/PostDetailsPage";
+import SavedPostsPage from "./pages/SavedPostsPage";
 import AdminLayout from "./pages/admin/AdminLayout";
 import AdminDashboard from "./pages/admin/Dashboard";
 import AdminUsers from "./pages/admin/Users";
@@ -80,7 +88,6 @@ export default function App() {
         <Route path="/dashboard" element={<UserOnly><Dashboard /></UserOnly>} />
         <Route path="/explore" element={<UserOnly><ExploreLocations /></UserOnly>} />
         <Route path="/locations/:id" element={<UserOnly><LocationDetails /></UserOnly>} />
-        <Route path="/plan-trip" element={<UserOnly><PlanTrip /></UserOnly>} />
         <Route path="/my-trips" element={<UserOnly><MyTrips /></UserOnly>} />
         <Route path="/profile" element={<UserOnly><Profile /></UserOnly>} />
         <Route path="/settings" element={<UserOnly><Settings /></UserOnly>} />
@@ -95,6 +102,15 @@ export default function App() {
         <Route path="/payment" element={<UserOnly><PaymentPage /></UserOnly>} />
         <Route path="/payments" element={<UserOnly><PaymentHistory /></UserOnly>} />
         <Route path="/buddy-finder" element={<UserOnly><BuddyFinder /></UserOnly>} />
+        <Route path="/buddy/create-trip" element={<UserOnly><CreateTripPlan /></UserOnly>} />
+        <Route path="/buddy/browse" element={<UserOnly><BrowseTripPlans /></UserOnly>} />
+        <Route path="/buddy/matches" element={<UserOnly><BuddyMatches /></UserOnly>} />
+        <Route path="/buddy/requests" element={<UserOnly><BuddyRequestsPage /></UserOnly>} />
+        <Route path="/buddy/chat/:chatRoomId" element={<UserOnly><BuddyChatPage /></UserOnly>} />
+        <Route path="/community" element={<UserOnly><CommunityFeed /></UserOnly>} />
+        <Route path="/community/create" element={<UserOnly><CreatePostPage /></UserOnly>} />
+        <Route path="/community/posts/:postId" element={<UserOnly><PostDetailsPage /></UserOnly>} />
+        <Route path="/community/saved" element={<UserOnly><SavedPostsPage /></UserOnly>} />
         <Route path="/trip-packages" element={<UserOnly><TripPackages /></UserOnly>} />
         <Route
           path="/admin"

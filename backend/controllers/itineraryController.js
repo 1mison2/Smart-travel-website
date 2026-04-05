@@ -3,23 +3,82 @@ const Location = require("../models/Location");
 
 const clamp = (value, min, max) => Math.min(Math.max(value, min), max);
 
-const buildDayPlan = ({ day, places, budgetPerDay }) => {
+const buildFallbackPlaces = ({ destination, interests, budgetPerDay }) => {
+  const interestList = Array.from(interests).filter(Boolean);
+  const mainInterest = interestList[0] || "culture";
+  const secondInterest = interestList[1] || "food";
+  const perPlace = Math.max(1, Math.round(budgetPerDay / 3));
+
+  return [
+    {
+      placeId: null,
+      name: `${destination} Welcome Walk`,
+      category: "sightseeing",
+      image: "",
+      estimatedCost: perPlace,
+      notes: "Easy walk to get familiar with the area and viewpoints.",
+    },
+    {
+      placeId: null,
+      name: `${mainInterest.charAt(0).toUpperCase() + mainInterest.slice(1)} Discovery`,
+      category: mainInterest,
+      image: "",
+      estimatedCost: perPlace,
+      notes: `Focused time for ${mainInterest} experiences and local highlights.`,
+    },
+    {
+      placeId: null,
+      name: `${destination} ${secondInterest} stop`,
+      category: secondInterest,
+      image: "",
+      estimatedCost: perPlace,
+      notes: `Relax and explore ${secondInterest} options before sunset.`,
+    },
+  ];
+};
+
+const buildDayPlan = ({ day, places, budgetPerDay, destination, interests }) => {
   const selected = places.slice(0, 3);
-  const estimatedCost = selected.reduce((sum, place) => sum + (place.averageCost || 0), 0) || budgetPerDay;
+  const useFallback = selected.length === 0;
+  const finalPlaces = useFallback
+    ? buildFallbackPlaces({ destination, interests, budgetPerDay })
+    : selected.map((place) => ({
+        placeId: place._id,
+        name: place.name,
+        category: place.category || "attraction",
+        image: place.image || "",
+        estimatedCost: place.averageCost || Math.round(budgetPerDay / 3),
+        notes: [place.district, place.province].filter(Boolean).join(", "),
+        latitude: typeof place.latitude === "number" ? place.latitude : null,
+        longitude: typeof place.longitude === "number" ? place.longitude : null,
+      }));
+
+  const estimatedCost = finalPlaces.reduce((sum, place) => sum + (place.estimatedCost || 0), 0) || budgetPerDay;
+  const headline = finalPlaces[0]?.name || `${destination} Highlights`;
 
   return {
     day,
-    title: `Day ${day} plan`,
-    places: selected.map((place) => ({
-      placeId: place._id,
-      name: place.name,
-      category: place.category || "attraction",
-      image: place.image || "",
-      estimatedCost: place.averageCost || Math.round(budgetPerDay / 3),
-      notes: [place.district, place.province].filter(Boolean).join(", "),
-    })),
+    title: `Day ${day}: ${headline}`,
+    places: finalPlaces,
     estimatedCost,
-    notes: `Keep ${Math.round(Math.max(0, budgetPerDay - estimatedCost))} NPR as flexible budget for meals and transport.`,
+    notes: `Balance your day around ${headline}. Keep ${Math.round(Math.max(0, budgetPerDay - estimatedCost))} NPR for meals and transport.`,
+    timeline: [
+      {
+        time: "Morning",
+        title: finalPlaces[0]?.name || `${destination} Morning Start`,
+        details: finalPlaces[0]?.notes || "Light exploration and orientation.",
+      },
+      {
+        time: "Afternoon",
+        title: finalPlaces[1]?.name || "Local highlights",
+        details: finalPlaces[1]?.notes || "Main activities and sightseeing.",
+      },
+      {
+        time: "Evening",
+        title: finalPlaces[2]?.name || "Relax & dinner",
+        details: finalPlaces[2]?.notes || "Relax and wrap up the day.",
+      },
+    ],
   };
 };
 
@@ -79,7 +138,13 @@ exports.generateItinerary = async (req, res) => {
     for (let day = 1; day <= numericDays; day += 1) {
       const offset = (day - 1) * 3;
       const slice = scored.slice(offset, offset + 6);
-      days.push(buildDayPlan({ day, places: slice, budgetPerDay }));
+      days.push(buildDayPlan({
+        day,
+        places: slice,
+        budgetPerDay,
+        destination: String(destination).trim(),
+        interests: interestSet,
+      }));
     }
 
     const totalEstimatedCost = days.reduce((sum, day) => sum + day.estimatedCost, 0);

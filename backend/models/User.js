@@ -46,6 +46,10 @@ const UserSchema = new mongoose.Schema({
     type: String,
     default: ""
   },
+  profilePicture: {
+    type: String,
+    default: ""
+  },
   birthDate: {
     type: Date
   },
@@ -58,6 +62,41 @@ const UserSchema = new mongoose.Schema({
     travelStyle: { type: String, default: "" },
     accommodation: { type: String, default: "" },
     interests: { type: [String], default: [] }
+  },
+  interests: {
+    type: [String],
+    default: []
+  },
+  followers: {
+    type: [
+      {
+        type: mongoose.Schema.Types.ObjectId,
+        ref: "User"
+      }
+    ],
+    default: []
+  },
+  following: {
+    type: [
+      {
+        type: mongoose.Schema.Types.ObjectId,
+        ref: "User"
+      }
+    ],
+    default: []
+  },
+  travelStyle: {
+    type: String,
+    default: ""
+  },
+  savedLocations: {
+    type: [
+      {
+        type: mongoose.Schema.Types.ObjectId,
+        ref: "Location"
+      }
+    ],
+    default: []
   },
   notifications: {
     emailNotifications: { type: Boolean, default: true },
@@ -75,5 +114,15 @@ const UserSchema = new mongoose.Schema({
     select: false // Don't include in queries by default
   }
 }, { timestamps: true });
+
+UserSchema.pre("save", function syncTravelProfile(next) {
+  if ((!this.travelStyle || !this.travelStyle.trim()) && this.preferences?.travelStyle) {
+    this.travelStyle = this.preferences.travelStyle;
+  }
+  if ((!this.interests || this.interests.length === 0) && Array.isArray(this.preferences?.interests)) {
+    this.interests = this.preferences.interests;
+  }
+  next();
+});
 
 module.exports = mongoose.model("User", UserSchema);

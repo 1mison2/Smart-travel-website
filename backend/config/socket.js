@@ -1,6 +1,8 @@
 const jwt = require("jsonwebtoken");
 const User = require("../models/User");
 const ChatMessage = require("../models/ChatMessage");
+const ChatRoom = require("../models/ChatRoom");
+const Message = require("../models/Message");
 
 const buildRoomId = (userA, userB) => [String(userA), String(userB)].sort().join(":");
 
@@ -97,6 +99,51 @@ const createSocketServer = (httpServer) => {
         io.to(message.roomId).emit("chat:read", { messageId, readAt: message.readAt });
       } catch (_err) {
         // ignore read errors on socket channel
+      }
+    });
+
+    socket.on("chat:join-room", async ({ chatRoomId }) => {
+      try {
+        if (!chatRoomId) return;
+        const chatRoom = await ChatRoom.findById(chatRoomId).select("participants");
+        if (!chatRoom) return;
+        if (!chatRoom.participants.some((participantId) => String(participantId) === userId)) return;
+        socket.join(`chat-room:${chatRoomId}`);
+        socket.emit("chat:room-joined", { chatRoomId });
+      } catch (_err) {
+        socket.emit("chat:error", { message: "Failed to join room" });
+      }
+    });
+
+    socket.on("chat:send-room", async ({ chatRoomId, message }) => {
+      try {
+        const trimmedMessage = String(message || "").trim();
+        if (!chatRoomId || !trimmedMessage) return;
+        const chatRoom = await ChatRoom.findById(chatRoomId);
+        if (!chatRoom) return;
+        if (!chatRoom.participants.some((participantId) => String(participantId) === userId)) return;
+
+        const createdMessage = await Message.create({
+          chatRoomId,
+          senderId: socket.user._id,
+          message: trimmedMessage,
+          timestamp: new Date(),
+        });
+
+        const normalized = {
+          _id: createdMessage._id,
+          chatRoomId: createdMessage.chatRoomId,
+          senderId: {
+            _id: socket.user._id,
+            name: socket.user.name,
+            email: socket.user.email,
+          },
+          message: createdMessage.message,
+          timestamp: createdMessage.timestamp,
+        };
+        io.to(`chat-room:${chatRoomId}`).emit("chat:room-message", normalized);
+      } catch (_err) {
+        socket.emit("chat:error", { message: "Failed to send room message" });
       }
     });
   });

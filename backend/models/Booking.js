@@ -1,5 +1,55 @@
 const mongoose = require("mongoose");
 
+const BookingPackageActivitySchema = new mongoose.Schema(
+  {
+    title: { type: String, trim: true, default: "" },
+    notes: { type: String, trim: true, default: "" },
+  },
+  { _id: false }
+);
+
+const BookingPackageDaySchema = new mongoose.Schema(
+  {
+    dayNumber: { type: Number, min: 1 },
+    title: { type: String, trim: true, default: "" },
+    summary: { type: String, trim: true, default: "" },
+    hotelName: { type: String, trim: true, default: "" },
+    meals: [{ type: String, trim: true }],
+    transport: { type: String, trim: true, default: "" },
+    altitude: { type: String, trim: true, default: "" },
+    notes: { type: String, trim: true, default: "" },
+    image: { type: String, trim: true, default: "" },
+    activities: { type: [BookingPackageActivitySchema], default: [] },
+  },
+  { _id: false }
+);
+
+const BookingPackageSnapshotSchema = new mongoose.Schema(
+  {
+    title: { type: String, trim: true, default: "" },
+    shortDescription: { type: String, trim: true, default: "" },
+    description: { type: String, trim: true, default: "" },
+    location: { type: String, trim: true, default: "" },
+    region: { type: String, trim: true, default: "" },
+    pickupCity: { type: String, trim: true, default: "" },
+    dropoffCity: { type: String, trim: true, default: "" },
+    startDate: { type: Date },
+    endDate: { type: Date },
+    durationDays: { type: Number, min: 1, default: 1 },
+    coverImage: { type: String, trim: true, default: "" },
+    included: [{ type: String, trim: true }],
+    excluded: [{ type: String, trim: true }],
+    highlights: [{ type: String, trim: true }],
+    bestSeason: { type: String, trim: true, default: "" },
+    difficulty: { type: String, trim: true, default: "" },
+    tripType: { type: String, trim: true, default: "" },
+    cancellationPolicy: { type: String, trim: true, default: "" },
+    paymentPolicy: { type: String, trim: true, default: "" },
+    itineraryDays: { type: [BookingPackageDaySchema], default: [] },
+  },
+  { _id: false }
+);
+
 const BookingSchema = new mongoose.Schema(
   {
     userId: { type: mongoose.Schema.Types.ObjectId, ref: "User", required: true },
@@ -38,6 +88,7 @@ const BookingSchema = new mongoose.Schema(
         default: [],
       },
     },
+    packageSnapshot: { type: BookingPackageSnapshotSchema, default: undefined },
     bookingStatus: {
       type: String,
       enum: ["pending", "awaiting_payment", "confirmed", "cancelled"],
@@ -62,6 +113,7 @@ const BookingSchema = new mongoose.Schema(
     transactionId: { type: String, trim: true, default: "" },
     paidAt: { type: Date },
     cancelledAt: { type: Date },
+    lastReminderEmailSentAt: { type: Date },
     notes: { type: String, trim: true, default: "" },
   },
   { timestamps: true }

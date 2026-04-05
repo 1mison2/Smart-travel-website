@@ -1,6 +1,6 @@
 import React, { useEffect, useMemo, useState } from "react";
 import { Outlet, useNavigate } from "react-router-dom";
-import { CalendarDays, Plus, Search } from "lucide-react";
+import { CalendarDays } from "lucide-react";
 import Sidebar from "../../components/admin/Sidebar";
 import { useAuth } from "../../context/AuthContext";
 import NotificationBell from "../../components/NotificationBell";
@@ -44,7 +44,7 @@ export default function AdminLayout() {
 
   return (
     <div className="admin-shell">
-      <Sidebar adminName={user?.name || "Admin"} onLogout={onLogout} />
+      <Sidebar />
       <main className="admin-main">
         <header className="admin-topbar">
           <div className="admin-topbar__intro">
@@ -57,22 +57,7 @@ export default function AdminLayout() {
           </div>
 
           <div className="admin-topbar__actions">
-            <label className="admin-search">
-              <Search size={16} />
-              <input type="text" placeholder="Search users, destinations, packages..." />
-            </label>
             <NotificationBell className="admin-notif-btn" />
-            <button type="button" className="admin-btn admin-btn--primary admin-btn--header" onClick={() => navigate("/admin/locations")}>
-              <Plus size={16} />
-              Add Destination
-            </button>
-            <button type="button" className="admin-topbar__profile" onClick={() => navigate("/profile")}>
-              <span>{initials(user?.name || "Admin")}</span>
-              <div>
-                <strong>{user?.name || "Admin"}</strong>
-                <small>{user?.email || "admin@smarttravel.com"}</small>
-              </div>
-            </button>
           </div>
         </header>
 
@@ -82,13 +67,4 @@ export default function AdminLayout() {
       </main>
     </div>
   );
-}
-
-function initials(value) {
-  return String(value || "AD")
-    .split(/\s+/)
-    .filter(Boolean)
-    .slice(0, 2)
-    .map((part) => part[0]?.toUpperCase())
-    .join("");
 }

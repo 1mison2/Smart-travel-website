@@ -5,7 +5,13 @@ const User = require("../models/User");
 const Location = require("../models/Location");
 const Booking = require("../models/Booking");
 const Post = require("../models/Post");
+const Review = require("../models/Review");
 const { createNotification, notifyAdmins } = require("../utils/notificationService");
+const {
+  canSendEmail,
+  sendAnnouncementEmail,
+  sendTripReminderEmail,
+} = require("../utils/emailService");
 
 const isValidObjectId = (id) => mongoose.Types.ObjectId.isValid(id);
 const buildImageUrl = (req, filename) =>
@@ -163,6 +169,7 @@ exports.createLocation = async (req, res) => {
       name,
       province,
       district,
+      parentLocationId,
       description,
       category,
       averageCost,
@@ -191,6 +198,7 @@ exports.createLocation = async (req, res) => {
       name: name.trim(),
       province: province.trim(),
       district: district.trim(),
+      parentLocationId: isValidObjectId(parentLocationId) ? parentLocationId : null,
       description: description.trim(),
       category: category.trim(),
       averageCost: numericCost,
@@ -199,6 +207,10 @@ exports.createLocation = async (req, res) => {
       latitude: numericLatitude,
       longitude: numericLongitude,
     });
+    const populatedLocation = await Location.findById(location._id).populate(
+      "parentLocationId",
+      "name district province category"
+    );
 
     await notifyAdmins({
       type: "system",
@@ -206,7 +218,7 @@ exports.createLocation = async (req, res) => {
       message: `Admin ${req.user?.name || req.user?.email} created location ${location.name}.`,
       meta: { locationId: location._id },
     });
-    res.status(201).json(location);
+    res.status(201).json(populatedLocation);
   } catch (err) {
     console.error(err);
     res.status(500).json({ message: "Failed to create location" });
@@ -215,7 +227,9 @@ exports.createLocation = async (req, res) => {
 
 exports.getAllLocations = async (_req, res) => {
   try {
-    const locations = await Location.find().sort({ createdAt: -1 });
+    const locations = await Location.find()
+      .populate("parentLocationId", "name district province category")
+      .sort({ createdAt: -1 });
     res.json(locations);
   } catch (err) {
     console.error(err);
@@ -232,6 +246,9 @@ exports.updateLocation = async (req, res) => {
     if (payload.name !== undefined) payload.name = String(payload.name).trim();
     if (payload.province !== undefined) payload.province = String(payload.province).trim();
     if (payload.district !== undefined) payload.district = String(payload.district).trim();
+    if (payload.parentLocationId !== undefined) {
+      payload.parentLocationId = isValidObjectId(payload.parentLocationId) ? payload.parentLocationId : null;
+    }
     if (payload.description !== undefined) payload.description = String(payload.description).trim();
     if (payload.category !== undefined) payload.category = String(payload.category).trim();
     if (payload.averageCost !== undefined) payload.averageCost = Number(payload.averageCost);
@@ -269,7 +286,10 @@ exports.updateLocation = async (req, res) => {
       }
     }
 
-    const updated = await Location.findByIdAndUpdate(id, payload, { new: true, runValidators: true });
+    const updated = await Location.findByIdAndUpdate(id, payload, {
+      new: true,
+      runValidators: true,
+    }).populate("parentLocationId", "name district province category");
 
     await notifyAdmins({
       type: "system",
@@ -291,6 +311,7 @@ exports.deleteLocation = async (req, res) => {
 
     const deleted = await Location.findByIdAndDelete(id);
     if (!deleted) return res.status(404).json({ message: "Location not found" });
+    await Location.updateMany({ parentLocationId: deleted._id }, { $set: { parentLocationId: null } });
 
     await notifyAdmins({
       type: "system",
@@ -394,6 +415,26 @@ exports.getAllPosts = async (_req, res) => {
   }
 };
 
+exports.updatePostStatus = async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { status } = req.body || {};
+    if (!isValidObjectId(id)) return res.status(400).json({ message: "Invalid post id" });
+    if (!["approved", "rejected", "pending"].includes(String(status))) {
+      return res.status(400).json({ message: "Valid status is required" });
+    }
+
+    const post = await Post.findById(id).populate("userId", "name email");
+    if (!post) return res.status(404).json({ message: "Post not found" });
+    post.status = String(status);
+    await post.save();
+    return res.json({ message: `Post ${status}`, post });
+  } catch (err) {
+    console.error(err);
+    return res.status(500).json({ message: "Failed to update post status" });
+  }
+};
+
 exports.approvePost = async (req, res) => {
   try {
     const { id } = req.params;
@@ -415,6 +456,51 @@ exports.approvePost = async (req, res) => {
   }
 };
 
+exports.getAllReviews = async (_req, res) => {
+  try {
+    const reviews = await Review.find()
+      .populate("userId", "name email profilePicture")
+      .sort({ createdAt: -1 });
+    return res.json(reviews);
+  } catch (err) {
+    console.error(err);
+    return res.status(500).json({ message: "Failed to fetch reviews" });
+  }
+};
+
+exports.updateReviewStatus = async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { status } = req.body || {};
+    if (!isValidObjectId(id)) return res.status(400).json({ message: "Invalid review id" });
+    if (!["approved", "rejected", "pending"].includes(String(status))) {
+      return res.status(400).json({ message: "Valid status is required" });
+    }
+
+    const review = await Review.findById(id).populate("userId", "name email");
+    if (!review) return res.status(404).json({ message: "Review not found" });
+    review.status = String(status);
+    await review.save();
+    return res.json({ message: `Review ${status}`, review });
+  } catch (err) {
+    console.error(err);
+    return res.status(500).json({ message: "Failed to update review status" });
+  }
+};
+
+exports.deleteReview = async (req, res) => {
+  try {
+    const { id } = req.params;
+    if (!isValidObjectId(id)) return res.status(400).json({ message: "Invalid review id" });
+    const review = await Review.findByIdAndDelete(id);
+    if (!review) return res.status(404).json({ message: "Review not found" });
+    return res.json({ message: "Review deleted" });
+  } catch (err) {
+    console.error(err);
+    return res.status(500).json({ message: "Failed to delete review" });
+  }
+};
+
 exports.deletePost = async (req, res) => {
   try {
     const { id } = req.params;
@@ -433,5 +519,132 @@ exports.deletePost = async (req, res) => {
   } catch (err) {
     console.error(err);
     res.status(500).json({ message: "Failed to delete post" });
+  }
+};
+
+exports.sendAnnouncementEmailToUsers = async (req, res) => {
+  try {
+    const { subject, message, newsletterOnly = true } = req.body || {};
+    const trimmedSubject = String(subject || "").trim();
+    const trimmedMessage = String(message || "").trim();
+
+    if (!trimmedSubject || !trimmedMessage) {
+      return res.status(400).json({ message: "subject and message are required" });
+    }
+
+    const users = await User.find({ isBlocked: false })
+      .select("name email notifications")
+      .lean();
+
+    const recipients = users.filter((user) =>
+      canSendEmail(user, newsletterOnly ? "newsletter" : "general")
+    );
+
+    const results = await Promise.allSettled(
+      recipients.map((user) =>
+        sendAnnouncementEmail({
+          email: user.email,
+          customerName: user.name,
+          subject: trimmedSubject,
+          message: trimmedMessage,
+        })
+      )
+    );
+
+    const sentCount = results.filter((result) => result.status === "fulfilled").length;
+    const failedCount = results.length - sentCount;
+
+    await notifyAdmins({
+      type: "system",
+      title: "Announcement email sent",
+      message: `Admin ${req.user?.name || req.user?.email} sent an email campaign to ${sentCount} users.`,
+      meta: { subject: trimmedSubject, sentCount, failedCount, newsletterOnly: Boolean(newsletterOnly) },
+    });
+
+    return res.json({
+      message: "Announcement email processing complete",
+      recipients: recipients.length,
+      sentCount,
+      failedCount,
+    });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ message: "Failed to send announcement emails" });
+  }
+};
+
+exports.sendUpcomingTripReminders = async (req, res) => {
+  try {
+    const windowHours = Math.max(1, Number(req.body?.windowHours || 48));
+    const now = new Date();
+    const upperBound = new Date(now.getTime() + windowHours * 60 * 60 * 1000);
+
+    const bookings = await Booking.find({
+      bookingStatus: "confirmed",
+      checkIn: { $gte: now, $lte: upperBound },
+      $or: [
+        { lastReminderEmailSentAt: { $exists: false } },
+        { lastReminderEmailSentAt: null },
+      ],
+    })
+      .populate("userId", "name email notifications")
+      .populate("locationId", "name")
+      .populate("listingId", "title")
+      .populate("tripPackageId", "title")
+      .limit(200);
+
+    let sentCount = 0;
+    let skippedCount = 0;
+    let failedCount = 0;
+
+    for (const booking of bookings) {
+      const user = booking.userId;
+      if (!canSendEmail(user, "tripReminder")) {
+        skippedCount += 1;
+        continue;
+      }
+
+      const bookingName =
+        booking.tripPackageId?.title ||
+        booking.listingId?.title ||
+        booking.locationId?.name ||
+        "your upcoming trip";
+
+      try {
+        await sendTripReminderEmail({
+          email: user.email,
+          customerName: user.name,
+          bookingName,
+          bookingId: String(booking._id),
+          checkIn: booking.checkIn || booking.date,
+          packageSnapshot: booking.packageSnapshot,
+        });
+        booking.lastReminderEmailSentAt = new Date();
+        await booking.save();
+        sentCount += 1;
+      } catch (error) {
+        console.error("Failed to send trip reminder email:", error);
+        failedCount += 1;
+      }
+    }
+
+    await notifyAdmins({
+      type: "system",
+      title: "Trip reminders processed",
+      message: `Admin ${req.user?.name || req.user?.email} processed upcoming trip reminder emails.`,
+      meta: { windowHours, sentCount, skippedCount, failedCount },
+    });
+
+    return res.json({
+      message: "Trip reminder email processing complete",
+      windowHours,
+      matchedBookings: bookings.length,
+      sentCount,
+      skippedCount,
+      failedCount,
+    });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ message: "Failed to send trip reminder emails" });
   }
 };
