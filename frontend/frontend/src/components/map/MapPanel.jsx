@@ -1,6 +1,7 @@
 import { LocateFixed, MapPin, Plus, RefreshCw } from "lucide-react";
 
-function FloatingAction({ icon: Icon, label, onClick, disabled = false, busy = false, tone = "primary" }) {
+function FloatingAction({ icon, label, onClick, disabled = false, busy = false, tone = "primary" }) {
+  const ActionIcon = icon;
   const toneClass =
     tone === "secondary"
       ? "border-white/70 bg-white/85 text-slate-700 hover:border-[#1F7A8C]/35 hover:text-[#1F7A8C]"
@@ -15,7 +16,7 @@ function FloatingAction({ icon: Icon, label, onClick, disabled = false, busy = f
       disabled={disabled || busy}
       className={`inline-flex items-center gap-2 rounded-full border px-4 py-2.5 text-sm font-semibold shadow-[0_14px_28px_rgba(15,23,42,0.08)] transition hover:-translate-y-0.5 ${toneClass} disabled:cursor-not-allowed disabled:opacity-60`}
     >
-      <Icon className={`h-4 w-4 ${busy ? "animate-spin" : ""}`} />
+      <ActionIcon className={`h-4 w-4 ${busy ? "animate-spin" : ""}`} />
       {label}
     </button>
   );

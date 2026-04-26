@@ -1,4 +1,5 @@
 const Location = require("../models/Location");
+const Listing = require("../models/Listing");
 
 const EARTH_RADIUS_KM = 6371;
 const TYPE_KEYWORDS = {
@@ -66,6 +67,13 @@ const TYPE_KEYWORDS = {
     "espresso",
     "bistro",
   ],
+};
+
+const TYPE_TO_LISTING_TYPES = {
+  tourist_attraction: ["activity"],
+  lodging: ["hotel"],
+  restaurant: ["restaurant"],
+  cafe: ["cafe"],
 };
 
 const normalizeText = (value) => String(value || "").trim().toLowerCase();
@@ -188,6 +196,100 @@ const getLocalNearbyFromLocations = async ({ lat, lng, query, type, limit = 20, 
   return filtered;
 };
 
+const buildLocationLookup = (locations) => {
+  const lookup = new Map();
+
+  (Array.isArray(locations) ? locations : []).forEach((location) => {
+    const keys = [
+      location?.name,
+      `${location?.name || ""}|${location?.district || ""}`,
+      `${location?.name || ""}|${location?.district || ""}|${location?.province || ""}`,
+    ]
+      .map((value) => normalizeText(value))
+      .filter(Boolean);
+
+    keys.forEach((key) => {
+      if (!lookup.has(key)) lookup.set(key, location);
+    });
+  });
+
+  return lookup;
+};
+
+const resolveListingCoordinates = (listing, locationLookup) => {
+  const lat = Number(listing?.location?.lat);
+  const lng = Number(listing?.location?.lng);
+  if (Number.isFinite(lat) && Number.isFinite(lng)) {
+    return { lat, lng };
+  }
+
+  const lookupKeys = [
+    listing?.location?.name,
+    `${listing?.location?.name || ""}|${listing?.location?.district || ""}`,
+    `${listing?.location?.name || ""}|${listing?.location?.district || ""}|${listing?.location?.province || ""}`,
+  ]
+    .map((value) => normalizeText(value))
+    .filter(Boolean);
+
+  const matchedLocation = lookupKeys.map((key) => locationLookup.get(key)).find(Boolean);
+  if (!matchedLocation) return null;
+
+  return {
+    lat: Number(matchedLocation.latitude),
+    lng: Number(matchedLocation.longitude),
+  };
+};
+
+const getLocalNearbyFromListings = async ({ lat, lng, type, limit = 20, radiusKm, locationLookup }) => {
+  const listingTypes = TYPE_TO_LISTING_TYPES[type] || [];
+  if (!listingTypes.length) return [];
+
+  const listings = await Listing.find({
+    isActive: true,
+    type: { $in: listingTypes },
+  })
+    .sort({ createdAt: -1 })
+    .lean();
+
+  return listings
+    .map((listing) => {
+      const coordinates = resolveListingCoordinates(listing, locationLookup);
+      if (!coordinates || !Number.isFinite(coordinates.lat) || !Number.isFinite(coordinates.lng)) {
+        return null;
+      }
+
+      const distanceKm =
+        typeof lat === "number" && typeof lng === "number"
+          ? Number(haversineDistanceKm(lat, lng, coordinates.lat, coordinates.lng).toFixed(2))
+          : null;
+      const withinRadius = distanceKm === null || !Number.isFinite(radiusKm) ? true : distanceKm <= radiusKm;
+      if (!withinRadius) return null;
+
+      return {
+        placeId: `listing-${listing._id}`,
+        name: listing.title,
+        rating: Number(listing.rating || 0),
+        address:
+          [
+            listing.location?.address,
+            listing.location?.name,
+            listing.location?.district,
+            listing.location?.province,
+          ]
+            .filter(Boolean)
+            .join(", ") || "Local listing",
+        location: coordinates,
+        distanceKm,
+        photo: Array.isArray(listing.photos) ? listing.photos[0] || "" : "",
+        mapUri: "",
+        categories: [listing.type, listing.location?.name].filter(Boolean),
+      };
+    })
+    .filter(Boolean)
+    .sort((a, b) => (a.distanceKm ?? Number.MAX_SAFE_INTEGER) - (b.distanceKm ?? Number.MAX_SAFE_INTEGER))
+    .slice(0, limit);
+};
+
 const mergePlaces = ({ localPlaces = [], remotePlaces = [], limit = 20 }) => {
   const seen = new Set();
   const merged = [];
@@ -255,13 +357,29 @@ exports.getNearbyPlaces = async (req, res) => {
     }
 
     const radiusKm = radius / 1000;
-    const localPlaces = await getLocalNearbyFromLocations({
+    const allLocations = await Location.find().lean();
+    const locationLookup = buildLocationLookup(allLocations);
+
+    const localLocationPlaces = await getLocalNearbyFromLocations({
       lat,
       lng,
       query,
       type,
       limit: maxResultCount,
       radiusKm,
+    });
+    const localListingPlaces = await getLocalNearbyFromListings({
+      lat,
+      lng,
+      type,
+      limit: maxResultCount,
+      radiusKm,
+      locationLookup,
+    });
+    const localPlaces = mergePlaces({
+      localPlaces: localLocationPlaces,
+      remotePlaces: localListingPlaces,
+      limit: maxResultCount,
     });
 
     const apiKey = process.env.GOOGLE_MAPS_API_KEY;

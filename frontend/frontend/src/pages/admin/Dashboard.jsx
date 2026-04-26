@@ -24,12 +24,6 @@ const initialState = {
 
 const currency = (value) => `NPR ${Number(value || 0).toLocaleString()}`;
 
-const dayKey = (value) => {
-  const date = new Date(value);
-  date.setHours(0, 0, 0, 0);
-  return date.toISOString();
-};
-
 const countInRange = (items, getDate, start, end, predicate = () => true) =>
   items.filter((item) => {
     const raw = getDate(item);
@@ -142,7 +136,7 @@ export default function AdminDashboard() {
   }, []);
 
   const overview = useMemo(() => {
-    const { stats, users, bookings, payments, packages, locations, posts } = state;
+    const { stats, users, bookings, payments, packages, locations } = state;
     if (!stats) return null;
 
     const now = new Date();

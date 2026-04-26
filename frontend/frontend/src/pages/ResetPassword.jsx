@@ -2,6 +2,7 @@ import React, { useMemo, useState } from "react";
 import { Link, useNavigate, useSearchParams } from "react-router-dom";
 import { ArrowLeft, ArrowRight, Eye, EyeOff, Lock, Mail, Shield } from "lucide-react";
 import api from "../utils/api";
+import { validateEmail } from "../utils/authValidation";
 import "./Auth.css";
 
 export default function ResetPassword() {
@@ -24,8 +25,8 @@ export default function ResetPassword() {
 
     if (!form.email.trim()) {
       newErrors.email = "Email is required";
-    } else if (!/\S+@\S+\.\S+/.test(form.email)) {
-      newErrors.email = "Email is invalid";
+    } else if (!validateEmail(form.email)) {
+      newErrors.email = "Enter a valid email address";
     }
 
     if (!form.code.trim()) {

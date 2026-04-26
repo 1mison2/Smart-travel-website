@@ -193,6 +193,36 @@ const locationSeeds = [
     image: "",
     images: [],
   },
+  {
+    key: "patan",
+    parentKey: "kathmandu",
+    name: "Patan",
+    province: "Bagmati",
+    district: "Lalitpur",
+    category: "Cultural City",
+    averageCost: 1800,
+    latitude: 27.6734,
+    longitude: 85.3256,
+    description:
+      "Patan is the historic city of fine courtyards, temples, Newar craftsmanship, and one of the most celebrated royal squares in the Kathmandu Valley.",
+    image: "",
+    images: [],
+  },
+  {
+    key: "bhaktapur",
+    parentKey: "kathmandu",
+    name: "Bhaktapur",
+    province: "Bagmati",
+    district: "Bhaktapur",
+    category: "Cultural City",
+    averageCost: 2000,
+    latitude: 27.671,
+    longitude: 85.4298,
+    description:
+      "Bhaktapur is a well-preserved medieval city known for pottery squares, palaces, temples, Newari heritage, and traditional urban life.",
+    image: "",
+    images: [],
+  },
 ];
 
 const listingSeeds = [

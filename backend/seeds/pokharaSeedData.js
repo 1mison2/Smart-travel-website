@@ -290,6 +290,26 @@ const listingSeeds = [
     amenities: ["Local guide", "Water break", "Scenic stops"],
     rating: 4.7,
   },
+  {
+    type: "activity",
+    title: "ZipFlyer Nepal",
+    description: "High-speed zipline experience from the Sarangkot side of Pokhara with dramatic valley views.",
+    location: { name: "Sarangkot", address: "ZipFlyer Base, Hemja-Sarangkot Route, Pokhara", district: "Kaski", province: "Gandaki", lat: 28.2531, lng: 83.9391 },
+    pricePerUnit: 7500,
+    capacity: 1,
+    amenities: ["Safety gear", "Shuttle transfer", "Crew support"],
+    rating: 4.8,
+  },
+  {
+    type: "activity",
+    title: "Ultralight Flight Pokhara",
+    description: "Scenic ultralight flight over Pokhara Valley with close-up Himalayan views on clear-weather days.",
+    location: { name: "Pokhara", address: "Pokhara Airport Ultralight Counter, Pokhara", district: "Kaski", province: "Gandaki", lat: 28.2002, lng: 83.9821 },
+    pricePerUnit: 11000,
+    capacity: 1,
+    amenities: ["Pilot", "Safety briefing", "Weather check", "Flight gear"],
+    rating: 4.9,
+  },
 
   {
     type: "activity",

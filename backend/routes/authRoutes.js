@@ -5,6 +5,9 @@ const {
   forgotPassword,
   resetPassword,
   googleAuth,
+  verifySignupCode,
+  verifyLoginCode,
+  resendAuthCode,
 } = require("../controllers/authController");
 const { protect } = require("../middleware/authMiddleware");
 
@@ -15,6 +18,9 @@ router.post("/signup", register);
 router.post("/register", register);
 router.post("/login", login);
 router.post("/google", googleAuth);
+router.post("/verify-signup", verifySignupCode);
+router.post("/verify-login", verifyLoginCode);
+router.post("/resend-code", resendAuthCode);
 
 // forgot password and reset password endpoints
 router.post("/forgot-password", forgotPassword);

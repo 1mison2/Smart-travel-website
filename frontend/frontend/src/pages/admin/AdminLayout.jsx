@@ -44,7 +44,7 @@ export default function AdminLayout() {
 
   return (
     <div className="admin-shell">
-      <Sidebar />
+      <Sidebar user={user} onLogout={onLogout} />
       <main className="admin-main">
         <header className="admin-topbar">
           <div className="admin-topbar__intro">

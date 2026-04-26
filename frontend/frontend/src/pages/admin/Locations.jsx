@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 import api, { resolveImageUrl } from "../../utils/api";
 
 const emptyForm = {
@@ -45,8 +45,51 @@ export default function AdminLocations() {
   const [saving, setSaving] = useState(false);
   const [currentImage, setCurrentImage] = useState("");
   const [currentImages, setCurrentImages] = useState([]);
+  const [nameFilter, setNameFilter] = useState("all");
+  const [categoryFilter, setCategoryFilter] = useState("all");
+  const [startDateFilter, setStartDateFilter] = useState("");
+  const [endDateFilter, setEndDateFilter] = useState("");
+  const [appliedFilters, setAppliedFilters] = useState({
+    name: "all",
+    category: "all",
+    startDate: "",
+    endDate: "",
+  });
+  const [hasAppliedFilters, setHasAppliedFilters] = useState(false);
+  const locationLookup = useMemo(() => {
+    const byId = new Map();
+
+    (Array.isArray(locations) ? locations : []).forEach((location) => {
+      if (location?._id) {
+        byId.set(String(location._id), location);
+      }
+    });
+
+    return byId;
+  }, [locations]);
   const parentCandidates = locations.filter(
     (location) => location._id !== editingId && !getParentId(location)
+  );
+  const filteredLocations = useMemo(() => {
+    return locations.filter((location) => {
+      const matchesName =
+        appliedFilters.name === "all" || locationMatchesDestinationHub(location, appliedFilters.name, locationLookup);
+      const matchesCategory =
+        appliedFilters.category === "all" || String(location.category || "").toLowerCase() === appliedFilters.category.toLowerCase();
+      const matchesDate = isWithinDateRange(location.createdAt, appliedFilters.startDate, appliedFilters.endDate);
+      return matchesName && matchesCategory && matchesDate;
+    });
+  }, [locations, appliedFilters, locationLookup]);
+  const nameOptions = useMemo(
+    () =>
+      Array.from(
+        new Set(locations.map((location) => getDestinationHubName(location, locationLookup)).filter(Boolean))
+      ).sort(),
+    [locations, locationLookup]
+  );
+  const categoryOptions = useMemo(
+    () => Array.from(new Set(locations.map((location) => String(location.category || "").trim()).filter(Boolean))),
+    [locations]
   );
 
   const loadLocations = async () => {
@@ -144,7 +187,12 @@ export default function AdminLocations() {
     setCurrentImages(Array.isArray(location.images) ? location.images : []);
   };
 
-  const onDelete = async (id) => {
+  const onDelete = async (id, name) => {
+    const confirmed = window.confirm(
+      `Are you sure you want to delete "${name || "this location"}"? This action cannot be undone.`
+    );
+    if (!confirmed) return;
+
     try {
       await api.delete(`/api/admin/locations/${id}`);
       setLocations((prev) => prev.filter((item) => item._id !== id));
@@ -157,6 +205,30 @@ export default function AdminLocations() {
     } catch (err) {
       setError(getApiErrorMessage(err, "Failed to delete location"));
     }
+  };
+
+  const applyFilters = () => {
+    setAppliedFilters({
+      name: nameFilter,
+      category: categoryFilter,
+      startDate: startDateFilter,
+      endDate: endDateFilter,
+    });
+    setHasAppliedFilters(true);
+  };
+
+  const resetBrowseFilters = () => {
+    setNameFilter("all");
+    setCategoryFilter("all");
+    setStartDateFilter("");
+    setEndDateFilter("");
+    setAppliedFilters({
+      name: "all",
+      category: "all",
+      startDate: "",
+      endDate: "",
+    });
+    setHasAppliedFilters(false);
   };
 
   return (
@@ -229,55 +301,269 @@ export default function AdminLocations() {
         <p className="admin-loading">Loading locations...</p>
       ) : (
         <div className="admin-card admin-table-wrap">
-          <table className="admin-table">
-            <thead>
-              <tr>
-                <th>Name</th>
-                <th>Province</th>
-                <th>District</th>
-                <th>Parent</th>
-                <th>Category</th>
-                <th>Avg. Cost</th>
-                <th>Coordinates</th>
-                <th>Image</th>
-                <th>Actions</th>
-              </tr>
-            </thead>
-            <tbody>
-              {locations.map((location) => (
-                <tr key={location._id}>
-                  <td>{location.name}</td>
-                  <td>{location.province || "-"}</td>
-                  <td>{location.district || "-"}</td>
-                  <td>{location.parentLocationId?.name || "-"}</td>
-                  <td>{location.category}</td>
-                  <td>${location.averageCost}</td>
-                  <td>{location.latitude}, {location.longitude}</td>
-                  <td>
-                    {(location.image || location.images?.[0]) ? (
-                      <img
-                        src={resolveImageUrl(location.image || location.images?.[0])}
-                        alt={location.name}
-                        style={{ width: "56px", height: "42px", objectFit: "cover", borderRadius: "6px" }}
-                      />
-                    ) : "-"}
-                  </td>
-                  <td>
-                    <div className="admin-actions">
-                    <button type="button" onClick={() => onEdit(location)} className="admin-btn admin-btn--primary">
-                      Edit
-                    </button>
-                    <button type="button" onClick={() => onDelete(location._id)} className="admin-btn admin-btn--danger">
-                      Delete
-                    </button>
-                    </div>
-                  </td>
+          <div className="admin-filter-panel">
+            <div className="admin-filter-panel__head">
+              <div>
+                <p className="admin-filter-panel__eyebrow">Browse locations</p>
+                <h3>Filter the destination list</h3>
+              </div>
+              <div className="admin-filter-panel__meta">
+                <span>{hasAppliedFilters ? `${filteredLocations.length} shown` : "0 shown"}</span>
+                <span>{locations.length} total</span>
+              </div>
+            </div>
+
+            <div className="admin-table-filters">
+              <label className="admin-filter-field">
+                <span>Destination hub</span>
+                <select className="admin-input" value={nameFilter} onChange={(e) => setNameFilter(e.target.value)}>
+                  <option value="all">All destination hubs</option>
+                  {nameOptions.map((name) => (
+                    <option key={name} value={name}>
+                      {name}
+                    </option>
+                  ))}
+                </select>
+              </label>
+
+              <label className="admin-filter-field">
+                <span>Category</span>
+                <select className="admin-input" value={categoryFilter} onChange={(e) => setCategoryFilter(e.target.value)}>
+                  <option value="all">All categories</option>
+                  {categoryOptions.map((category) => (
+                    <option key={category} value={category}>
+                      {category}
+                    </option>
+                  ))}
+                </select>
+              </label>
+
+              <label className="admin-filter-field">
+                <span>Created from</span>
+                <input className="admin-input" type="date" value={startDateFilter} onChange={(e) => setStartDateFilter(e.target.value)} />
+              </label>
+
+              <label className="admin-filter-field">
+                <span>Created to</span>
+                <input className="admin-input" type="date" value={endDateFilter} min={startDateFilter || undefined} onChange={(e) => setEndDateFilter(e.target.value)} />
+              </label>
+            </div>
+
+            <div className="admin-filter-panel__actions">
+              <button
+                type="button"
+                className="admin-btn admin-btn--primary"
+                onClick={applyFilters}
+              >
+                Apply filters
+              </button>
+              <button
+                type="button"
+                className="admin-btn admin-btn--muted"
+                onClick={resetBrowseFilters}
+                disabled={
+                  nameFilter === "all" &&
+                  categoryFilter === "all" &&
+                  !startDateFilter &&
+                  !endDateFilter
+                }
+              >
+                Reset filters
+              </button>
+            </div>
+          </div>
+
+          {!hasAppliedFilters ? (
+            <div className="admin-table__muted" style={{ padding: "18px 6px" }}>
+              Apply filters to view posted location details.
+            </div>
+          ) : (
+            <table className="admin-table">
+              <thead>
+                <tr>
+                  <th>Name</th>
+                  <th>Province</th>
+                  <th>District</th>
+                  <th>Parent</th>
+                  <th>Category</th>
+                  <th>Avg. Cost</th>
+                  <th>Coordinates</th>
+                  <th>Image</th>
+                  <th>Actions</th>
                 </tr>
-              ))}
-            </tbody>
-          </table>
+              </thead>
+              <tbody>
+                {filteredLocations.map((location) => (
+                  <tr key={location._id}>
+                    <td>{location.name}</td>
+                    <td>{location.province || "-"}</td>
+                    <td>{location.district || "-"}</td>
+                    <td>{location.parentLocationId?.name || "-"}</td>
+                    <td>{location.category}</td>
+                    <td>NPR {location.averageCost}</td>
+                    <td>{location.latitude}, {location.longitude}</td>
+                    <td>
+                      {(location.image || location.images?.[0]) ? (
+                        <img
+                          src={resolveImageUrl(location.image || location.images?.[0])}
+                          alt={location.name}
+                          style={{ width: "56px", height: "42px", objectFit: "cover", borderRadius: "6px" }}
+                        />
+                      ) : "-"}
+                    </td>
+                    <td>
+                      <div className="admin-actions">
+                      <button type="button" onClick={() => onEdit(location)} className="admin-btn admin-btn--primary">
+                        Edit
+                      </button>
+                      <button type="button" onClick={() => onDelete(location._id, location.name)} className="admin-btn admin-btn--danger">
+                        Delete
+                      </button>
+                      </div>
+                    </td>
+                  </tr>
+                ))}
+                {filteredLocations.length === 0 && (
+                  <tr>
+                    <td colSpan="9">No locations match the applied filters.</td>
+                  </tr>
+                )}
+              </tbody>
+            </table>
+          )}
         </div>
       )}
+
+      <style>{`
+        .admin-filter-panel {
+          margin-bottom: 16px;
+          padding: 18px;
+          border-radius: 20px;
+          background: linear-gradient(135deg, rgba(255,255,255,0.96), rgba(248,250,252,0.92));
+          border: 1px solid rgba(148, 163, 184, 0.18);
+          box-shadow: inset 0 1px 0 rgba(255,255,255,0.8);
+        }
+        .admin-filter-panel__head {
+          display: flex;
+          justify-content: space-between;
+          align-items: flex-start;
+          gap: 12px;
+          margin-bottom: 14px;
+          flex-wrap: wrap;
+        }
+        .admin-filter-panel__eyebrow {
+          margin: 0 0 4px;
+          color: #f97316;
+          font-size: 0.74rem;
+          font-weight: 800;
+          letter-spacing: 0.14em;
+          text-transform: uppercase;
+        }
+        .admin-filter-panel__head h3 {
+          margin: 0;
+          color: #0f172a;
+          font-size: 1.15rem;
+        }
+        .admin-filter-panel__meta {
+          display: flex;
+          gap: 8px;
+          flex-wrap: wrap;
+        }
+        .admin-filter-panel__meta span {
+          padding: 8px 12px;
+          border-radius: 999px;
+          background: rgba(255,255,255,0.86);
+          border: 1px solid rgba(148, 163, 184, 0.18);
+          color: #475569;
+          font-size: 0.8rem;
+          font-weight: 700;
+        }
+        .admin-table-filters {
+          display: grid;
+          grid-template-columns: repeat(4, minmax(180px, 1fr));
+          gap: 12px;
+        }
+        .admin-filter-field {
+          display: grid;
+          gap: 8px;
+        }
+        .admin-filter-field span {
+          color: #475569;
+          font-size: 0.8rem;
+          font-weight: 700;
+        }
+        .admin-filter-panel__actions {
+          display: flex;
+          justify-content: flex-end;
+          margin-top: 14px;
+        }
+        @media (max-width: 720px) {
+          .admin-filter-panel {
+            padding: 16px;
+          }
+          .admin-table-filters {
+            grid-template-columns: 1fr;
+          }
+          .admin-filter-panel__actions {
+            justify-content: stretch;
+          }
+        }
+      `}</style>
     </section>
   );
+}
+
+function isWithinDateRange(value, filterStart, filterEnd) {
+  if (!filterStart && !filterEnd) return true;
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return false;
+
+  if (filterStart) {
+    const start = new Date(filterStart);
+    start.setHours(0, 0, 0, 0);
+    if (date < start) return false;
+  }
+
+  if (filterEnd) {
+    const end = new Date(filterEnd);
+    end.setHours(23, 59, 59, 999);
+    if (date > end) return false;
+  }
+
+  return true;
+}
+
+function normalizeText(value) {
+  return String(value || "").trim().toLowerCase();
+}
+
+function getDestinationHubName(location, locationLookup) {
+  let current = location;
+  const visited = new Set();
+
+  while (current?.parentLocationId) {
+    const parentId =
+      typeof current.parentLocationId === "object" ? current.parentLocationId?._id : current.parentLocationId;
+    const normalizedParentId = String(parentId || "");
+
+    if (!normalizedParentId || visited.has(normalizedParentId)) break;
+    visited.add(normalizedParentId);
+
+    const nextLocation =
+      typeof current.parentLocationId === "object" && current.parentLocationId?.name
+        ? current.parentLocationId
+        : locationLookup.get(normalizedParentId);
+
+    if (!nextLocation) break;
+    current = nextLocation;
+  }
+
+  return String(current?.name || location?.name || "").trim();
+}
+
+function locationMatchesDestinationHub(location, hubName, locationLookup) {
+  const normalizedHubName = normalizeText(hubName);
+  if (!normalizedHubName) return true;
+
+  return normalizeText(getDestinationHubName(location, locationLookup)) === normalizedHubName;
 }

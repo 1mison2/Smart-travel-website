@@ -30,7 +30,17 @@ exports.getMyPayments = async (req, res) => {
     const query = req.user.role === "admin" ? {} : { userId: req.user._id };
     const payments = await Payment.find(query)
       .sort({ createdAt: -1 })
-      .populate("bookingId", "amount bookingStatus paymentStatus date")
+      .populate("userId", "name email")
+      .populate({
+        path: "bookingId",
+        select:
+          "amount currency bookingStatus paymentStatus bookingType date checkIn checkOut guests paidAt cancelledAt createdAt locationId listingId tripPackageId",
+        populate: [
+          { path: "locationId", select: "name province district" },
+          { path: "listingId", select: "title type" },
+          { path: "tripPackageId", select: "title" },
+        ],
+      })
       .limit(100);
     res.json({ payments });
   } catch (err) {

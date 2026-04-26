@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 import { Link, useParams } from "react-router-dom";
 import api from "../utils/api";
 
@@ -39,6 +39,19 @@ export default function ItineraryDetails() {
     };
   }, [id]);
 
+  const routeMeta = useMemo(() => {
+    const places = (itinerary?.days || []).flatMap((day) => day?.places || []);
+    const distanceKm = places.reduce((sum, place, index) => {
+      if (index === 0) return 0;
+      return sum + calculateDistanceKm(places[index - 1], place);
+    }, 0);
+
+    return {
+      stopCount: places.length,
+      distanceKm,
+    };
+  }, [itinerary]);
+
   return (
     <div className="itinerary-page">
       <header className="itinerary-page__hero">
@@ -51,7 +64,9 @@ export default function ItineraryDetails() {
           <h1>{itinerary?.destination || "Your itinerary"}</h1>
           {itinerary && (
             <p>
-              {itinerary.durationDays} day(s) • Budget NPR {itinerary.budget} • Estimated NPR {itinerary.totalEstimatedCost}
+              {itinerary.durationDays} day(s) | Budget NPR {Number(itinerary.budget || 0).toLocaleString()} | Estimated
+              NPR {Number(itinerary.totalEstimatedCost || 0).toLocaleString()} | {routeMeta.stopCount} stops |{" "}
+              {routeMeta.distanceKm > 0 ? `${routeMeta.distanceKm.toFixed(1)} km route` : "distance pending"}
             </p>
           )}
         </div>
@@ -78,7 +93,7 @@ export default function ItineraryDetails() {
                   <p className="itinerary-day__badge">Day {day.day}</p>
                   <h2>{day.title}</h2>
                 </div>
-                <div className="itinerary-day__cost">Estimated NPR {day.estimatedCost || 0}</div>
+                <div className="itinerary-day__cost">Estimated NPR {Number(day.estimatedCost || 0).toLocaleString()}</div>
               </div>
               {day.notes && <p className="itinerary-day__notes">{day.notes}</p>}
               <div className="itinerary-places">
@@ -94,7 +109,7 @@ export default function ItineraryDetails() {
                     <div className="itinerary-place__body">
                       <h3>{place.name}</h3>
                       <p className="itinerary-place__meta">{place.category || "attraction"}</p>
-                      <p className="itinerary-place__cost">Estimated NPR {place.estimatedCost || 0}</p>
+                      <p className="itinerary-place__cost">Estimated NPR {Number(place.estimatedCost || 0).toLocaleString()}</p>
                       {place.notes && <p className="itinerary-place__notes">{place.notes}</p>}
                     </div>
                   </div>
@@ -310,4 +325,26 @@ export default function ItineraryDetails() {
       `}</style>
     </div>
   );
+}
+
+function toRadians(value) {
+  return (Number(value) * Math.PI) / 180;
+}
+
+function calculateDistanceKm(from, to) {
+  const fromLat = Number(from?.latitude);
+  const fromLng = Number(from?.longitude);
+  const toLat = Number(to?.latitude);
+  const toLng = Number(to?.longitude);
+
+  if (![fromLat, fromLng, toLat, toLng].every(Number.isFinite)) return 0;
+
+  const earthRadiusKm = 6371;
+  const deltaLat = toRadians(toLat - fromLat);
+  const deltaLng = toRadians(toLng - fromLng);
+  const a =
+    Math.sin(deltaLat / 2) ** 2 +
+    Math.cos(toRadians(fromLat)) * Math.cos(toRadians(toLat)) * Math.sin(deltaLng / 2) ** 2;
+
+  return earthRadiusKm * (2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a)));
 }

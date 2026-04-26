@@ -1,6 +1,5 @@
 import React, { useEffect, useState } from "react";
 import { Star } from "lucide-react";
-import { Link } from "react-router-dom";
 import api from "../../utils/api";
 import SectionSkeleton from "./SectionSkeleton";
 
@@ -20,7 +19,7 @@ export default function DestinationReviewsSection({ onNotify }) {
         reviews: data?.reviews || [],
       });
       setDestination(target);
-    } catch (_err) {
+    } catch {
       onNotify?.({ type: "error", message: "Failed to load destination reviews." });
     } finally {
       setLoading(false);
@@ -39,7 +38,6 @@ export default function DestinationReviewsSection({ onNotify }) {
         <div className="border-b border-slate-200 bg-[linear-gradient(135deg,#fff7ed,#ffffff)] px-6 py-6">
           <div className="flex flex-wrap items-center justify-between gap-3">
             <div>
-              <p className="text-xs font-extrabold uppercase tracking-[0.28em] text-slate-400">Destination Reviews</p>
               <h3 className="mt-2 text-3xl font-bold text-slate-900">{summary.destination}</h3>
             </div>
             <div className="rounded-[24px] bg-amber-50 px-5 py-4 text-right">
@@ -61,14 +59,6 @@ export default function DestinationReviewsSection({ onNotify }) {
               </button>
             ))}
           </div>
-
-          <div className="mb-5 flex flex-wrap items-center justify-between gap-3 rounded-[24px] bg-slate-50 px-4 py-4 ring-1 ring-slate-200">
-            <p className="text-sm text-slate-600">Reviews can be written on each location page.</p>
-            <Link to="/explore" className="rounded-full bg-slate-900 px-4 py-2 text-sm font-semibold text-white">
-              Open locations
-            </Link>
-          </div>
-
           <div className="grid gap-4">
             {summary.reviews.map((review) => (
               <article key={review._id} className="rounded-[26px] border border-slate-200 bg-slate-50 p-4">

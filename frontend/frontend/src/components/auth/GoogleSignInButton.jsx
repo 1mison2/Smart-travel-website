@@ -9,6 +9,10 @@ const loadGoogleScript = () => {
   googleScriptPromise = new Promise((resolve, reject) => {
     const existing = document.querySelector("script[data-google-identity='true']");
     if (existing) {
+      if (window.google?.accounts?.id) {
+        resolve();
+        return;
+      }
       existing.addEventListener("load", resolve, { once: true });
       existing.addEventListener("error", reject, { once: true });
       return;
@@ -24,7 +28,25 @@ const loadGoogleScript = () => {
     document.head.appendChild(script);
   });
 
-  return googleScriptPromise;
+  return googleScriptPromise.catch((error) => {
+    googleScriptPromise = undefined;
+    throw error;
+  });
+};
+
+const buildGoogleErrorMessage = (error) => {
+  const rawMessage = String(error?.message || error || "").trim();
+  const lower = rawMessage.toLowerCase();
+
+  if (lower.includes("origin") && lower.includes("not allowed")) {
+    return `Google sign-in is blocked for this site origin (${window.location.origin}). Add it to Authorized JavaScript origins in Google Cloud Console.`;
+  }
+
+  if (lower.includes("network") || lower.includes("load")) {
+    return "Google sign-in script could not load. Check internet access, browser extensions, or privacy blocking.";
+  }
+
+  return rawMessage || "Failed to load Google sign-in";
 };
 
 export default function GoogleSignInButton({
@@ -45,6 +67,8 @@ export default function GoogleSignInButton({
         await loadGoogleScript();
         if (!active || !buttonRef.current || !window.google?.accounts?.id) return;
 
+        buttonRef.current.innerHTML = "";
+
         window.google.accounts.id.initialize({
           client_id: clientId,
           callback: (response) => {
@@ -64,8 +88,9 @@ export default function GoogleSignInButton({
           shape: "pill",
           width: buttonRef.current.offsetWidth || 360,
         });
-      } catch (_err) {
-        onError?.("Failed to load Google sign-in");
+      } catch (err) {
+        console.error("Google sign-in initialization failed:", err);
+        onError?.(buildGoogleErrorMessage(err));
       }
     };
 

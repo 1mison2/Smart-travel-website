@@ -74,6 +74,7 @@ const normalizePackage = (pkg) => ({
   highlights: Array.isArray(pkg.highlights) ? pkg.highlights : [],
   faqs: Array.isArray(pkg.faqs) ? pkg.faqs : [],
   itineraryDays: Array.isArray(pkg.itineraryDays) ? pkg.itineraryDays : [],
+  rating: Number(pkg.rating || 0),
   durationDays: getDurationDays(pkg.startDate, pkg.endDate),
   effectivePrice: Number(pkg.discountPrice || 0) > 0 ? Number(pkg.discountPrice) : Number(pkg.basePrice || 0),
 });
@@ -143,9 +144,11 @@ exports.bookTripPackage = async (req, res) => {
       title: item.title,
       price: Number(item.pricePerUnit || item.pricing?.price || 0),
     }));
-    const addOnTotal = addOnsPricing.reduce((sum, item) => sum + Number(item.price || 0), 0);
+    const addOnUnitTotal = addOnsPricing.reduce((sum, item) => sum + Number(item.price || 0), 0);
     const basePrice = Number(tripPackage.discountPrice || tripPackage.basePrice || 0);
-    const total = Number((basePrice + addOnTotal).toFixed(2));
+    const subtotal = Number((basePrice * numericGuests).toFixed(2));
+    const addOnTotal = Number((addOnUnitTotal * numericGuests).toFixed(2));
+    const total = Number((subtotal + addOnTotal).toFixed(2));
 
     const startDate = new Date(tripPackage.startDate);
     const endDate = new Date(tripPackage.endDate);
@@ -166,11 +169,13 @@ exports.bookTripPackage = async (req, res) => {
       pricingSnapshot: {
         unitPrice: basePrice,
         nights: 1,
-        subtotal: basePrice,
+        subtotal,
         serviceFee: 0,
         tax: 0,
         total,
         basePrice,
+        baseTotal: subtotal,
+        addOnUnitTotal,
         addOnTotal,
         addOns: addOnsPricing,
       },

@@ -3,6 +3,7 @@ const BuddyRequest = require("../models/BuddyRequest");
 const ChatRoom = require("../models/ChatRoom");
 const TravelPlan = require("../models/TravelPlan");
 const User = require("../models/User");
+const { createNotification } = require("../utils/notificationService");
 
 const isValidObjectId = (id) => mongoose.Types.ObjectId.isValid(id);
 
@@ -165,7 +166,7 @@ exports.getMatchesForTravelPlan = async (req, res) => {
 
 exports.createBuddyRequest = async (req, res) => {
   try {
-    const { receiverId, travelPlanId, senderPlanId } = req.body || {};
+    const { receiverId, travelPlanId, senderPlanId, introMessage = "" } = req.body || {};
     if (!receiverId || !travelPlanId) {
       return res.status(400).json({ message: "receiverId and travelPlanId are required" });
     }
@@ -199,6 +200,7 @@ exports.createBuddyRequest = async (req, res) => {
       travelPlanId,
       senderPlanId: linkedSenderPlan?._id || null,
       receiverPlanId: receiverPlan._id,
+      introMessage: String(introMessage || "").trim().slice(0, 500),
       status: "pending",
     });
 
@@ -206,6 +208,18 @@ exports.createBuddyRequest = async (req, res) => {
       .populate("senderId", "name email profilePicture")
       .populate("receiverId", "name email profilePicture")
       .populate("travelPlanId");
+
+    await createNotification({
+      recipient: receiverId,
+      type: "system",
+      title: "New buddy request",
+      message: `${req.user.name} sent you a buddy request for your travel plan.`,
+      meta: {
+        buddyRequestId: buddyRequest._id,
+        travelPlanId,
+        senderId: req.user._id,
+      },
+    });
 
     return res.status(201).json({ message: "Buddy request sent", buddyRequest: populated });
   } catch (err) {
@@ -223,8 +237,8 @@ const updateBuddyRequestStatus = async ({ req, res, nextStatus }) => {
     if (!requestId || !isValidObjectId(requestId)) return res.status(400).json({ message: "Valid requestId is required" });
     const buddyRequest = await BuddyRequest.findById(requestId);
     if (!buddyRequest) return res.status(404).json({ message: "Buddy request not found" });
-    if (buddyRequest.receiverId.toString() !== req.user._id.toString() && buddyRequest.senderId.toString() !== req.user._id.toString()) {
-      return res.status(403).json({ message: "You cannot update this buddy request" });
+    if (buddyRequest.receiverId.toString() !== req.user._id.toString()) {
+      return res.status(403).json({ message: "Only the receiver can respond to this buddy request" });
     }
     if (buddyRequest.status !== "pending") {
       return res.status(409).json({ message: "This buddy request has already been processed" });
@@ -250,6 +264,22 @@ const updateBuddyRequestStatus = async ({ req, res, nextStatus }) => {
       .populate("receiverId", "name email profilePicture")
       .populate("travelPlanId");
 
+    const notifyRecipientId = buddyRequest.senderId;
+    const actorName = req.user?.name || "A traveler";
+
+    await createNotification({
+      recipient: notifyRecipientId,
+      type: "system",
+      title: `Buddy request ${nextStatus}`,
+      message: `${actorName} ${nextStatus} the buddy request.`,
+      meta: {
+        buddyRequestId: buddyRequest._id,
+        travelPlanId: buddyRequest.travelPlanId,
+        chatRoomId: chatRoom?._id || null,
+        status: nextStatus,
+      },
+    });
+
     return res.json({ message: `Buddy request ${nextStatus}`, buddyRequest: populated, chatRoom });
   } catch (err) {
     console.error(err);
@@ -274,6 +304,17 @@ exports.cancelBuddyRequest = async (req, res) => {
     }
     buddyRequest.status = "cancelled";
     await buddyRequest.save();
+    await createNotification({
+      recipient: buddyRequest.receiverId,
+      type: "system",
+      title: "Buddy request cancelled",
+      message: `${req.user.name} cancelled the buddy request.`,
+      meta: {
+        buddyRequestId: buddyRequest._id,
+        travelPlanId: buddyRequest.travelPlanId,
+        status: "cancelled",
+      },
+    });
     return res.json({ message: "Buddy request cancelled", buddyRequest });
   } catch (err) {
     console.error(err);

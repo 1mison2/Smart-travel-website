@@ -24,7 +24,7 @@ export default function BlogFeedSection({ onNotify }) {
       setLoading(true);
       const { data } = await api.get("/api/posts", { params: { type: "blog" } });
       setBlogs(data?.posts || []);
-    } catch (_err) {
+    } catch {
       onNotify?.({ type: "error", message: "Failed to load travel blogs." });
     } finally {
       setLoading(false);
@@ -54,7 +54,7 @@ export default function BlogFeedSection({ onNotify }) {
     try {
       const { data } = await api.get(`/api/comments/${postId}`);
       setCommentsByPost((current) => ({ ...current, [postId]: data?.comments || [] }));
-    } catch (_err) {
+    } catch {
       onNotify?.({ type: "error", message: "Failed to load comments." });
     }
   };
@@ -80,7 +80,7 @@ export default function BlogFeedSection({ onNotify }) {
     try {
       await api.post("/api/posts/like", { postId });
       await loadBlogs();
-    } catch (_err) {
+    } catch {
       onNotify?.({ type: "error", message: "Failed to update like." });
     }
   };
@@ -90,7 +90,7 @@ export default function BlogFeedSection({ onNotify }) {
       await api.post("/api/posts/save", { postId });
       await loadBlogs();
       onNotify?.({ type: "success", message: "Blog saved." });
-    } catch (_err) {
+    } catch {
       onNotify?.({ type: "error", message: "Failed to save blog." });
     }
   };
@@ -100,7 +100,7 @@ export default function BlogFeedSection({ onNotify }) {
     try {
       await navigator.clipboard.writeText(link);
       onNotify?.({ type: "success", message: "Blog link copied." });
-    } catch (_err) {
+    } catch {
       onNotify?.({ type: "info", message: link });
     }
   };
@@ -110,12 +110,8 @@ export default function BlogFeedSection({ onNotify }) {
   return (
     <div className="grid gap-6">
       <section className="overflow-hidden rounded-[30px] border border-slate-200 bg-white shadow-sm">
-        <div className="border-b border-slate-200 bg-[linear-gradient(135deg,#14532d,#0f766e_45%,#0ea5e9)] px-6 py-6 text-white">
-          <p className="text-xs font-extrabold uppercase tracking-[0.28em] text-emerald-100">Travel Blogs</p>
-          <h3 className="mt-3 text-3xl font-bold leading-tight md:text-4xl">Turn useful travel experience into readable stories</h3>
-          <p className="mt-3 max-w-3xl text-sm leading-7 text-emerald-50/90">
-            Publish blogs with destination context, practical detail, and visual personality so other travelers actually learn from them.
-          </p>
+        <div className="border-b border-slate-200 bg-[linear-gradient(135deg,#14532d,#0f766e_45%,#0ea5e9)] px-6 py-5 text-white">
+          <h3 className="text-2xl font-bold">Travel Blogs</h3>
         </div>
 
         <form onSubmit={createBlog} className="grid gap-4 p-6">
@@ -125,8 +121,7 @@ export default function BlogFeedSection({ onNotify }) {
           </div>
           <input value={form.tags} onChange={(e) => setForm((c) => ({ ...c, tags: e.target.value }))} placeholder="Tags separated by comma" className="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3.5 outline-none" />
           <textarea value={form.content} onChange={(e) => setForm((c) => ({ ...c, content: e.target.value }))} rows={5} placeholder="Write your travel story..." className="rounded-[24px] border border-slate-200 bg-slate-50 px-4 py-3.5 outline-none" />
-          <div className="flex flex-wrap items-center justify-between gap-3">
-            <p className="text-sm text-slate-500">Tip: include one practical takeaway, one memorable moment, and one honest note.</p>
+          <div>
             <button type="submit" disabled={creating} className="rounded-full bg-emerald-500 px-5 py-3 text-sm font-semibold text-white hover:bg-emerald-600 disabled:opacity-60">
               {creating ? "Publishing..." : "Publish Blog"}
             </button>

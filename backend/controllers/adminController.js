@@ -4,6 +4,7 @@ const path = require("path");
 const User = require("../models/User");
 const Location = require("../models/Location");
 const Booking = require("../models/Booking");
+const Payment = require("../models/Payment");
 const Post = require("../models/Post");
 const Review = require("../models/Review");
 const { createNotification, notifyAdmins } = require("../utils/notificationService");
@@ -346,8 +347,13 @@ exports.deleteBooking = async (req, res) => {
     const { id } = req.params;
     if (!isValidObjectId(id)) return res.status(400).json({ message: "Invalid booking id" });
 
-    const deleted = await Booking.findByIdAndDelete(id);
-    if (!deleted) return res.status(404).json({ message: "Booking not found" });
+    const booking = await Booking.findById(id).select("paymentStatus bookingStatus amount");
+    if (!booking) return res.status(404).json({ message: "Booking not found" });
+    if (booking.paymentStatus === "paid") {
+      return res.status(400).json({ message: "Paid bookings cannot be deleted. Use a refund flow first." });
+    }
+
+    await Booking.findByIdAndDelete(id);
 
     res.json({ message: "Booking deleted successfully" });
   } catch (err) {
@@ -366,10 +372,19 @@ exports.updateBookingStatus = async (req, res) => {
     }
 
     const booking = await Booking.findById(id)
+      .populate("userId", "name email")
       .populate("locationId", "name")
       .populate("listingId", "title")
       .populate("tripPackageId", "title");
     if (!booking) return res.status(404).json({ message: "Booking not found" });
+    if (booking.bookingStatus === bookingStatus) {
+      return res.json({ message: "Booking status already up to date", booking });
+    }
+    if (booking.paymentStatus === "paid" && bookingStatus !== "confirmed") {
+      return res.status(400).json({
+        message: "Paid bookings cannot be cancelled or changed here. Handle refund/admin review first.",
+      });
+    }
 
     booking.bookingStatus = bookingStatus;
     if (bookingStatus === "cancelled") booking.cancelledAt = new Date();
@@ -400,6 +415,96 @@ exports.updateBookingStatus = async (req, res) => {
   } catch (err) {
     console.error(err);
     res.status(500).json({ message: "Failed to update booking status" });
+  }
+};
+
+exports.reviewRefundRequest = async (req, res) => {
+  try {
+    const { id } = req.params;
+    const action = String(req.body?.action || "").trim().toLowerCase();
+    const note = String(req.body?.note || "").trim();
+
+    if (!isValidObjectId(id)) return res.status(400).json({ message: "Invalid booking id" });
+    if (!["approve", "reject"].includes(action)) {
+      return res.status(400).json({ message: "Action must be approve or reject" });
+    }
+
+    const booking = await Booking.findById(id)
+      .populate("userId", "name email")
+      .populate("locationId", "name")
+      .populate("listingId", "title")
+      .populate("tripPackageId", "title");
+    if (!booking) return res.status(404).json({ message: "Booking not found" });
+    if (booking.refundRequestStatus !== "requested") {
+      return res.status(400).json({ message: "There is no pending refund request for this booking" });
+    }
+
+    const bookingName =
+      booking.tripPackageId?.title ||
+      booking.listingId?.title ||
+      booking.locationId?.name ||
+      "selected booking";
+
+    booking.refundDecisionNote = note;
+    booking.refundReviewedAt = new Date();
+
+    if (action === "approve") {
+      booking.refundRequestStatus = "approved";
+      booking.paymentStatus = "refunded";
+      booking.bookingStatus = "cancelled";
+      booking.cancelledAt = booking.cancelledAt || new Date();
+      booking.refundedAt = new Date();
+      booking.refundedAmount = Number(booking.amount || 0);
+
+      await Payment.updateMany(
+        { bookingId: booking._id, status: { $in: ["success", "initiated"] } },
+        {
+          $set: {
+            status: "refunded",
+            refundedAt: booking.refundedAt,
+            refundAmount: booking.refundedAmount,
+            refundReason: booking.refundReason || note,
+            verifiedAt: new Date(),
+          },
+        }
+      );
+
+      await createNotification({
+        recipient: booking.userId._id,
+        type: "refund_approved",
+        title: "Refund approved",
+        message: `Your refund request for ${bookingName} was approved.`,
+        meta: { bookingId: booking._id, refundedAmount: booking.refundedAmount },
+      });
+      await notifyAdmins({
+        type: "refund_approved",
+        title: "Refund approved",
+        message: `Admin ${req.user?.name || req.user?.email} approved a refund for ${bookingName}.`,
+        meta: { bookingId: booking._id, userId: booking.userId._id, refundedAmount: booking.refundedAmount },
+      });
+    } else {
+      booking.refundRequestStatus = "rejected";
+
+      await createNotification({
+        recipient: booking.userId._id,
+        type: "refund_rejected",
+        title: "Refund request rejected",
+        message: `Your refund request for ${bookingName} was rejected.`,
+        meta: { bookingId: booking._id, note },
+      });
+      await notifyAdmins({
+        type: "refund_rejected",
+        title: "Refund request rejected",
+        message: `Admin ${req.user?.name || req.user?.email} rejected a refund for ${bookingName}.`,
+        meta: { bookingId: booking._id, userId: booking.userId._id, note },
+      });
+    }
+
+    await booking.save();
+    res.json({ message: `Refund request ${action}d successfully`, booking });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ message: "Failed to review refund request" });
   }
 };
 

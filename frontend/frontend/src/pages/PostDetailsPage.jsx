@@ -26,7 +26,10 @@ export default function PostDetailsPage() {
   };
 
   useEffect(() => {
-    load();
+    const syncPost = async () => {
+      await load();
+    };
+    syncPost();
   }, [postId]);
 
   const submitComment = async (event) => {

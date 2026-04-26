@@ -7,6 +7,7 @@ const BuddyRequestSchema = new mongoose.Schema(
     travelPlanId: { type: mongoose.Schema.Types.ObjectId, ref: "TravelPlan", required: true, index: true },
     senderPlanId: { type: mongoose.Schema.Types.ObjectId, ref: "TravelPlan", default: null },
     receiverPlanId: { type: mongoose.Schema.Types.ObjectId, ref: "TravelPlan", default: null },
+    introMessage: { type: String, trim: true, maxlength: 500, default: "" },
     status: {
       type: String,
       enum: ["pending", "accepted", "rejected", "cancelled"],

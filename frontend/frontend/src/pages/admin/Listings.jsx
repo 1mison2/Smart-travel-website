@@ -19,12 +19,67 @@ const emptyForm = {
 
 export default function AdminListings() {
   const [listings, setListings] = useState([]);
+  const [locations, setLocations] = useState([]);
+  const [listingTotal, setListingTotal] = useState(0);
   const [form, setForm] = useState(emptyForm);
   const [photoFiles, setPhotoFiles] = useState([]);
   const [editingId, setEditingId] = useState("");
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
+  const [searchFilter, setSearchFilter] = useState("");
+  const [typeFilter, setTypeFilter] = useState("all");
+  const [cityFilter, setCityFilter] = useState("all");
+  const [startDateFilter, setStartDateFilter] = useState("");
+  const [endDateFilter, setEndDateFilter] = useState("");
+  const [appliedFilters, setAppliedFilters] = useState({
+    search: "",
+    type: "all",
+    city: "all",
+    startDate: "",
+    endDate: "",
+  });
+  const [hasAppliedFilters, setHasAppliedFilters] = useState(false);
+
+  const locationLookup = useMemo(() => {
+    const byId = new Map();
+    const byName = new Map();
+
+    (Array.isArray(locations) ? locations : []).forEach((location) => {
+      if (location?._id) {
+        byId.set(String(location._id), location);
+      }
+
+      const normalizedName = normalizeText(location?.name);
+      if (normalizedName && !byName.has(normalizedName)) {
+        byName.set(normalizedName, location);
+      }
+    });
+
+    return { byId, byName };
+  }, [locations]);
+
+  const filteredListings = useMemo(() => {
+    return listings.filter((listing) => {
+      const matchesSearch = listingMatchesSearch(listing, appliedFilters.search, locationLookup);
+      const matchesType = appliedFilters.type === "all" || listing.type === appliedFilters.type;
+      const matchesCity =
+        appliedFilters.city === "all" || listingMatchesDestinationHub(listing, appliedFilters.city, locationLookup);
+      const matchesDate = isWithinDateRange(listing.createdAt, appliedFilters.startDate, appliedFilters.endDate);
+      return matchesSearch && matchesType && matchesCity && matchesDate;
+    });
+  }, [listings, appliedFilters, locationLookup]);
+  const cityOptions = useMemo(
+    () =>
+      Array.from(
+        new Set(
+          listings
+            .map((listing) => getListingDestinationHubName(listing, locationLookup))
+            .filter(Boolean)
+        )
+      ).sort(),
+    [listings, locationLookup]
+  );
 
   const photoUrls = useMemo(() => {
     const items = String(form.photos || "")
@@ -53,8 +108,13 @@ export default function AdminListings() {
   const loadListings = async () => {
     try {
       setLoading(true);
-      const { data } = await api.get("/api/admin/listings?includeInactive=true");
-      setListings(Array.isArray(data?.listings) ? data.listings : []);
+      const [{ data: listingData }, { data: locationData }] = await Promise.all([
+        api.get("/api/admin/listings?includeInactive=true&limit=5000"),
+        api.get("/api/locations"),
+      ]);
+      setListings(Array.isArray(listingData?.listings) ? listingData.listings : []);
+      setListingTotal(Number(listingData?.total || 0));
+      setLocations(Array.isArray(locationData) ? locationData : []);
       setError("");
     } catch (err) {
       setError(err?.response?.data?.message || "Failed to load listings");
@@ -187,7 +247,12 @@ export default function AdminListings() {
     });
   };
 
-  const onDelete = async (id) => {
+  const onDelete = async (id, title) => {
+    const confirmed = window.confirm(
+      `Are you sure you want to delete "${title || "this listing"}"? This action cannot be undone.`
+    );
+    if (!confirmed) return;
+
     try {
       await api.delete(`/api/admin/listings/${id}`);
       setListings((prev) => prev.filter((item) => item._id !== id));
@@ -198,6 +263,33 @@ export default function AdminListings() {
     } catch (err) {
       setError(err?.response?.data?.message || "Failed to delete listing");
     }
+  };
+
+  const resetBrowseFilters = () => {
+    setSearchFilter("");
+    setCityFilter("all");
+    setTypeFilter("all");
+    setStartDateFilter("");
+    setEndDateFilter("");
+    setAppliedFilters({
+      search: "",
+      type: "all",
+      city: "all",
+      startDate: "",
+      endDate: "",
+    });
+    setHasAppliedFilters(false);
+  };
+
+  const applyFilters = () => {
+    setAppliedFilters({
+      search: searchFilter,
+      type: typeFilter,
+      city: cityFilter,
+      startDate: startDateFilter,
+      endDate: endDateFilter,
+    });
+    setHasAppliedFilters(true);
   };
 
   return (
@@ -301,43 +393,288 @@ export default function AdminListings() {
         <p className="admin-loading">Loading listings...</p>
       ) : (
         <div className="admin-card admin-table-wrap">
-          <table className="admin-table">
-            <thead>
-              <tr>
-                <th>Type</th>
-                <th>Title</th>
-                <th>City</th>
-                <th>Price</th>
-                <th>Capacity</th>
-                <th>Rating</th>
-                <th>Actions</th>
-              </tr>
-            </thead>
-            <tbody>
-              {listings.map((listing) => (
-                <tr key={listing._id}>
-                  <td>{listing.type}</td>
-                  <td>{listing.title}</td>
-                  <td>{listing.location?.name || "-"}</td>
-                  <td>NPR {listing.pricePerUnit}</td>
-                  <td>{listing.capacity || 1}</td>
-                  <td>{listing.rating || 0}</td>
-                  <td>
-                    <div className="admin-actions">
-                      <button type="button" onClick={() => onEdit(listing)} className="admin-btn admin-btn--primary">
-                        Edit
-                      </button>
-                      <button type="button" onClick={() => onDelete(listing._id)} className="admin-btn admin-btn--danger">
-                        Delete
-                      </button>
-                    </div>
-                  </td>
+          <div className="admin-filter-panel">
+            <div className="admin-filter-panel__head">
+              <div>
+                <p className="admin-filter-panel__eyebrow">Browse listings</p>
+                <h3>Filter the inventory table</h3>
+              </div>
+              <div className="admin-filter-panel__meta">
+                <span>{hasAppliedFilters ? `${filteredListings.length} shown` : "0 shown"}</span>
+                <span>{listingTotal || listings.length} total</span>
+              </div>
+            </div>
+
+            <div className="admin-table-filters">
+              <label className="admin-filter-field">
+                <span>Search</span>
+                <input
+                  className="admin-input"
+                  value={searchFilter}
+                  onChange={(e) => setSearchFilter(e.target.value)}
+                  placeholder="Title, place, address, amenity"
+                />
+              </label>
+
+              <label className="admin-filter-field">
+                <span>Destination hub</span>
+                <select className="admin-input" value={cityFilter} onChange={(e) => setCityFilter(e.target.value)}>
+                  <option value="all">All destination hubs</option>
+                  {cityOptions.map((city) => (
+                    <option key={city} value={city}>
+                      {city}
+                    </option>
+                  ))}
+                </select>
+              </label>
+
+              <label className="admin-filter-field">
+                <span>Listing type</span>
+                <select className="admin-input" value={typeFilter} onChange={(e) => setTypeFilter(e.target.value)}>
+                  <option value="all">All types</option>
+                  <option value="hotel">Hotel</option>
+                  <option value="activity">Activity</option>
+                  <option value="cafe">Cafe</option>
+                  <option value="restaurant">Restaurant</option>
+                </select>
+              </label>
+
+              <label className="admin-filter-field">
+                <span>Created from</span>
+                <input className="admin-input" type="date" value={startDateFilter} onChange={(e) => setStartDateFilter(e.target.value)} />
+              </label>
+
+              <label className="admin-filter-field">
+                <span>Created to</span>
+                <input className="admin-input" type="date" value={endDateFilter} min={startDateFilter || undefined} onChange={(e) => setEndDateFilter(e.target.value)} />
+              </label>
+            </div>
+
+            <div className="admin-filter-panel__actions">
+              <button
+                type="button"
+                className="admin-btn admin-btn--primary"
+                onClick={applyFilters}
+              >
+                Apply filters
+              </button>
+              <button
+                type="button"
+                className="admin-btn admin-btn--muted"
+                onClick={resetBrowseFilters}
+                disabled={!searchFilter && cityFilter === "all" && typeFilter === "all" && !startDateFilter && !endDateFilter}
+              >
+                Reset filters
+              </button>
+            </div>
+          </div>
+
+          {!hasAppliedFilters ? (
+            <p className="admin-empty">Apply filters to view listing details.</p>
+          ) : (
+            <table className="admin-table">
+              <thead>
+                <tr>
+                  <th>Type</th>
+                  <th>Title</th>
+                  <th>City</th>
+                  <th>Price</th>
+                  <th>Capacity</th>
+                  <th>Rating</th>
+                  <th>Actions</th>
                 </tr>
-              ))}
-            </tbody>
-          </table>
+              </thead>
+              <tbody>
+                {filteredListings.map((listing) => (
+                  <tr key={listing._id}>
+                    <td>{listing.type}</td>
+                    <td>{listing.title}</td>
+                    <td>{listing.location?.name || "-"}</td>
+                    <td>NPR {listing.pricePerUnit}</td>
+                    <td>{listing.capacity || 1}</td>
+                    <td>{listing.rating || 0}</td>
+                    <td>
+                      <div className="admin-actions">
+                        <button type="button" onClick={() => onEdit(listing)} className="admin-btn admin-btn--primary">
+                          Edit
+                        </button>
+                        <button type="button" onClick={() => onDelete(listing._id, listing.title)} className="admin-btn admin-btn--danger">
+                          Delete
+                        </button>
+                      </div>
+                    </td>
+                  </tr>
+                ))}
+                {filteredListings.length === 0 && (
+                  <tr>
+                    <td colSpan="7">No listings match the applied filters.</td>
+                  </tr>
+                )}
+              </tbody>
+            </table>
+          )}
         </div>
       )}
+
+      <style>{`
+        .admin-filter-panel {
+          margin-bottom: 16px;
+          padding: 18px;
+          border-radius: 20px;
+          background: linear-gradient(135deg, rgba(255,255,255,0.96), rgba(248,250,252,0.92));
+          border: 1px solid rgba(148, 163, 184, 0.18);
+          box-shadow: inset 0 1px 0 rgba(255,255,255,0.8);
+        }
+        .admin-filter-panel__head {
+          display: flex;
+          justify-content: space-between;
+          align-items: flex-start;
+          gap: 12px;
+          margin-bottom: 14px;
+          flex-wrap: wrap;
+        }
+        .admin-filter-panel__eyebrow {
+          margin: 0 0 4px;
+          color: #f97316;
+          font-size: 0.74rem;
+          font-weight: 800;
+          letter-spacing: 0.14em;
+          text-transform: uppercase;
+        }
+        .admin-filter-panel__head h3 {
+          margin: 0;
+          color: #0f172a;
+          font-size: 1.15rem;
+        }
+        .admin-filter-panel__meta {
+          display: flex;
+          gap: 8px;
+          flex-wrap: wrap;
+        }
+        .admin-filter-panel__meta span {
+          padding: 8px 12px;
+          border-radius: 999px;
+          background: rgba(255,255,255,0.86);
+          border: 1px solid rgba(148, 163, 184, 0.18);
+          color: #475569;
+          font-size: 0.8rem;
+          font-weight: 700;
+        }
+        .admin-table-filters {
+          display: grid;
+          grid-template-columns: repeat(5, minmax(180px, 1fr));
+          gap: 12px;
+        }
+        .admin-filter-field {
+          display: grid;
+          gap: 8px;
+        }
+        .admin-filter-field span {
+          color: #475569;
+          font-size: 0.8rem;
+          font-weight: 700;
+        }
+        .admin-filter-panel__actions {
+          display: flex;
+          justify-content: flex-end;
+          margin-top: 14px;
+        }
+        @media (max-width: 720px) {
+          .admin-filter-panel {
+            padding: 16px;
+          }
+          .admin-table-filters {
+            grid-template-columns: 1fr;
+          }
+          .admin-filter-panel__actions {
+            justify-content: stretch;
+          }
+        }
+      `}</style>
     </section>
   );
+}
+
+function isWithinDateRange(value, filterStart, filterEnd) {
+  if (!filterStart && !filterEnd) return true;
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return false;
+
+  if (filterStart) {
+    const start = new Date(filterStart);
+    start.setHours(0, 0, 0, 0);
+    if (date < start) return false;
+  }
+
+  if (filterEnd) {
+    const end = new Date(filterEnd);
+    end.setHours(23, 59, 59, 999);
+    if (date > end) return false;
+  }
+
+  return true;
+}
+
+function normalizeText(value) {
+  return String(value || "").trim().toLowerCase();
+}
+
+function getListingDestinationHubName(listing, locationLookup) {
+  const locationName = normalizeText(listing?.location?.name);
+  if (!locationName) return "";
+
+  const matchedLocation = locationLookup?.byName?.get(locationName);
+  if (!matchedLocation) {
+    return String(listing?.location?.name || "").trim();
+  }
+
+  let current = matchedLocation;
+  const visited = new Set();
+
+  while (current?.parentLocationId) {
+    const parentId =
+      typeof current.parentLocationId === "object" ? current.parentLocationId?._id : current.parentLocationId;
+    const normalizedParentId = String(parentId || "");
+
+    if (!normalizedParentId || visited.has(normalizedParentId)) break;
+    visited.add(normalizedParentId);
+
+    const nextLocation =
+      typeof current.parentLocationId === "object" && current.parentLocationId?.name
+        ? current.parentLocationId
+        : locationLookup?.byId?.get(normalizedParentId);
+
+    if (!nextLocation) break;
+    current = nextLocation;
+  }
+
+  return String(current?.name || matchedLocation?.name || listing?.location?.name || "").trim();
+}
+
+function listingMatchesDestinationHub(listing, hubName, locationLookup) {
+  const normalizedHubName = normalizeText(hubName);
+  if (!normalizedHubName) return true;
+
+  return normalizeText(getListingDestinationHubName(listing, locationLookup)) === normalizedHubName;
+}
+
+function listingMatchesSearch(listing, searchText, locationLookup) {
+  const normalizedSearch = normalizeText(searchText);
+  if (!normalizedSearch) return true;
+
+  const haystack = [
+    listing?.title,
+    listing?.type,
+    listing?.location?.name,
+    listing?.location?.address,
+    listing?.location?.district,
+    listing?.location?.province,
+    getListingDestinationHubName(listing, locationLookup),
+    ...(Array.isArray(listing?.amenities) ? listing.amenities : []),
+  ]
+    .filter(Boolean)
+    .join(" ")
+    .toLowerCase();
+
+  return haystack.includes(normalizedSearch);
 }

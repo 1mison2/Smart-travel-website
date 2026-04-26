@@ -1,14 +1,19 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
-import { Link, useParams } from "react-router-dom";
+import { Link, useNavigate, useParams } from "react-router-dom";
 import DestinationReviewPanel from "../components/DestinationReviewPanel";
 import api, { resolveImageUrl } from "../utils/api";
+import { useAuth } from "../context/AuthContext";
 
 export default function LocationDetails() {
   const { id } = useParams();
+  const navigate = useNavigate();
+  const { user } = useAuth();
   const [location, setLocation] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [previewImage, setPreviewImage] = useState("");
+  const [isSaved, setIsSaved] = useState(false);
+  const [saveLoading, setSaveLoading] = useState(false);
 
   const [activities, setActivities] = useState([]);
   const [cafes, setCafes] = useState([]);
@@ -114,10 +119,10 @@ export default function LocationDetails() {
             fetchNearbyByType({ lat: current.latitude, lng: current.longitude, type: "lodging", limit: 6, radius: nearbyRadius }),
           ]);
           if (!active) return;
-          setActivities(activityPlaces);
-          setCafes(cafePlaces);
-          setRestaurants(restaurantPlaces);
-          setHotels(hotelPlaces);
+          setActivities(filterNearbyPlaces(activityPlaces, current, { excludeHubLike: true }));
+          setCafes(filterNearbyPlaces(cafePlaces, current));
+          setRestaurants(filterNearbyPlaces(restaurantPlaces, current));
+          setHotels(filterNearbyPlaces(hotelPlaces, current));
 
           const routePlaces = await fetchNearbyByType({
             lat: current.latitude,
@@ -142,6 +147,61 @@ export default function LocationDetails() {
       active = false;
     };
   }, [id]);
+
+  useEffect(() => {
+    let active = true;
+
+    const loadSavedState = async () => {
+      if (!user?._id || !id) {
+        setIsSaved(false);
+        return;
+      }
+
+      try {
+        const { data } = await api.get("/api/locations/saved/me");
+        if (!active) return;
+        const savedIds = new Set(
+          (Array.isArray(data?.savedLocations) ? data.savedLocations : [])
+            .map((item) => String(item?._id || item))
+            .filter(Boolean)
+        );
+        setIsSaved(savedIds.has(String(id)));
+      } catch {
+        if (active) setIsSaved(false);
+      }
+    };
+
+    loadSavedState();
+    return () => {
+      active = false;
+    };
+  }, [id, user?._id]);
+
+  const handleToggleSave = async () => {
+    if (!location?._id) return;
+    if (!user?._id) {
+      navigate("/login");
+      return;
+    }
+
+    try {
+      setSaveLoading(true);
+      if (isSaved) {
+        await api.delete(`/api/locations/${location._id}/save`);
+        setIsSaved(false);
+      } else {
+        await api.post(`/api/locations/${location._id}/save`);
+        setIsSaved(true);
+      }
+    } catch (err) {
+      setError(
+        err?.response?.data?.message ||
+          `Failed to ${isSaved ? "remove" : "save"} this destination`
+      );
+    } finally {
+      setSaveLoading(false);
+    }
+  };
 
   const handleToggleStayEat = () => {
     setShowAllStayEat((prev) => {
@@ -244,6 +304,14 @@ export default function LocationDetails() {
               <Link to={`/itinerary-planner?locationId=${location._id}`} className="travel-btn travel-btn-primary">
                 AI Trip Planner
               </Link>
+              <button
+                type="button"
+                className="travel-btn travel-btn-soft"
+                onClick={handleToggleSave}
+                disabled={saveLoading}
+              >
+                {saveLoading ? "Saving..." : isSaved ? "Saved destination" : "Save destination"}
+              </button>
               <button
                 type="button"
                 className="travel-btn travel-btn-soft"
@@ -522,12 +590,13 @@ function PlaceCard({ item }) {
           <p>{item.address || "Address unavailable"}</p>
         </div>
         <div className="hub-place__meta">
+          <span>Nearby place</span>
           <span>Rating {item.rating || 0}</span>
           <span>{item.distanceKm ?? "-"} km away</span>
         </div>
         {item.mapUri && (
-          <a href={item.mapUri} target="_blank" rel="noreferrer" className="hub-link">
-            Open in Maps
+          <a href={item.mapUri} target="_blank" rel="noreferrer" className="travel-btn travel-btn-soft hub-place__link">
+            View on map
           </a>
         )}
       </div>
@@ -679,6 +748,15 @@ function filterHikingRoutes(places, current) {
     .filter((place) => !isSameLocation(current, place))
     .filter((place) => !isHubLikePlace(place, current))
     .filter((place) => isHikingLikePlace(place));
+}
+
+function filterNearbyPlaces(places, current, options = {}) {
+  const { excludeHubLike = false } = options;
+  return (Array.isArray(places) ? places : []).filter((place) => {
+    if (isSameLocation(current, place)) return false;
+    if (excludeHubLike && isHubLikePlace(place, current)) return false;
+    return true;
+  });
 }
 
 function buildRecommendations({ allLocations, current, isHubLocation }) {

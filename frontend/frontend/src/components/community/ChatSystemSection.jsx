@@ -5,6 +5,8 @@ import { createSocketConnection } from "../../utils/socketClient";
 import { useAuth } from "../../context/AuthContext";
 import SectionSkeleton from "./SectionSkeleton";
 
+const CHAT_POLL_MS = 6000;
+
 export default function ChatSystemSection({ onNotify }) {
   const { user } = useAuth();
   const [rooms, setRooms] = useState([]);
@@ -23,7 +25,7 @@ export default function ChatSystemSection({ onNotify }) {
       const nextRooms = data?.chatRooms || [];
       setRooms(nextRooms);
       if (!activeRoomId && nextRooms[0]?._id) setActiveRoomId(nextRooms[0]._id);
-    } catch (_err) {
+    } catch {
       onNotify?.({ type: "error", message: "Failed to load chat rooms." });
     } finally {
       setLoading(false);
@@ -35,7 +37,7 @@ export default function ChatSystemSection({ onNotify }) {
     try {
       const { data } = await api.get(`/api/chat/${roomId}`);
       setMessages(data?.messages || []);
-    } catch (_err) {
+    } catch {
       onNotify?.({ type: "error", message: "Failed to load chat messages." });
     }
   };
@@ -43,6 +45,29 @@ export default function ChatSystemSection({ onNotify }) {
   useEffect(() => {
     loadRooms();
   }, []);
+
+  useEffect(() => {
+    const intervalId = window.setInterval(() => {
+      loadRooms();
+      if (activeRoomId) {
+        loadMessages(activeRoomId);
+      }
+    }, CHAT_POLL_MS);
+
+    const onFocus = () => {
+      loadRooms();
+      if (activeRoomId) {
+        loadMessages(activeRoomId);
+      }
+    };
+
+    window.addEventListener("focus", onFocus);
+
+    return () => {
+      window.clearInterval(intervalId);
+      window.removeEventListener("focus", onFocus);
+    };
+  }, [activeRoomId]);
 
   useEffect(() => {
     loadMessages(activeRoomId);
@@ -62,10 +87,13 @@ export default function ChatSystemSection({ onNotify }) {
         socketRef.current = socket;
         socket.on("chat:room-message", (message) => {
           if (String(message.chatRoomId) === String(activeRoomId)) {
-            setMessages((current) => [...current, message]);
+            setMessages((current) => {
+              if (current.some((item) => String(item._id) === String(message._id))) return current;
+              return [...current, message];
+            });
           }
         });
-      } catch (_err) {
+      } catch {
         // REST fallback remains available
       }
     };
@@ -90,7 +118,7 @@ export default function ChatSystemSection({ onNotify }) {
       setDraft("");
       await api.post("/api/chat/message", { chatRoomId: activeRoomId, message: trimmed });
       await loadMessages(activeRoomId);
-    } catch (_err) {
+    } catch {
       onNotify?.({ type: "error", message: "Failed to send message." });
     } finally {
       setSending(false);
@@ -103,9 +131,7 @@ export default function ChatSystemSection({ onNotify }) {
     <div className="grid gap-6 xl:grid-cols-[320px,1fr]">
       <section className="overflow-hidden rounded-[30px] border border-slate-200 bg-white shadow-sm">
         <div className="border-b border-slate-200 bg-[linear-gradient(135deg,#0f172a,#0f3f66_55%,#0ea5e9)] px-5 py-5 text-white">
-          <p className="text-xs font-extrabold uppercase tracking-[0.28em] text-sky-100">Messages / Chat</p>
-          <h3 className="mt-3 text-2xl font-bold leading-tight">Accepted buddy conversations</h3>
-          <p className="mt-2 text-sm leading-7 text-sky-50/85">Private rooms open only after both travelers agree.</p>
+          <h3 className="text-2xl font-bold leading-tight">Messages</h3>
         </div>
         <div className="grid gap-3 p-4">
           {rooms.map((room) => {
@@ -140,7 +166,6 @@ export default function ChatSystemSection({ onNotify }) {
             </div>
             <div>
               <h4 className="text-lg font-bold text-slate-900">Private chat room</h4>
-              <p className="text-sm text-slate-500">Real-time planning for accepted buddy requests.</p>
             </div>
           </div>
         </div>

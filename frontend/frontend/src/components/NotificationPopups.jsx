@@ -72,14 +72,6 @@ export default function NotificationPopups() {
   };
 
   useEffect(() => {
-    setPopups([]);
-    initializedRef.current = false;
-    seenIdsRef.current = new Set();
-    dismissTimersRef.current.forEach((timer) => clearTimeout(timer));
-    dismissTimersRef.current.clear();
-  }, [user?._id]);
-
-  useEffect(() => {
     if (!user?._id) return undefined;
 
     let active = true;
@@ -126,12 +118,15 @@ export default function NotificationPopups() {
     return () => {
       active = false;
       clearInterval(intervalId);
-      dismissTimersRef.current.forEach((timer) => clearTimeout(timer));
-      dismissTimersRef.current.clear();
+      const timers = dismissTimersRef.current;
+      timers.forEach((timer) => clearTimeout(timer));
+      timers.clear();
     };
   }, [user?._id]);
 
   if (!user || popups.length === 0) return null;
+
+  const notificationTarget = user?.role === "admin" ? "/admin/notifications" : "/notifications";
 
   return (
     <div className="notif-popups" aria-live="polite" aria-label="Live notifications">
@@ -139,11 +134,11 @@ export default function NotificationPopups() {
         <article
           key={popup.id}
           className="notif-toast"
-          onClick={() => navigate("/notifications")}
+          onClick={() => navigate(notificationTarget)}
           role="button"
           tabIndex={0}
           onKeyDown={(e) => {
-            if (e.key === "Enter" || e.key === " ") navigate("/notifications");
+            if (e.key === "Enter" || e.key === " ") navigate(notificationTarget);
           }}
         >
           <div className="notif-toast__head">

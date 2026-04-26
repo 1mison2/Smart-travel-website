@@ -1,5 +1,5 @@
-import React from "react";
-import { Routes, Route, Navigate } from "react-router-dom";
+import React, { useEffect } from "react";
+import { Routes, Route, Navigate, useLocation } from "react-router-dom";
 import Home from "./pages/Home";
 import Signup from "./pages/Signup";
 import Login from "./pages/Login";
@@ -21,6 +21,7 @@ import BuddyFinder from "./pages/BuddyFinder";
 import PlaceDetails from "./pages/PlaceDetails";
 import BookingCheckout from "./pages/BookingCheckout";
 import TripPackages from "./pages/TripPackages";
+import TripPackageDetails from "./pages/TripPackageDetails";
 import Profile from "./pages/Profile";
 import Settings from "./pages/Settings";
 import CreateTripPlan from "./pages/CreateTripPlan";
@@ -44,43 +45,113 @@ import AdminTripPackages from "./pages/admin/TripPackages";
 import AdminNotifications from "./pages/admin/Notifications";
 import NotificationPopups from "./components/NotificationPopups";
 import GlobalHeader from "./components/GlobalHeader";
+import GlobalFooter from "./components/GlobalFooter";
 import { useAuth } from "./context/AuthContext";
+import { getAuthRedirect, setAuthRedirect } from "./utils/authRedirect";
+
+function RouteLoadingScreen() {
+  return (
+    <div style={{
+      minHeight: "100vh",
+      display: "grid",
+      placeItems: "center",
+      background: "linear-gradient(180deg, #edf6ff 0%, #f8fafc 100%)",
+      color: "#334155",
+      padding: "24px",
+    }}>
+      <div style={{
+        display: "grid",
+        gap: "12px",
+        justifyItems: "center",
+        textAlign: "center",
+      }}>
+        <div style={{
+          width: "44px",
+          height: "44px",
+          borderRadius: "999px",
+          border: "4px solid rgba(14,165,233,0.18)",
+          borderTopColor: "#0ea5e9",
+          animation: "st-spin 0.8s linear infinite",
+        }} />
+        <strong>Loading your travel space...</strong>
+      </div>
+      <style>{`
+        @keyframes st-spin {
+          to { transform: rotate(360deg); }
+        }
+      `}</style>
+    </div>
+  );
+}
 
 function Protected({ children }) {
+  const location = useLocation();
   const { user, token, ready } = useAuth();
-  if (!ready) return null;
-  return user && token ? children : <Navigate to="/login" replace />;
+  if (!ready) return <RouteLoadingScreen />;
+  if (user && token) return children;
+  const from = `${location.pathname}${location.search}${location.hash}`;
+  setAuthRedirect(from);
+  return <Navigate to="/login" replace state={{ from }} />;
 }
 
 function UserOnly({ children }) {
+  const location = useLocation();
   const { user, token, ready } = useAuth();
-  if (!ready) return null;
-  if (!user || !token) return <Navigate to="/login" replace />;
+  if (!ready) return <RouteLoadingScreen />;
+  if (!user || !token) {
+    const from = `${location.pathname}${location.search}${location.hash}`;
+    setAuthRedirect(from);
+    return <Navigate to="/login" replace state={{ from }} />;
+  }
   if (user.role === "admin") return <Navigate to="/admin" replace />;
   return children;
 }
 
 function PublicOnly({ children }) {
+  const location = useLocation();
   const { user, ready } = useAuth();
-  if (!ready) return null;
-  return !user ? children : <Navigate to={user?.role === "admin" ? "/admin" : "/dashboard"} replace />;
+  if (!ready) return <RouteLoadingScreen />;
+  const from = location.state?.from || getAuthRedirect();
+  const redirectTo = typeof from === "string" && from.startsWith("/") ? from : "/dashboard";
+  return !user ? children : <Navigate to={user?.role === "admin" ? "/admin" : redirectTo} replace />;
 }
 
 function AdminOnly({ children }) {
   const { user, ready } = useAuth();
-  if (!ready) return null;
+  if (!ready) return <RouteLoadingScreen />;
   if (!user) return <Navigate to="/login" replace />;
   if (user.role !== "admin") return <Navigate to="/dashboard" replace />;
   return children;
 }
 
+function LandingRoute() {
+  const { user, ready } = useAuth();
+  if (!ready) return <RouteLoadingScreen />;
+  if (user?.role === "admin") return <Navigate to="/admin" replace />;
+  if (user) return <Navigate to="/dashboard" replace />;
+  return <Home />;
+}
+
+function ScrollToTop() {
+  const { pathname } = useLocation();
+
+  useEffect(() => {
+    window.scrollTo(0, 0);
+  }, [pathname]);
+
+  return null;
+}
+
 export default function App() {
+  const { user } = useAuth();
+
   return (
     <>
+      <ScrollToTop />
       <GlobalHeader />
-      <NotificationPopups />
+      <NotificationPopups key={user?._id || "guest"} />
       <Routes>
-        <Route path="/" element={<Home />} />
+        <Route path="/" element={<LandingRoute />} />
         <Route path="/signup" element={<PublicOnly><Signup /></PublicOnly>} />
         <Route path="/login" element={<PublicOnly><Login /></PublicOnly>} />
         <Route path="/forgot-password" element={<PublicOnly><ForgotPassword /></PublicOnly>} />
@@ -112,6 +183,7 @@ export default function App() {
         <Route path="/community/posts/:postId" element={<UserOnly><PostDetailsPage /></UserOnly>} />
         <Route path="/community/saved" element={<UserOnly><SavedPostsPage /></UserOnly>} />
         <Route path="/trip-packages" element={<UserOnly><TripPackages /></UserOnly>} />
+        <Route path="/trip-packages/:id" element={<UserOnly><TripPackageDetails /></UserOnly>} />
         <Route
           path="/admin"
           element={
@@ -131,6 +203,7 @@ export default function App() {
           <Route path="trip-packages" element={<AdminTripPackages />} />
         </Route>
       </Routes>
+      <GlobalFooter />
     </>
   );
 }

@@ -281,6 +281,49 @@ const sendWelcomeEmail = async ({ email, customerName }) => {
   });
 };
 
+const sendAuthCodeEmail = async ({
+  email,
+  customerName,
+  code,
+  purpose = "signup",
+}) => {
+  const safeCustomerName = customerName || "Traveler";
+  const heading = purpose === "login" ? "Your Login Verification Code" : "Verify Your Smart Travel Account";
+  const subject = purpose === "login" ? "Login verification code - Smart Travel" : "Verify your email - Smart Travel";
+  const intro =
+    purpose === "login"
+      ? `Hello ${safeCustomerName}, use this code to finish signing in to Smart Travel.`
+      : `Hello ${safeCustomerName}, use this code to verify your Smart Travel account and finish signing up.`;
+
+  return sendMailWithTemplate({
+    to: email,
+    subject,
+    text:
+      `${intro}\n\n` +
+      `Your verification code is: ${code}\n\n` +
+      "This code expires in 10 minutes. If you did not request this, you can ignore this email.",
+    html: `
+      <div style="max-width: 620px; margin: 0 auto; padding: 24px; font-family: Arial, sans-serif; color: #1f2937;">
+        <div style="background: #0f766e; color: #ffffff; padding: 24px; border-radius: 16px 16px 0 0;">
+          <h1 style="margin: 0; font-size: 28px;">${heading}</h1>
+          <p style="margin: 8px 0 0;">This code keeps your account secure.</p>
+        </div>
+        <div style="border: 1px solid #d1d5db; border-top: 0; border-radius: 0 0 16px 16px; padding: 24px; background: #ffffff;">
+          <p style="margin-top: 0; line-height: 1.6;">${intro}</p>
+          <div style="margin: 24px 0; text-align: center;">
+            <div style="display: inline-block; padding: 18px 24px; border-radius: 14px; border: 1px dashed #94a3b8; background: #f8fafc;">
+              <span style="font-size: 32px; letter-spacing: 0.32em; font-weight: 800; color: #0f172a;">${code}</span>
+            </div>
+          </div>
+          <p style="margin-bottom: 0; line-height: 1.6; color: #475569;">
+            This code expires in 10 minutes. If you did not request this, you can ignore this email.
+          </p>
+        </div>
+      </div>
+    `,
+  });
+};
+
 const sendBookingCreatedEmail = async ({
   email,
   customerName,
@@ -619,6 +662,7 @@ const sendPaymentSuccessEmail = async ({
 
 module.exports = {
   canSendEmail,
+  sendAuthCodeEmail,
   sendAnnouncementEmail,
   sendBookingCancelledEmail,
   sendBookingCreatedEmail,

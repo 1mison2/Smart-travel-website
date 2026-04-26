@@ -364,3 +364,59 @@ exports.cancelBooking = async (req, res) => {
     res.status(500).json({ message: "Failed to cancel booking" });
   }
 };
+
+exports.requestRefund = async (req, res) => {
+  try {
+    const { id } = req.params;
+    const reason = String(req.body?.reason || "").trim();
+    if (!isValidObjectId(id)) return res.status(400).json({ message: "Invalid booking id" });
+
+    const booking = await Booking.findById(id)
+      .populate("locationId", "name")
+      .populate("listingId", "title")
+      .populate("tripPackageId", "title");
+    if (!booking) return res.status(404).json({ message: "Booking not found" });
+    if (!canAccessBooking(booking, req.user)) return res.status(403).json({ message: "Forbidden" });
+    if (booking.paymentStatus !== "paid") {
+      return res.status(400).json({ message: "Only paid bookings can request a refund" });
+    }
+    if (booking.paymentStatus === "refunded" || booking.refundRequestStatus === "approved") {
+      return res.status(400).json({ message: "This booking has already been refunded" });
+    }
+    if (booking.refundRequestStatus === "requested") {
+      return res.status(400).json({ message: "A refund request is already pending review" });
+    }
+
+    booking.refundRequestStatus = "requested";
+    booking.refundReason = reason;
+    booking.refundDecisionNote = "";
+    booking.refundRequestedAt = new Date();
+    booking.refundReviewedAt = undefined;
+    await booking.save();
+
+    const bookingName =
+      booking.tripPackageId?.title ||
+      booking.listingId?.title ||
+      booking.locationId?.name ||
+      "selected booking";
+
+    await createNotification({
+      recipient: booking.userId,
+      type: "refund_requested",
+      title: "Refund request submitted",
+      message: `Your refund request for ${bookingName} was sent for admin review.`,
+      meta: { bookingId: booking._id, refundRequestStatus: booking.refundRequestStatus },
+    });
+    await notifyAdmins({
+      type: "refund_requested",
+      title: "Refund request received",
+      message: `${req.user.name || req.user.email} requested a refund for ${bookingName}.`,
+      meta: { bookingId: booking._id, userId: req.user._id, reason },
+    });
+
+    res.json({ message: "Refund request submitted successfully", booking });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ message: "Failed to submit refund request" });
+  }
+};

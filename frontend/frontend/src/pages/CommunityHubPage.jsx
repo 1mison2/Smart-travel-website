@@ -1,4 +1,5 @@
 import React, { useEffect, useRef, useState } from "react";
+import { useLocation } from "react-router-dom";
 import { BookOpenText, Compass, MessageSquareText, ScrollText, Star, Users } from "lucide-react";
 import BuddyFinderSection from "../components/community/BuddyFinderSection";
 import TravelerNetworkSection from "../components/community/TravelerNetworkSection";
@@ -17,12 +18,39 @@ const tabs = [
   { key: "chat", label: "Messages / Chat", icon: MessageSquareText, description: "Accepted chats" },
 ];
 
+const DEFAULT_TAB_BY_PATH = {
+  "/buddy-finder": "buddies",
+  "/community": "trips",
+};
+
+const HASH_TAB_MAP = {
+  "#finder": "buddies",
+  "#community": "trips",
+  "#travelers": "travelers",
+  "#trips": "trips",
+  "#blogs": "blogs",
+  "#reviews": "reviews",
+  "#chat": "chat",
+};
+
+function resolveActiveTab(pathname, hash) {
+  const hashTab = HASH_TAB_MAP[hash];
+  if (hashTab) return hashTab;
+  return DEFAULT_TAB_BY_PATH[pathname] || "travelers";
+}
+
 export default function CommunityHubPage() {
-  const [activeTab, setActiveTab] = useState("travelers");
+  const location = useLocation();
+  const [activeTab, setActiveTab] = useState(() => resolveActiveTab(location.pathname, location.hash));
   const [toast, setToast] = useState(null);
   const toastTimerRef = useRef(null);
+  const activeTabMeta = tabs.find((tab) => tab.key === activeTab) || tabs[0];
 
   useEffect(() => () => window.clearTimeout(toastTimerRef.current), []);
+
+  useEffect(() => {
+    setActiveTab(resolveActiveTab(location.pathname, location.hash));
+  }, [location.pathname, location.hash]);
 
   const notify = (payload) => {
     setToast(payload);
@@ -39,13 +67,17 @@ export default function CommunityHubPage() {
 
         <section className="community-hub-page__hero">
           <div className="community-hub-page__hero-main">
-            <h1>Travel Buddy Finder and Travel Community Hub</h1>
-            <p>Find travelers, share trips, and chat in one place.</p>
+            <p className="community-hub-page__hero-kicker">{location.pathname === "/community" ? "Community" : "Travel Buddy"}</p>
+            <h1>{activeTabMeta.label}</h1>
           </div>
         </section>
 
         <section className="community-hub-page__workspace">
           <aside className="community-hub-page__sidebar">
+            <div className="community-hub-page__sidebar-head">
+              <p>Sections</p>
+              <h3>Choose a section.</h3>
+            </div>
             <div className="community-hub-page__tab-list">
               {tabs.map((tab) => (
                 <button
@@ -114,34 +146,37 @@ export default function CommunityHubPage() {
         }
 
         .community-hub-page__hero {
-          display: grid;
-          grid-template-columns: 1fr;
-          gap: 22px;
+          display: block;
           margin-top: 20px;
-          padding: 28px;
-          border-radius: 34px;
+          padding: 20px 24px;
+          border-radius: 28px;
           border: 1px solid rgba(255,255,255,0.6);
           background:
             linear-gradient(135deg, rgba(8,47,73,0.98), rgba(14,165,233,0.92) 68%, rgba(34,197,94,0.88)),
             #0f172a;
-          box-shadow: 0 28px 80px rgba(15, 23, 42, 0.16);
+          box-shadow: 0 20px 60px rgba(15, 23, 42, 0.14);
           color: #fff;
         }
 
         .community-hub-page__hero h1 {
           margin: 0;
           max-width: 18ch;
-          font-size: clamp(2.4rem, 4vw, 4.6rem);
-          line-height: 0.98;
+          font-size: clamp(2rem, 3.4vw, 3rem);
+          line-height: 1.05;
           color: #fff;
         }
 
-        .community-hub-page__hero p {
-          margin: 16px 0 0;
-          max-width: 48rem;
-          color: rgba(240,249,255,0.92);
-          font-size: 1rem;
-          line-height: 1.8;
+        .community-hub-page__hero-kicker,
+        .community-hub-page__sidebar-head p {
+          margin: 0 0 8px;
+          font-size: 0.74rem;
+          font-weight: 700;
+          letter-spacing: 0.16em;
+          text-transform: uppercase;
+        }
+
+        .community-hub-page__sidebar-head h3 {
+          margin: 0;
         }
 
         .community-hub-page__workspace {
@@ -161,6 +196,19 @@ export default function CommunityHubPage() {
           background: rgba(255,255,255,0.9);
           box-shadow: 0 20px 55px rgba(15, 23, 42, 0.06);
           backdrop-filter: blur(18px);
+        }
+
+        .community-hub-page__sidebar-head {
+          margin-bottom: 16px;
+        }
+
+        .community-hub-page__sidebar-head p {
+          color: #64748b;
+        }
+
+        .community-hub-page__sidebar-head h3 {
+          font-size: 1rem;
+          color: #0f172a;
         }
 
         .community-hub-page__tab-list {
@@ -229,6 +277,7 @@ export default function CommunityHubPage() {
 
         .community-hub-page__content {
           min-width: 0;
+          margin-top: 22px;
         }
 
         .community-hub-page__toast {
@@ -256,7 +305,6 @@ export default function CommunityHubPage() {
         }
 
         @media (max-width: 1100px) {
-          .community-hub-page__hero,
           .community-hub-page__workspace {
             grid-template-columns: 1fr;
           }

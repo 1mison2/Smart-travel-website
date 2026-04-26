@@ -3,6 +3,51 @@ const Itinerary = require('../models/Itinerary');
 const User = require("../models/User");
 const bcrypt = require("bcryptjs");
 
+const toRadians = (value) => (Number(value) * Math.PI) / 180;
+
+const calculateDistanceKm = (from, to) => {
+  const fromLat = Number(from?.latitude);
+  const fromLng = Number(from?.longitude);
+  const toLat = Number(to?.latitude);
+  const toLng = Number(to?.longitude);
+
+  if (![fromLat, fromLng, toLat, toLng].every(Number.isFinite)) return 0;
+
+  const earthRadiusKm = 6371;
+  const deltaLat = toRadians(toLat - fromLat);
+  const deltaLng = toRadians(toLng - fromLng);
+  const a =
+    Math.sin(deltaLat / 2) ** 2 +
+    Math.cos(toRadians(fromLat)) * Math.cos(toRadians(toLat)) * Math.sin(deltaLng / 2) ** 2;
+
+  return earthRadiusKm * (2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a)));
+};
+
+const summarizeItineraryRoute = (days = []) => {
+  const places = days.flatMap((day) => (Array.isArray(day?.places) ? day.places : []));
+  const uniqueStops = Array.from(
+    new Map(
+      places
+        .filter((place) => place?.name)
+        .map((place) => [String(place.name).toLowerCase(), { name: place.name, category: place.category || "" }])
+    ).values()
+  );
+
+  const totalDistanceKm = places.reduce((sum, place, index) => {
+    if (index === 0) return 0;
+    return sum + calculateDistanceKm(places[index - 1], place);
+  }, 0);
+
+  return {
+    stopCount: uniqueStops.length,
+    stopsPreview: uniqueStops.slice(0, 4).map((place) => place.name),
+    categories: Array.from(
+      new Set(uniqueStops.map((place) => String(place.category || "").trim()).filter(Boolean))
+    ).slice(0, 4),
+    totalDistanceKm: Math.round(totalDistanceKm * 10) / 10,
+  };
+};
+
 exports.getStats = async (req, res) => {
   try {
     const userId = req.user._id;
@@ -44,6 +89,7 @@ exports.getRecentTrips = async (req, res) => {
       const safeStartDate = Number.isNaN(anchorDate.getTime()) ? new Date() : anchorDate;
       const safeEndDate = new Date(safeStartDate);
       safeEndDate.setDate(safeStartDate.getDate() + Math.max(Number(itinerary.durationDays || 1) - 1, 0));
+      const routeSummary = summarizeItineraryRoute(itinerary.days);
 
       return {
         _id: itinerary._id,
@@ -57,6 +103,12 @@ exports.getRecentTrips = async (req, res) => {
         durationDays: itinerary.durationDays || 1,
         budget: itinerary.budget || 0,
         totalEstimatedCost: itinerary.totalEstimatedCost || 0,
+        interests: Array.isArray(itinerary.interests) ? itinerary.interests : [],
+        stopCount: routeSummary.stopCount,
+        stopsPreview: routeSummary.stopsPreview,
+        categories: routeSummary.categories,
+        totalDistanceKm: routeSummary.totalDistanceKm,
+        detailPath: `/itineraries/${itinerary._id}`,
         sourceType: "itinerary",
         createdAt: itinerary.createdAt,
       };

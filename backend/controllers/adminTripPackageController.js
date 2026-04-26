@@ -79,6 +79,7 @@ const normalizePayload = (body = {}) => {
     endDate: body.endDate ? new Date(body.endDate) : null,
     basePrice: Number(body.basePrice || 0),
     discountPrice: Number(body.discountPrice || 0),
+    rating: Number(body.rating || 0),
     currency: String(body.currency || "NPR").trim() || "NPR",
     capacity,
     minGuests,
@@ -113,6 +114,7 @@ const validatePayload = (payload) => {
   if (Number.isNaN(payload.basePrice) || payload.basePrice < 0) return "Base price must be a valid number";
   if (Number.isNaN(payload.discountPrice) || payload.discountPrice < 0) return "Discount price must be a valid number";
   if (payload.discountPrice > 0 && payload.discountPrice > payload.basePrice) return "Discount price cannot exceed base price";
+  if (Number.isNaN(payload.rating) || payload.rating < 0 || payload.rating > 5) return "Rating must be between 0 and 5";
   if (Number.isNaN(payload.capacity) || payload.capacity < 1) return "Capacity must be at least 1";
   if (Number.isNaN(payload.minGuests) || payload.minGuests < 1) return "Minimum guests must be at least 1";
   if (Number.isNaN(payload.maxGuests) || payload.maxGuests < payload.minGuests) return "Maximum guests must be at least minimum guests";

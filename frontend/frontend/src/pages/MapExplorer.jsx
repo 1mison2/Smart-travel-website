@@ -406,7 +406,6 @@ export default function MapExplorer() {
   const [searchError, setSearchError] = useState("");
   const [routeError, setRouteError] = useState("");
   const [nearbyError, setNearbyError] = useState("");
-  const [loadingSearch, setLoadingSearch] = useState(false);
   const [loadingCurrentLocation, setLoadingCurrentLocation] = useState(false);
   const [loadingRoute, setLoadingRoute] = useState(false);
   const [loadingNearby, setLoadingNearby] = useState(false);
@@ -419,7 +418,6 @@ export default function MapExplorer() {
   const [ratingFilter, setRatingFilter] = useState("all");
   const [distanceFilter, setDistanceFilter] = useState("all");
   const [openFilterMenu, setOpenFilterMenu] = useState("");
-  const [bottomOpen, setBottomOpen] = useState(false);
   const [routeOpen, setRouteOpen] = useState(true);
   const [toast, setToast] = useState("");
 
@@ -485,12 +483,7 @@ export default function MapExplorer() {
   );
 
   const destinationCards = useMemo(() => destinationResults.map((item) => ({ ...item, locationLabel: [item.district, item.province].filter(Boolean).join(", ") || "Nepal", distanceFromCurrent: calculateDistanceKm(currentLocation, item) })), [currentLocation, destinationResults]);
-  const selectedNearbyPlace = useMemo(
-    () => filteredNearbyPlaces.find((place) => place.placeId === selectedNearbyPlaceId) || null,
-    [filteredNearbyPlaces, selectedNearbyPlaceId]
-  );
-
-  const filteredDestinations = useMemo(() => destinationCards.filter((item) => {
+  const _filteredDestinations = useMemo(() => destinationCards.filter((item) => {
     const categoryTokens = getDestinationCategoryTokens(item);
     const matchesCategory = categoryFilter === "all" || categoryTokens.includes(normalizeCategoryToken(categoryFilter));
     const matchesRating = ratingFilter === "all" || Number(item.rating) >= Number(ratingFilter);
@@ -616,12 +609,6 @@ export default function MapExplorer() {
     return () => window.clearTimeout(timeoutId);
   }, [toast]);
 
-  useEffect(() => {
-    if (filteredDestinations.length > 1 && !selectedDestination) {
-      setBottomOpen(true);
-    }
-  }, [filteredDestinations.length, selectedDestination]);
-
   const runDestinationSearch = async (term) => {
     const safeTerm = String(term || "").trim();
     if (!safeTerm) {
@@ -630,7 +617,6 @@ export default function MapExplorer() {
       return;
     }
     try {
-      setLoadingSearch(true);
       setSearchError("");
       const { data } = await api.get(`/api/places/search?query=${encodeURIComponent(safeTerm)}`);
       const results = Array.isArray(data?.results) ? data.results.map(normalizeDestination) : [];
@@ -640,7 +626,6 @@ export default function MapExplorer() {
         const bestMatch = areaPreset || pickBestSearchResult(safeTerm, results) || results[0];
         setSelectedDestination(bestMatch);
         setSelectedNearbyPlaceId("");
-        setBottomOpen(results.length > 1);
         setMapFocusTarget({
           id: bestMatch.id,
           type: "location",
@@ -658,7 +643,7 @@ export default function MapExplorer() {
       setDestinationResults([]);
       setSearchError(err?.response?.data?.message || "Failed to search destinations.");
     } finally {
-      setLoadingSearch(false);
+      // no-op
     }
   };
 
@@ -732,22 +717,12 @@ export default function MapExplorer() {
   const handleNearbyTypeChange = (nextType) => {
     setNearbyType(nextType);
     if (!selectedDestination) {
-      setBottomOpen(true);
       const typeLabel = NEARBY_TYPES.find((item) => item.value === nextType)?.label || "places";
       setToast(`Select a destination first to explore nearby ${typeLabel.toLowerCase()}`);
       return;
     }
-    setBottomOpen(false);
     const typeLabel = NEARBY_TYPES.find((item) => item.value === nextType)?.label || "places";
     setToast(`Showing nearby ${typeLabel.toLowerCase()} around ${selectedDestination.name}`);
-  };
-
-  const handleSelectDestination = (destination) => {
-    setSelectedDestination(destination);
-    setSelectedNearbyPlaceId("");
-    setSearchTerm(destination.name);
-    setBottomOpen(false);
-    setMapFocusTarget({ id: destination.id, type: "location", lat: destination.lat, lng: destination.lng, zoom: 12 });
   };
 
   const handleSelectNearbyPlace = (place) => {

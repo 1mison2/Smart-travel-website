@@ -19,7 +19,10 @@ export default function SavedPostsPage() {
   };
 
   useEffect(() => {
-    loadSavedPosts();
+    const syncSavedPosts = async () => {
+      await loadSavedPosts();
+    };
+    syncSavedPosts();
   }, []);
 
   const likePost = async (postId) => {

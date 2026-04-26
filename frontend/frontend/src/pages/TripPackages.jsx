@@ -1,24 +1,30 @@
 import React, { useEffect, useMemo, useState } from "react";
-import { Calendar, CheckCircle2, MapPin, ShieldCheck, Sparkles, Users, XCircle } from "lucide-react";
+import { Calendar, CheckCircle2, MapPin, ShieldCheck, Sparkles, Star } from "lucide-react";
 import { useNavigate } from "react-router-dom";
-import api from "../utils/api";
+import api, { resolveImageUrl } from "../utils/api";
 
 export default function TripPackages() {
   const [packages, setPackages] = useState([]);
+  const [locations, setLocations] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
-  const [bookingState, setBookingState] = useState({});
-  const [expandedId, setExpandedId] = useState("");
+  const [activeLocation, setActiveLocation] = useState("All");
+  const [startDateFilter, setStartDateFilter] = useState("");
+  const [endDateFilter, setEndDateFilter] = useState("");
   const navigate = useNavigate();
 
   useEffect(() => {
     const fetchPackages = async () => {
       try {
         setLoading(true);
-        const { data } = await api.get("/api/trip-packages");
+        const [packagesRes, locationsRes] = await Promise.all([
+          api.get("/api/trip-packages"),
+          api.get("/api/locations"),
+        ]);
+        const data = packagesRes.data;
         const list = Array.isArray(data?.packages) ? data.packages : [];
         setPackages(list);
-        setExpandedId((prev) => prev || list[0]?._id || "");
+        setLocations(Array.isArray(locationsRes.data) ? locationsRes.data : []);
         setError("");
       } catch (err) {
         setError(err?.response?.data?.message || "Failed to load trip packages");
@@ -29,44 +35,6 @@ export default function TripPackages() {
     fetchPackages();
   }, []);
 
-  const setPackageState = (id, next) => {
-    setBookingState((prev) => ({ ...prev, [id]: { ...prev[id], ...next } }));
-  };
-
-  const onToggleAddOn = (pkgId, listingId) => {
-    setBookingState((prev) => {
-      const current = prev[pkgId]?.addOns || [];
-      const exists = current.includes(listingId);
-      const nextAddOns = exists ? current.filter((id) => id !== listingId) : [...current, listingId];
-      return { ...prev, [pkgId]: { ...prev[pkgId], addOns: nextAddOns } };
-    });
-  };
-
-  const onBook = async (pkg) => {
-    const state = bookingState[pkg._id] || {};
-    const guests = Number(state.guests || pkg.minGuests || 1);
-    const addOns = state.addOns || [];
-    setPackageState(pkg._id, { booking: true, error: "" });
-    try {
-      const { data } = await api.post(`/api/trip-packages/${pkg._id}/book`, {
-        guests,
-        addOnListingIds: addOns,
-      });
-      setPackageState(pkg._id, { booking: false, success: true });
-      const bookingId = data?.booking?._id;
-      if (bookingId) {
-        navigate(`/payment?bookingId=${bookingId}`);
-      } else {
-        navigate("/bookings");
-      }
-    } catch (err) {
-      setPackageState(pkg._id, {
-        booking: false,
-        error: err?.response?.data?.message || "Failed to book trip package",
-      });
-    }
-  };
-
   const cheapestPackage = useMemo(() => {
     if (!packages.length) return null;
     return packages.reduce((lowest, current) => {
@@ -76,15 +44,61 @@ export default function TripPackages() {
     }, packages[0]);
   }, [packages]);
 
+  const locationFilters = useMemo(
+    () => ["All", ...Array.from(new Set(packages.map((pkg) => pkg.location).filter(Boolean)))],
+    [packages]
+  );
+
+  const filteredPackages = useMemo(
+    () =>
+      packages.filter((pkg) => {
+        const matchesLocation = activeLocation === "All" || pkg.location === activeLocation;
+        const matchesDate = isDateRangeMatch(pkg.startDate, pkg.endDate, startDateFilter, endDateFilter);
+        return matchesLocation && matchesDate;
+      }),
+    [packages, activeLocation, startDateFilter, endDateFilter]
+  );
+
+  const featuredPackage = useMemo(() => {
+    if (!filteredPackages.length) return null;
+    return (
+      filteredPackages.find((pkg) => pkg.isFeatured) ||
+      filteredPackages.reduce((best, current) => {
+        const bestScore = Number(best.rating || 0);
+        const currentScore = Number(current.rating || 0);
+        return currentScore > bestScore ? current : best;
+      }, filteredPackages[0])
+    );
+  }, [filteredPackages]);
+
+  const featuredPackageId = featuredPackage?._id || "";
+  const listPackages = useMemo(
+    () => filteredPackages.filter((pkg) => pkg._id !== featuredPackageId),
+    [filteredPackages, featuredPackageId]
+  );
+
+  const locationImageMap = useMemo(() => {
+    const pairs = (Array.isArray(locations) ? locations : []).map((location) => [
+      String(location?.name || "").trim().toLowerCase(),
+      resolveImageUrl(location?.image || location?.images?.[0] || ""),
+    ]);
+    return new Map(pairs.filter(([, image]) => Boolean(image)));
+  }, [locations]);
+
+  const getPackageImage = (pkg) =>
+    locationImageMap.get(String(pkg?.location || "").trim().toLowerCase()) ||
+    resolveImageUrl(pkg?.coverImage) ||
+    "https://images.unsplash.com/photo-1500530855697-b586d89ba3ee?auto=format&fit=crop&w=1400&q=80";
+
   return (
     <div className="trip-packages-page">
       <header className="trip-packages-hero">
         <div className="trip-packages-hero__copy">
           <p className="trip-packages-kicker">Trip Packages</p>
-          <h1>Book a final-ready Nepal package system with real trip structure</h1>
+          <h1>Travel Nepal through curated packages that already feel bookable</h1>
           <p>
-            Explore packages with itinerary days, hotel plans, activity planning, policies, inclusions, exclusions,
-            and optional add-ons before you pay.
+            Browse polished departures with real itinerary structure, hotel stays, included activities, and a booking
+            flow that continues into full package details.
           </p>
           <div className="trip-packages-hero__badges">
             <span><ShieldCheck size={15} /> Verified package content</span>
@@ -99,11 +113,17 @@ export default function TripPackages() {
           </div>
           <div>
             <span>Starting from</span>
-            <strong>{cheapestPackage ? `${cheapestPackage.currency || "NPR"} ${Number(cheapestPackage.discountPrice || cheapestPackage.basePrice || 0)}` : "-"}</strong>
+            <strong>
+              {cheapestPackage
+                ? `${cheapestPackage.currency || "NPR"} ${Number(
+                    cheapestPackage.discountPrice || cheapestPackage.basePrice || 0
+                  )}`
+                : "-"}
+            </strong>
           </div>
           <div>
-            <span>Coverage</span>
-            <strong>Nepal routes</strong>
+            <span>Featured regions</span>
+            <strong>{locationFilters.length > 1 ? locationFilters.length - 1 : 0}</strong>
           </div>
         </div>
       </header>
@@ -112,226 +132,163 @@ export default function TripPackages() {
       {loading && <p className="trip-packages-hint">Loading trip packages...</p>}
       {!loading && packages.length === 0 && <p className="trip-packages-hint">No trip packages available yet.</p>}
 
+      {!loading && packages.length > 0 && (
+        <>
+          <section className="trip-filter-bar">
+            <div className="trip-filter-group">
+              <span className="trip-filter-label">Destination</span>
+              <div className="trip-filter-chips">
+                {locationFilters.map((item) => (
+                  <button
+                    key={item}
+                    type="button"
+                    className={`trip-filter-chip ${activeLocation === item ? "is-active" : ""}`}
+                    onClick={() => setActiveLocation(item)}
+                  >
+                    {item}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            <div className="trip-filter-group">
+              <span className="trip-filter-label">Travel dates</span>
+              <div className="trip-filter-dates">
+                <input type="date" value={startDateFilter} onChange={(event) => setStartDateFilter(event.target.value)} />
+                <input
+                  type="date"
+                  value={endDateFilter}
+                  min={startDateFilter || undefined}
+                  onChange={(event) => setEndDateFilter(event.target.value)}
+                />
+              </div>
+            </div>
+
+          </section>
+
+          {featuredPackage && (
+            <section className="trip-spotlight">
+              <div className="trip-spotlight__media">
+                <img
+                  src={
+                    getPackageImage(featuredPackage)
+                  }
+                  alt={featuredPackage.title}
+                />
+                <div className="trip-spotlight__veil" />
+              </div>
+              <div className="trip-spotlight__content">
+                <p className="trip-spotlight__kicker">{featuredPackage.isFeatured ? "Top Pick" : "Featured Escape"}</p>
+                <h2>{featuredPackage.title}</h2>
+                <p>{featuredPackage.shortDescription || featuredPackage.description}</p>
+                <div className="trip-spotlight__meta">
+                  <span><MapPin size={14} /> {featuredPackage.location || "Nepal"}</span>
+                  <span><Calendar size={14} /> {getTripDays(featuredPackage.startDate, featuredPackage.endDate)} days</span>
+                  <span><Star size={14} /> {Number(featuredPackage.rating || 0).toFixed(1)}</span>
+                </div>
+                <div className="trip-spotlight__actions">
+                  <button
+                    type="button"
+                    className="trip-package-btn"
+                    onClick={() => navigate(`/trip-packages/${featuredPackage._id}`)}
+                  >
+                    Explore this package
+                  </button>
+                  <div className="trip-spotlight__price">
+                    <span>From</span>
+                    <strong>
+                      {featuredPackage.currency || "NPR"}{" "}
+                      {Number(featuredPackage.discountPrice || featuredPackage.basePrice || 0)}
+                    </strong>
+                  </div>
+                </div>
+              </div>
+            </section>
+          )}
+
+          <div className="trip-results-head">
+            <div>
+              <h2>Available packages</h2>
+              <p>{listPackages.length} package{listPackages.length === 1 ? "" : "s"} match your current view.</p>
+            </div>
+            {activeLocation !== "All" && (
+              <button
+                type="button"
+                className="trip-package-toggle"
+                onClick={() => {
+                  setActiveLocation("All");
+                  setStartDateFilter("");
+                  setEndDateFilter("");
+                }}
+              >
+                Reset filters
+              </button>
+            )}
+            {activeLocation === "All" && (startDateFilter || endDateFilter) && (
+              <button
+                type="button"
+                className="trip-package-toggle"
+                onClick={() => {
+                  setStartDateFilter("");
+                  setEndDateFilter("");
+                }}
+              >
+                Reset filters
+              </button>
+            )}
+          </div>
+        </>
+      )}
+
       <section className="trip-packages-grid">
-        {packages.map((pkg) => {
-          const state = bookingState[pkg._id] || {};
-          const addOnListings = Array.isArray(pkg.addOnListings) ? pkg.addOnListings : [];
-          const selectedAddOns = state.addOns || [];
-          const addOnTotal = addOnListings
-            .filter((item) => selectedAddOns.includes(String(item._id)))
-            .reduce((sum, item) => sum + Number(item.pricePerUnit || item.pricing?.price || 0), 0);
-          const guestCount = Number(state.guests || pkg.minGuests || 1);
-          const basePrice = Number(pkg.discountPrice || pkg.basePrice || 0);
-          const total = basePrice + addOnTotal;
-          const tripDays = getTripDays(pkg.startDate, pkg.endDate);
-          const isExpanded = expandedId === pkg._id;
-          const highlights = Array.isArray(pkg.highlights) ? pkg.highlights : [];
-          const included = Array.isArray(pkg.included) ? pkg.included : [];
-          const excluded = Array.isArray(pkg.excluded) ? pkg.excluded : [];
-          const itineraryDays = Array.isArray(pkg.itineraryDays) ? pkg.itineraryDays : [];
-
+        {listPackages.map((pkg) => {
+          const price = Number(pkg.discountPrice || pkg.basePrice || 0);
           return (
-            <article key={pkg._id} className={`trip-package-card ${isExpanded ? "is-expanded" : ""}`}>
-              <div className="trip-package-shell">
-                <div className="trip-package-media">
-                  <img
-                    src={pkg.coverImage || "https://images.unsplash.com/photo-1500530855697-b586d89ba3ee?auto=format&fit=crop&w=1200&q=80"}
-                    alt={pkg.title}
-                  />
-                  <div className="trip-package-media__overlay">
-                    <div>
-                      <p className="trip-package-media__kicker">{pkg.tripType || "Nepal trip package"}</p>
-                      <h2>{pkg.title}</h2>
-                      <p>{pkg.shortDescription || pkg.description || "Structured travel package with stays and experiences."}</p>
-                    </div>
-                    <span className="trip-package-media__badge">{tripDays} days</span>
-                  </div>
+            <article key={pkg._id} className="trip-package-card trip-package-card--browse">
+              <div className="trip-package-card__media">
+                <img
+                  src={getPackageImage(pkg)}
+                  alt={pkg.title}
+                />
+                <div className="trip-package-card__veil" />
+              </div>
+
+              <div className="trip-package-card__content">
+                <div className="trip-package-card__head">
+                  <p className="trip-package-card__kicker">{pkg.isFeatured ? "Top Pick" : pkg.tripType || "Curated Trip"}</p>
+                  <h3>{pkg.title}</h3>
+                  <p>{pkg.shortDescription || pkg.description || "Structured travel package with curated stay and activity planning."}</p>
                 </div>
 
-                <div className="trip-package-body">
-                  <div className="trip-package-main">
-                    <div className="trip-package-meta-grid">
-                      <p className="trip-package-meta"><MapPin size={14} /> {pkg.location || "Nepal"}{pkg.region ? `, ${pkg.region}` : ""}</p>
-                      <p className="trip-package-meta"><Calendar size={14} /> {formatDate(pkg.startDate)} - {formatDate(pkg.endDate)}</p>
-                      <p className="trip-package-meta"><Users size={14} /> Guests {pkg.minGuests || 1} - {pkg.maxGuests || pkg.capacity || 1}</p>
-                      <p className="trip-package-meta"><Sparkles size={14} /> {pkg.difficulty || "All levels"}{pkg.bestSeason ? ` • ${pkg.bestSeason}` : ""}</p>
-                    </div>
-
-                    {highlights.length > 0 && (
-                      <div className="trip-package-chips">
-                        {highlights.slice(0, 4).map((item) => (
-                          <span key={item} className="trip-package-chip">{item}</span>
-                        ))}
-                      </div>
-                    )}
-                  </div>
-
-                  <aside className="trip-package-price">
-                    <span>Package price</span>
-                    <strong>{pkg.currency || "NPR"} {basePrice}</strong>
-                    {pkg.discountPrice > 0 && (
-                      <small>Regular price {pkg.currency || "NPR"} {pkg.basePrice}</small>
-                    )}
-                    <button
-                      type="button"
-                      className="trip-package-toggle"
-                      onClick={() => setExpandedId((prev) => (prev === pkg._id ? "" : pkg._id))}
-                    >
-                      {isExpanded ? "Hide details" : "View details"}
-                    </button>
-                  </aside>
+                <div className="trip-package-card__meta">
+                  <span><MapPin size={14} /> {pkg.location || "Nepal"}</span>
+                  <span><Calendar size={14} /> {getTripDays(pkg.startDate, pkg.endDate)} days</span>
+                  <span><Star size={14} /> {Number(pkg.rating || 0).toFixed(1)}</span>
                 </div>
 
-                {isExpanded && (
-                  <div className="trip-package-details">
-                    <div className="trip-package-columns">
-                      <section className="trip-package-panel">
-                        <h3>Included</h3>
-                        {included.length ? (
-                          <ul className="trip-package-list trip-package-list--ok">
-                            {included.map((item) => (
-                              <li key={item}><CheckCircle2 size={15} /> {item}</li>
-                            ))}
-                          </ul>
-                        ) : (
-                          <p className="trip-package-empty">No included items listed.</p>
-                        )}
-                      </section>
-
-                      <section className="trip-package-panel">
-                        <h3>Excluded</h3>
-                        {excluded.length ? (
-                          <ul className="trip-package-list trip-package-list--warn">
-                            {excluded.map((item) => (
-                              <li key={item}><XCircle size={15} /> {item}</li>
-                            ))}
-                          </ul>
-                        ) : (
-                          <p className="trip-package-empty">No excluded items listed.</p>
-                        )}
-                      </section>
-                    </div>
-
-                    <section className="trip-package-panel">
-                      <div className="trip-package-section__head">
-                        <h3>Day-wise itinerary</h3>
-                        <span>{itineraryDays.length || tripDays} planned days</span>
-                      </div>
-                      <div className="trip-itinerary">
-                        {(itineraryDays.length ? itineraryDays : [{ dayNumber: 1, title: pkg.title, summary: pkg.description }]).map((day, index) => {
-                          const activityNames = Array.isArray(day.activities)
-                            ? day.activities.map((activity) => activity.title || activity.listingId?.title).filter(Boolean)
-                            : [];
-                          return (
-                            <article key={`${pkg._id}-day-${index}`} className="trip-itinerary-day">
-                              <div className="trip-itinerary-day__badge">Day {day.dayNumber || index + 1}</div>
-                              <div className="trip-itinerary-day__content">
-                                <h4>{day.title || `Day ${day.dayNumber || index + 1}`}</h4>
-                                <p>{day.summary || "Travel, stays, and experiences will be organized for this day."}</p>
-                                <div className="trip-itinerary-day__meta">
-                                  <span>Hotel: {day.hotelName || day.hotelListingId?.title || "TBD"}</span>
-                                  <span>Meals: {Array.isArray(day.meals) && day.meals.length ? day.meals.join(", ") : "TBD"}</span>
-                                  <span>Transport: {day.transport || "TBD"}</span>
-                                </div>
-                                {activityNames.length > 0 && (
-                                  <div className="trip-package-chips trip-package-chips--soft">
-                                    {activityNames.map((item) => (
-                                      <span key={`${pkg._id}-${day.dayNumber}-${item}`} className="trip-package-chip">{item}</span>
-                                    ))}
-                                  </div>
-                                )}
-                              </div>
-                            </article>
-                          );
-                        })}
-                      </div>
-                    </section>
-
-                    <div className="trip-package-columns">
-                      <section className="trip-package-panel">
-                        <h3>Policies</h3>
-                        <div className="trip-policy">
-                          <strong>Payment policy</strong>
-                          <p>{pkg.paymentPolicy || "Payment terms will be confirmed during checkout."}</p>
-                        </div>
-                        <div className="trip-policy">
-                          <strong>Cancellation policy</strong>
-                          <p>{pkg.cancellationPolicy || "Cancellation terms are not listed yet."}</p>
-                        </div>
-                      </section>
-
-                      <section className="trip-package-panel">
-                        <h3>Customize and book</h3>
-                        {addOnListings.length > 0 && (
-                          <div className="trip-package-addon-list">
-                            {addOnListings.map((item) => {
-                              const price = Number(item.pricePerUnit || item.pricing?.price || 0);
-                              const checked = selectedAddOns.includes(String(item._id));
-                              return (
-                                <label key={item._id} className={`trip-addon ${checked ? "is-selected" : ""}`}>
-                                  <input
-                                    type="checkbox"
-                                    checked={checked}
-                                    onChange={() => onToggleAddOn(pkg._id, String(item._id))}
-                                  />
-                                  <span>{item.title}</span>
-                                  <strong>{pkg.currency || "NPR"} {price}</strong>
-                                </label>
-                              );
-                            })}
-                          </div>
-                        )}
-
-                        <div className="trip-package-actions">
-                          <label className="trip-package-label">
-                            Guests
-                            <input
-                              type="number"
-                              min={pkg.minGuests || 1}
-                              max={pkg.maxGuests || pkg.capacity || 1}
-                              value={guestCount}
-                              onChange={(e) => setPackageState(pkg._id, { guests: e.target.value })}
-                            />
-                          </label>
-
-                          <div className="trip-package-total-box">
-                            <p className="trip-package-total-row"><span>Package</span><strong>{pkg.currency || "NPR"} {basePrice}</strong></p>
-                            <p className="trip-package-total-row"><span>Add-ons</span><strong>{pkg.currency || "NPR"} {addOnTotal}</strong></p>
-                            <p className="trip-package-total">Total: {pkg.currency || "NPR"} {total}</p>
-                          </div>
-
-                          <button
-                            type="button"
-                            className="trip-package-btn"
-                            onClick={() => onBook(pkg)}
-                            disabled={state.booking}
-                          >
-                            {state.booking ? "Booking..." : "Book Trip"}
-                          </button>
-                        </div>
-                        {state.error && <p className="trip-packages-error">{state.error}</p>}
-                      </section>
-                    </div>
-
-                    {Array.isArray(pkg.faqs) && pkg.faqs.length > 0 && (
-                      <section className="trip-package-panel">
-                        <h3>Frequently asked questions</h3>
-                        <div className="trip-package-faqs">
-                          {pkg.faqs.map((faq, index) => (
-                            <article key={`${pkg._id}-faq-${index}`} className="trip-package-faq">
-                              <h4>{faq.question}</h4>
-                              <p>{faq.answer}</p>
-                            </article>
-                          ))}
-                        </div>
-                      </section>
-                    )}
+                <div className="trip-package-card__footer">
+                  <button
+                    type="button"
+                    className="trip-package-btn"
+                    onClick={() => navigate(`/trip-packages/${pkg._id}`)}
+                  >
+                    Explore this package
+                  </button>
+                  <div className="trip-package-card__price">
+                    <span>From</span>
+                    <strong>{pkg.currency || "NPR"} {price}</strong>
                   </div>
-                )}
+                </div>
               </div>
             </article>
           );
         })}
+        {!loading && packages.length > 0 && listPackages.length === 0 && (
+          <article className="trip-packages-empty">
+            <h3>{featuredPackage ? "No more packages in this view" : "No packages match these filters"}</h3>
+            <p>{featuredPackage ? "The top featured package is shown above." : "Try switching destination to see more curated options."}</p>
+          </article>
+        )}
       </section>
 
       <style>{`
@@ -418,99 +375,267 @@ export default function TripPackages() {
         }
         .trip-packages-error { color: #b91c1c; margin: 10px 0; }
         .trip-packages-hint { color: #475569; margin: 10px 0; }
-        .trip-packages-grid { display: grid; gap: 20px; }
-        .trip-package-card {
-          background: rgba(255, 255, 255, 0.9);
-          border-radius: 30px;
-          border: 1px solid rgba(255, 255, 255, 0.82);
-          box-shadow: 0 20px 38px rgba(15, 23, 42, 0.06);
-          overflow: hidden;
-          backdrop-filter: blur(14px);
+        .trip-filter-bar {
+          display: grid;
+          gap: 16px;
+          padding: 18px 20px;
+          margin: 18px 0 20px;
+          border-radius: 24px;
+          background:
+            radial-gradient(circle at top left, rgba(254, 215, 170, 0.28), transparent 30%),
+            linear-gradient(135deg, rgba(255, 255, 255, 0.94), rgba(248, 250, 252, 0.94));
+          border: 1px solid rgba(226, 232, 240, 0.9);
+          box-shadow: 0 18px 38px rgba(15, 23, 42, 0.05);
         }
-        .trip-package-shell { display: grid; gap: 0; }
-        .trip-package-media {
+        .trip-filter-group {
+          display: grid;
+          gap: 10px;
+        }
+        .trip-filter-dates {
+          display: grid;
+          grid-template-columns: repeat(2, minmax(180px, 220px));
+          gap: 10px;
+        }
+        .trip-filter-dates input {
+          min-height: 44px;
+          border-radius: 14px;
+          border: 1px solid rgba(203, 213, 225, 0.95);
+          background: rgba(255, 255, 255, 0.88);
+          padding: 0 14px;
+          color: #334155;
+          font: inherit;
+        }
+        .trip-filter-label {
+          font-size: 0.78rem;
+          letter-spacing: 0.16em;
+          text-transform: uppercase;
+          color: #64748b;
+          font-weight: 800;
+        }
+        .trip-filter-chips {
+          display: flex;
+          flex-wrap: wrap;
+          gap: 10px;
+        }
+        .trip-filter-chip {
+          border: 1px solid rgba(203, 213, 225, 0.95);
+          background: rgba(255, 255, 255, 0.88);
+          color: #334155;
+          border-radius: 999px;
+          padding: 10px 14px;
+          font-weight: 700;
+          cursor: pointer;
+        }
+        .trip-filter-chip.is-active {
+          background: linear-gradient(135deg, #11355a, #356d97);
+          color: #fff;
+          border-color: transparent;
+          box-shadow: 0 12px 24px rgba(17, 53, 90, 0.2);
+        }
+        .trip-spotlight {
           position: relative;
-          min-height: 320px;
+          display: grid;
+          grid-template-columns: minmax(0, 1.08fr) minmax(340px, 0.92fr);
+          gap: 0;
+          overflow: hidden;
+          border-radius: 36px;
+          background: #17385a;
+          margin-bottom: 24px;
+          box-shadow: 0 24px 44px rgba(15, 23, 42, 0.12);
         }
-        .trip-package-media img {
+        .trip-spotlight__media {
+          position: relative;
+          min-height: 420px;
+        }
+        .trip-spotlight__media img {
           width: 100%;
           height: 100%;
-          min-height: 320px;
           object-fit: cover;
           display: block;
         }
-        .trip-package-media__overlay {
+        .trip-spotlight__veil {
           position: absolute;
           inset: 0;
-          display: flex;
-          align-items: end;
-          justify-content: space-between;
-          gap: 20px;
-          padding: 24px;
-          background: linear-gradient(180deg, rgba(15, 23, 42, 0.06), rgba(15, 23, 42, 0.72));
-          color: white;
+          background: linear-gradient(90deg, rgba(15, 23, 42, 0.08), rgba(23, 56, 90, 0.28));
         }
-        .trip-package-media__overlay h2 {
-          margin: 0 0 8px;
-          font-size: clamp(1.6rem, 3vw, 2.4rem);
-        }
-        .trip-package-media__overlay p {
-          margin: 0;
-          max-width: 48ch;
-          color: rgba(255, 255, 255, 0.88);
-          line-height: 1.6;
-        }
-        .trip-package-media__kicker {
-          margin: 0 0 8px !important;
-          text-transform: uppercase;
-          letter-spacing: 0.16em;
-          font-size: 0.74rem;
-          color: rgba(255, 255, 255, 0.7) !important;
-          font-weight: 700;
-        }
-        .trip-package-media__badge {
-          padding: 10px 14px;
-          border-radius: 999px;
-          background: rgba(255, 255, 255, 0.16);
-          border: 1px solid rgba(255, 255, 255, 0.24);
-          backdrop-filter: blur(12px);
-          font-weight: 700;
-          white-space: nowrap;
-        }
-        .trip-package-body {
+        .trip-spotlight__content {
           display: grid;
-          grid-template-columns: minmax(0, 1fr) auto;
+          align-content: center;
           gap: 18px;
-          align-items: start;
-          padding: 22px 24px;
-          border-bottom: 1px solid #e2e8f0;
+          padding: 40px;
+          color: #f8fafc;
+          background:
+            radial-gradient(circle at top right, rgba(125, 211, 252, 0.12), transparent 34%),
+            linear-gradient(180deg, rgba(23, 56, 90, 0.98), rgba(19, 49, 79, 0.96));
         }
-        .trip-package-meta-grid {
+        .trip-spotlight__kicker {
+          margin: 0;
+          color: #dbeafe;
+          text-transform: uppercase;
+          letter-spacing: 0.24em;
+          font-size: 0.78rem;
+          font-weight: 800;
+        }
+        .trip-spotlight__content h2 {
+          margin: 0;
+          font-size: clamp(2rem, 3vw, 3rem);
+          line-height: 1.1;
+          font-family: "Playfair Display", serif;
+        }
+        .trip-spotlight__content p {
+          margin: 0;
+          color: rgba(248, 250, 252, 0.86);
+          line-height: 1.7;
+        }
+        .trip-spotlight__meta {
           display: flex;
           flex-wrap: wrap;
           gap: 12px 18px;
-          margin-bottom: 14px;
         }
-        .trip-package-meta {
-          margin: 0;
-          color: #475569;
+        .trip-spotlight__meta span {
           display: inline-flex;
           align-items: center;
-          gap: 6px;
-          font-size: 0.92rem;
+          gap: 7px;
+          color: #f8fafc;
+          font-weight: 700;
+          font-size: 1rem;
         }
-        .trip-package-price {
-          min-width: 200px;
+        .trip-spotlight__actions {
+          display: flex;
+          justify-content: space-between;
+          align-items: end;
+          gap: 18px;
+          flex-wrap: wrap;
+          margin-top: 10px;
+        }
+        .trip-spotlight__price,
+        .trip-package-card__price {
           display: grid;
-          gap: 6px;
-          padding: 16px;
-          border-radius: 18px;
-          background: linear-gradient(180deg, #fff8f4, rgba(255, 255, 255, 0.92));
-          border: 1px solid rgba(255, 228, 220, 0.9);
+          gap: 4px;
+          padding: 9px 11px;
+          border-radius: 14px;
+          background: rgba(255, 255, 255, 0.08);
+          border: 1px solid rgba(255, 255, 255, 0.12);
+          min-width: 108px;
         }
-        .trip-package-price span { color: #64748b; font-size: 0.8rem; }
-        .trip-package-price strong { font-size: 1.28rem; }
-        .trip-package-price small { color: #64748b; }
+        .trip-spotlight__price span,
+        .trip-package-card__price span {
+          color: #dbeafe;
+          font-size: 0.72rem;
+        }
+        .trip-spotlight__price strong,
+        .trip-package-card__price strong {
+          font-size: 0.88rem;
+          color: #fff;
+        }
+        .trip-results-head {
+          display: flex;
+          align-items: end;
+          justify-content: space-between;
+          gap: 16px;
+          flex-wrap: wrap;
+          margin: 8px 0 16px;
+        }
+        .trip-results-head h2 {
+          margin: 0 0 4px;
+          font-size: 1.5rem;
+        }
+        .trip-results-head p {
+          margin: 0;
+          color: #64748b;
+        }
+        .trip-packages-grid {
+          display: grid;
+          gap: 18px;
+        }
+        .trip-package-card--browse {
+          display: grid;
+          grid-template-columns: minmax(220px, 0.88fr) minmax(280px, 1fr);
+          overflow: hidden;
+          border-radius: 24px;
+          background: #17385a;
+          box-shadow: 0 20px 40px rgba(15, 23, 42, 0.08);
+        }
+        .trip-package-card__media {
+          position: relative;
+          min-height: 165px;
+        }
+        .trip-package-card__media img {
+          width: 100%;
+          height: 100%;
+          object-fit: cover;
+          display: block;
+        }
+        .trip-package-card__veil {
+          position: absolute;
+          inset: 0;
+          background: linear-gradient(90deg, rgba(255, 255, 255, 0.12), rgba(23, 56, 90, 0.05));
+        }
+        .trip-package-card__content {
+          display: grid;
+          align-content: center;
+          gap: 8px;
+          padding: 16px 18px;
+          background:
+            radial-gradient(circle at top right, rgba(125, 211, 252, 0.1), transparent 34%),
+            linear-gradient(180deg, rgba(23, 56, 90, 0.98), rgba(19, 49, 79, 0.96));
+          color: #f8fafc;
+        }
+        .trip-package-card__head {
+          display: grid;
+          gap: 5px;
+        }
+        .trip-package-card__kicker {
+          margin: 0;
+          color: #dbeafe;
+          text-transform: uppercase;
+          letter-spacing: 0.22em;
+          font-size: 0.62rem;
+          font-weight: 800;
+        }
+        .trip-package-card__head h3 {
+          margin: 0;
+          font-size: clamp(1.05rem, 1.4vw, 1.35rem);
+          line-height: 1.1;
+          font-family: "Playfair Display", serif;
+        }
+        .trip-package-card__head p {
+          margin: 0;
+          color: rgba(248, 250, 252, 0.86);
+          line-height: 1.4;
+          font-size: 0.78rem;
+        }
+        .trip-package-card__meta {
+          display: flex;
+          flex-wrap: wrap;
+          gap: 6px 10px;
+        }
+        .trip-package-card__meta span {
+          display: inline-flex;
+          align-items: center;
+          gap: 5px;
+          color: #f8fafc;
+          font-weight: 700;
+          font-size: 0.76rem;
+        }
+        .trip-package-card__footer {
+          display: flex;
+          justify-content: space-between;
+          align-items: end;
+          gap: 8px;
+          flex-wrap: wrap;
+        }
+        .trip-package-btn {
+          border: none;
+          border-radius: 999px;
+          padding: 8px 12px;
+          background: linear-gradient(135deg, #ff7d57, #ff5f57);
+          color: #fff;
+          font-weight: 800;
+          font-size: 0.75rem;
+          cursor: pointer;
+          box-shadow: 0 18px 28px rgba(255, 111, 97, 0.24);
+        }
         .trip-package-toggle {
           border: none;
           background: rgba(255, 111, 97, 0.12);
@@ -519,220 +644,36 @@ export default function TripPackages() {
           border-radius: 999px;
           padding: 10px 12px;
           cursor: pointer;
+          font-size: 0.82rem;
         }
-        .trip-package-details {
-          display: grid;
-          gap: 18px;
-          padding: 0 24px 24px;
+        .trip-packages-empty {
+          padding: 28px;
+          border-radius: 28px;
+          background: linear-gradient(180deg, rgba(255, 255, 255, 0.96), rgba(248, 250, 252, 0.94));
+          border: 1px solid rgba(226, 232, 240, 0.92);
+          text-align: center;
+          box-shadow: 0 18px 38px rgba(15, 23, 42, 0.05);
         }
-        .trip-package-columns {
-          display: grid;
-          grid-template-columns: repeat(2, minmax(0, 1fr));
-          gap: 18px;
+        .trip-packages-empty h3 {
+          margin: 0 0 8px;
+          font-size: 1.3rem;
         }
-        .trip-package-panel {
-          display: grid;
-          gap: 12px;
-          padding: 18px;
-          border-radius: 22px;
-          border: 1px solid rgba(255, 255, 255, 0.82);
-          background: rgba(255, 255, 255, 0.88);
-        }
-        .trip-package-panel h3,
-        .trip-package-panel h4 {
-          margin: 0;
-        }
-        .trip-package-section__head {
-          display: flex;
-          justify-content: space-between;
-          align-items: center;
-          gap: 12px;
-          flex-wrap: wrap;
-        }
-        .trip-package-chips {
-          display: flex;
-          flex-wrap: wrap;
-          gap: 8px;
-        }
-        .trip-package-chip {
-          display: inline-flex;
-          align-items: center;
-          padding: 8px 12px;
-          border-radius: 999px;
-          background: #fff9f6;
-          border: 1px solid rgba(255, 228, 220, 0.9);
-          color: #334155;
-          font-size: 0.84rem;
-          font-weight: 600;
-        }
-        .trip-package-chips--soft .trip-package-chip {
-          background: #fff7ed;
-          border-color: #fed7aa;
-        }
-        .trip-package-list {
-          list-style: none;
-          margin: 0;
-          padding: 0;
-          display: grid;
-          gap: 10px;
-        }
-        .trip-package-list li {
-          display: flex;
-          gap: 8px;
-          color: #334155;
-          line-height: 1.55;
-        }
-        .trip-package-list--ok svg { color: #059669; }
-        .trip-package-list--warn svg { color: #dc2626; }
-        .trip-package-empty {
+        .trip-packages-empty p {
           margin: 0;
           color: #64748b;
         }
-        .trip-itinerary {
-          display: grid;
-          gap: 12px;
-        }
-        .trip-itinerary-day {
-          display: grid;
-          grid-template-columns: auto 1fr;
-          gap: 14px;
-          padding: 14px;
-          border-radius: 18px;
-          background: rgba(255, 255, 255, 0.84);
-          border: 1px solid rgba(255, 255, 255, 0.82);
-        }
-        .trip-itinerary-day__badge {
-          padding: 10px 12px;
-          border-radius: 14px;
-          background: #fff;
-          border: 1px solid #e2e8f0;
-          font-weight: 700;
-          color: #e25a4f;
-          height: fit-content;
-        }
-        .trip-itinerary-day__content h4 {
-          margin: 0 0 6px;
-        }
-        .trip-itinerary-day__content p {
-          margin: 0;
-          color: #475569;
-          line-height: 1.6;
-        }
-        .trip-itinerary-day__meta {
-          display: flex;
-          flex-wrap: wrap;
-          gap: 10px 16px;
-          margin: 10px 0 0;
-          color: #334155;
-          font-size: 0.9rem;
-        }
-        .trip-policy strong {
-          display: block;
-          margin-bottom: 6px;
-        }
-        .trip-policy p {
-          margin: 0;
-          color: #475569;
-          line-height: 1.6;
-        }
-        .trip-package-addon-list {
-          display: grid;
-          gap: 8px;
-        }
-        .trip-addon {
-          display: grid;
-          grid-template-columns: auto 1fr auto;
-          align-items: center;
-          gap: 10px;
-          padding: 10px 12px;
-          border-radius: 14px;
-          border: 1px solid rgba(255, 255, 255, 0.82);
-          background: rgba(255, 255, 255, 0.88);
-          font-size: 0.9rem;
-          cursor: pointer;
-        }
-        .trip-addon.is-selected {
-          border-color: rgba(255, 111, 97, 0.4);
-          background: #fff1ef;
-        }
-        .trip-addon input { accent-color: #ff6f61; }
-        .trip-package-actions {
-          display: grid;
-          gap: 12px;
-        }
-        .trip-package-label {
-          display: grid;
-          gap: 6px;
-          font-size: 0.86rem;
-          color: #475569;
-        }
-        .trip-package-label input {
-          border: 1px solid #cbd5e1;
-          border-radius: 12px;
-          padding: 8px 12px;
-          max-width: 120px;
-        }
-        .trip-package-total-box {
-          display: grid;
-          gap: 6px;
-        }
-        .trip-package-total-row {
-          margin: 0;
-          display: flex;
-          justify-content: space-between;
-          gap: 16px;
-          color: #475569;
-          font-size: 0.9rem;
-        }
-        .trip-package-total {
-          margin: 2px 0 0;
-          font-weight: 800;
-          color: #0f172a;
-          font-size: 1.02rem;
-        }
-        .trip-package-btn {
-          border: none;
-          border-radius: 999px;
-          padding: 12px 18px;
-          background: linear-gradient(135deg, #ff6f61, #e25a4f);
-          color: #fff;
-          font-weight: 700;
-          cursor: pointer;
-          box-shadow: 0 12px 24px rgba(255, 111, 97, 0.24);
-        }
-        .trip-package-btn:disabled {
-          opacity: 0.6;
-          cursor: not-allowed;
-        }
-        .trip-package-faqs {
-          display: grid;
-          gap: 10px;
-        }
-        .trip-package-faq {
-          padding: 14px;
-          border-radius: 16px;
-          background: rgba(255, 255, 255, 0.84);
-          border: 1px solid rgba(255, 255, 255, 0.82);
-        }
-        .trip-package-faq h4 {
-          margin: 0 0 6px;
-        }
-        .trip-package-faq p {
-          margin: 0;
-          color: #475569;
-          line-height: 1.6;
-        }
         @media (max-width: 960px) {
           .trip-packages-hero,
-          .trip-package-columns,
-          .trip-package-body {
+          .trip-spotlight,
+          .trip-package-card--browse {
             grid-template-columns: 1fr;
           }
           .trip-packages-hero__stats {
             grid-template-columns: 1fr;
           }
-          .trip-package-price {
-            min-width: 0;
+          .trip-spotlight__media,
+          .trip-package-card__media {
+            min-height: 170px;
           }
         }
         @media (max-width: 640px) {
@@ -741,36 +682,22 @@ export default function TripPackages() {
             padding-right: 14px;
           }
           .trip-packages-hero,
-          .trip-package-body,
-          .trip-package-details {
-            padding-left: 16px;
-            padding-right: 16px;
+          .trip-filter-bar,
+          .trip-spotlight__content,
+          .trip-package-card__content {
+            padding: 16px;
           }
-          .trip-package-media {
-            min-height: 260px;
-          }
-          .trip-package-media img {
-            min-height: 260px;
-          }
-          .trip-package-media__overlay {
-            padding: 18px 16px;
-            flex-direction: column;
-            align-items: start;
-          }
-          .trip-itinerary-day {
+          .trip-filter-dates {
             grid-template-columns: 1fr;
+          }
+          .trip-spotlight__content h2,
+          .trip-package-card__head h3 {
+            font-size: 1.2rem;
           }
         }
       `}</style>
     </div>
   );
-}
-
-function formatDate(value) {
-  if (!value) return "-";
-  const parsed = new Date(value);
-  if (Number.isNaN(parsed.getTime())) return "-";
-  return parsed.toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" });
 }
 
 function getTripDays(startDate, endDate) {
@@ -779,4 +706,25 @@ function getTripDays(startDate, endDate) {
   if (Number.isNaN(start.getTime()) || Number.isNaN(end.getTime())) return 1;
   const diff = end.setHours(0, 0, 0, 0) - start.setHours(0, 0, 0, 0);
   return Math.max(1, Math.round(diff / (1000 * 60 * 60 * 24)) + 1);
+}
+
+function isDateRangeMatch(startDate, endDate, filterStart, filterEnd) {
+  if (!filterStart && !filterEnd) return true;
+  const start = new Date(startDate);
+  const end = new Date(endDate || startDate);
+  if (Number.isNaN(start.getTime()) || Number.isNaN(end.getTime())) return false;
+
+  if (filterStart) {
+    const selectedStart = new Date(filterStart);
+    selectedStart.setHours(0, 0, 0, 0);
+    if (end < selectedStart) return false;
+  }
+
+  if (filterEnd) {
+    const selectedEnd = new Date(filterEnd);
+    selectedEnd.setHours(23, 59, 59, 999);
+    if (start > selectedEnd) return false;
+  }
+
+  return true;
 }

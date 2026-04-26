@@ -1,19 +1,52 @@
-import React, { useMemo, useState } from "react";
-import { CalendarRange, Coins, MapPinned, Sparkles, TimerReset, Wand2 } from "lucide-react";
+import React, { useEffect, useMemo, useState } from "react";
+import { Link, useSearchParams } from "react-router-dom";
+import {
+  CalendarRange,
+  ChevronLeft,
+  ChevronRight,
+  Coins,
+  Compass,
+  MapPinned,
+  Mountain,
+  Route,
+  Sparkles,
+  TimerReset,
+  Users,
+} from "lucide-react";
 import api from "../utils/api";
 
-const INTEREST_OPTIONS = [
-  "food",
-  "nature",
-  "boating",
-  "hiking",
-  "culture",
-  "temples",
-  "sunrise",
-  "photography",
+const DRAFT_KEY = "st_itinerary_planner_draft_v2";
+const DESTINATION_SUGGESTIONS = ["Pokhara", "Kathmandu", "Chitwan", "Mustang", "Bandipur", "Lumbini"];
+const INTEREST_OPTIONS = ["food", "nature", "boating", "hiking", "culture", "temples", "sunrise", "photography"];
+const PACE_OPTIONS = [
+  { value: "relaxed", label: "Relaxed", copy: "Fewer stops and more breathing room." },
+  { value: "balanced", label: "Balanced", copy: "A steady mix of activity and rest." },
+  { value: "fast", label: "Fast", copy: "More movement and a fuller day." },
+];
+const STYLE_OPTIONS = [
+  { value: "balanced", label: "Balanced", icon: Sparkles, copy: "A general mix of places." },
+  { value: "culture", label: "Culture", icon: Mountain, copy: "Heritage, temples, and identity-rich stops." },
+  { value: "adventure", label: "Adventure", icon: Compass, copy: "Outdoors, movement, and scenic energy." },
+  { value: "food", label: "Food", icon: Coins, copy: "Local flavor and social stops." },
+  { value: "relaxation", label: "Relaxation", icon: Route, copy: "Scenic and softer pacing." },
+];
+const COMPANION_OPTIONS = [
+  { value: "solo", label: "Solo", copy: "Flexible and easy to adapt." },
+  { value: "couple", label: "Couple", copy: "More scenic and shared moments." },
+  { value: "friends", label: "Friends", copy: "Social and activity-friendly." },
+  { value: "family", label: "Family", copy: "Smoother transitions and easier flow." },
 ];
 
-const DESTINATION_SUGGESTIONS = ["Pokhara", "Kathmandu", "Chitwan", "Mustang", "Bandipur", "Lumbini"];
+const createInitialForm = () => ({
+  destination: "",
+  budget: "",
+  durationDays: "",
+  startDate: "",
+  interests: "",
+  pace: "balanced",
+  tripStyle: "balanced",
+  companionType: "solo",
+});
 
 const formatCurrency = (value) => {
   const amount = Number(value || 0);
@@ -21,17 +54,58 @@ const formatCurrency = (value) => {
   return `NPR ${amount.toLocaleString()}`;
 };
 
+const titleCase = (value) =>
+  String(value || "")
+    .split(/\s+/)
+    .filter(Boolean)
+    .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
+    .join(" ");
+
+const calculateDistanceKm = (from, to) => {
+  const lat1 = Number(from?.latitude);
+  const lon1 = Number(from?.longitude);
+  const lat2 = Number(to?.latitude);
+  const lon2 = Number(to?.longitude);
+  if (![lat1, lon1, lat2, lon2].every(Number.isFinite)) return 0;
+
+  const toRad = (deg) => (deg * Math.PI) / 180;
+  const earthRadiusKm = 6371;
+  const dLat = toRad(lat2 - lat1);
+  const dLon = toRad(lon2 - lon1);
+  const a =
+    Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+    Math.cos(toRad(lat1)) * Math.cos(toRad(lat2)) * Math.sin(dLon / 2) * Math.sin(dLon / 2);
+  const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+  return earthRadiusKm * c;
+};
+
+const getMinimumBudget = ({ destination, durationDays }) => {
+  const normalizedDestination = String(destination || "").trim().toLowerCase();
+  const dailyFloor = /(mustang|manang|dolpa|humla|muktinath)/.test(normalizedDestination) ? 5000 : 1000;
+  return dailyFloor * Math.max(1, Number(durationDays) || 1);
+};
+
+const loadDraft = () => {
+  try {
+    const raw = localStorage.getItem(DRAFT_KEY);
+    if (!raw) return createInitialForm();
+    const parsed = JSON.parse(raw);
+    return { ...createInitialForm(), ...parsed };
+  } catch {
+    return createInitialForm();
+  }
+};
+
 export default function ItineraryPlanner() {
-  const [form, setForm] = useState({
-    destination: "Pokhara",
-    budget: "15000",
-    durationDays: "3",
-    interests: "food,nature,boating",
-  });
+  const [searchParams] = useSearchParams();
+  const [form, setForm] = useState(() => loadDraft());
+  const [step, setStep] = useState(1);
   const [itinerary, setItinerary] = useState(null);
   const [summary, setSummary] = useState(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
+  const [prefillLabel, setPrefillLabel] = useState("");
+  const [fieldErrors, setFieldErrors] = useState({});
 
   const selectedInterests = useMemo(
     () =>
@@ -42,45 +116,145 @@ export default function ItineraryPlanner() {
     [form.interests]
   );
 
-  const onChange = (e) => setForm((prev) => ({ ...prev, [e.target.name]: e.target.value }));
+  useEffect(() => {
+    try {
+      localStorage.setItem(DRAFT_KEY, JSON.stringify(form));
+    } catch {
+      // ignore storage errors
+    }
+  }, [form]);
+
+  useEffect(() => {
+    const locationId = searchParams.get("locationId");
+    if (!locationId) return;
+
+    let active = true;
+    const loadLocation = async () => {
+      try {
+        const { data } = await api.get(`/api/locations/${locationId}`);
+        if (!active) return;
+        setForm((prev) => ({
+          ...prev,
+          destination: data?.name || prev.destination,
+          interests: prev.interests || [data?.category, data?.district].filter(Boolean).join(",").toLowerCase(),
+        }));
+        setPrefillLabel(data?.name || "Selected destination");
+      } catch {
+        // ignore prefill errors
+      }
+    };
+
+    loadLocation();
+    return () => {
+      active = false;
+    };
+  }, [searchParams]);
+
+  const routeDistanceKm = useMemo(() => {
+    const places = (itinerary?.days || []).flatMap((day) => day?.places || []);
+    return places.reduce((sum, place, index) => {
+      if (index === 0) return 0;
+      return sum + calculateDistanceKm(places[index - 1], place);
+    }, 0);
+  }, [itinerary]);
+
+  const budgetPerDay = useMemo(() => {
+    const budget = Number(form.budget || 0);
+    const days = Number(form.durationDays || 0);
+    return budget > 0 && days > 0 ? Math.round(budget / days) : 0;
+  }, [form.budget, form.durationDays]);
+
+  const totalPlaces = (itinerary?.days || []).reduce((sum, day) => sum + (day?.places?.length || 0), 0);
+  const totalMoments = (itinerary?.days || []).reduce((sum, day) => sum + (day?.timeline?.length || 0), 0);
+
+  const summaryBarItems = [
+    { label: "Destination", value: form.destination || "Not set" },
+    { label: "Days", value: form.durationDays || "--" },
+    { label: "Budget/day", value: budgetPerDay ? formatCurrency(budgetPerDay) : "--" },
+    { label: "Travel vibe", value: titleCase(form.tripStyle) },
+  ];
+
+  const validateStep = (stepToCheck = step) => {
+    const nextErrors = {};
+
+    if (stepToCheck === 1) {
+      if (!String(form.destination || "").trim()) nextErrors.destination = "Choose a destination.";
+      if (!Number(form.durationDays) || Number(form.durationDays) <= 0) nextErrors.durationDays = "Enter trip days.";
+      const minimumBudget = getMinimumBudget({ destination: form.destination, durationDays: form.durationDays });
+      if (!Number(form.budget) || Number(form.budget) < minimumBudget) {
+        nextErrors.budget = `Use at least ${formatCurrency(minimumBudget)} for this trip.`;
+      }
+    }
+
+    if (stepToCheck === 2) {
+      if (selectedInterests.length === 0) nextErrors.interests = "Choose at least one interest.";
+    }
+
+    setFieldErrors((prev) => ({ ...prev, ...nextErrors }));
+    return Object.keys(nextErrors).length === 0;
+  };
+
+  const updateField = (name, value) => {
+    setForm((prev) => ({ ...prev, [name]: value }));
+    setFieldErrors((prev) => {
+      if (!prev[name]) return prev;
+      const next = { ...prev };
+      delete next[name];
+      return next;
+    });
+  };
 
   const toggleInterest = (interest) => {
     const next = selectedInterests.includes(interest)
       ? selectedInterests.filter((item) => item !== interest)
       : [...selectedInterests, interest];
-
-    setForm((prev) => ({
-      ...prev,
-      interests: next.join(","),
-    }));
+    updateField("interests", next.join(","));
   };
 
-  const applyDestination = (destination) => {
-    setForm((prev) => ({ ...prev, destination }));
+  const goNext = () => {
+    if (!validateStep(step)) return;
+    setStep((current) => Math.min(3, current + 1));
   };
+
+  const goBack = () => setStep((current) => Math.max(1, current - 1));
 
   const onReset = () => {
-    setForm({
-      destination: "Pokhara",
-      budget: "15000",
-      durationDays: "3",
-      interests: "food,nature,boating",
-    });
+    const initial = createInitialForm();
+    setForm(initial);
+    setFieldErrors({});
     setError("");
+    setItinerary(null);
+    setSummary(null);
+    setStep(1);
+    try {
+      localStorage.removeItem(DRAFT_KEY);
+    } catch {
+      // ignore storage errors
+    }
   };
 
-  const onGenerate = async (e) => {
-    e.preventDefault();
+  const generateWithForm = async (override = {}) => {
+    const merged = { ...form, ...override };
+    const interests = String(merged.interests || "")
+      .split(",")
+      .map((item) => item.trim().toLowerCase())
+      .filter(Boolean);
+
+    setLoading(true);
+    setError("");
     try {
-      setLoading(true);
-      setError("");
       const payload = {
-        destination: form.destination,
-        budget: Number(form.budget),
-        durationDays: Number(form.durationDays),
-        interests: selectedInterests,
+        destination: merged.destination,
+        budget: Number(merged.budget),
+        durationDays: Number(merged.durationDays),
+        interests,
+        startDate: merged.startDate || undefined,
+        pace: merged.pace,
+        tripStyle: merged.tripStyle,
+        companionType: merged.companionType,
       };
       const { data } = await api.post("/api/itineraries/generate", payload);
+      setForm(merged);
       setItinerary(data?.itinerary || null);
       setSummary(data?.summary || null);
     } catch (err) {
@@ -90,255 +264,427 @@ export default function ItineraryPlanner() {
     }
   };
 
-  const totalPlaces = (itinerary?.days || []).reduce((sum, day) => sum + (day?.places?.length || 0), 0);
-  const totalMoments = (itinerary?.days || []).reduce((sum, day) => sum + (day?.timeline?.length || 0), 0);
+  const onGenerate = async (e) => {
+    e.preventDefault();
+    const basicsOk = validateStep(1);
+    const vibeOk = validateStep(2);
+    if (!basicsOk || !vibeOk) {
+      setStep(!basicsOk ? 1 : 2);
+      return;
+    }
+    await generateWithForm();
+  };
+
+  const quickAdjustments = [
+    {
+      label: "Make it cheaper",
+      run: () => generateWithForm({ budget: String(Math.max(2000, Math.round(Number(form.budget || 0) * 0.8))) }),
+    },
+    {
+      label: "Make it relaxed",
+      run: () => generateWithForm({ pace: "relaxed" }),
+    },
+    {
+      label: "More adventure",
+      run: () => generateWithForm({ tripStyle: "adventure", interests: Array.from(new Set([...selectedInterests, "hiking", "nature"])).join(",") }),
+    },
+  ];
+
+  const resultHighlights = summary
+    ? [
+        { label: "Planning mode", value: titleCase(summary.planningMode || "balanced") },
+        { label: "Matched locations", value: summary.matchedLocations || 0 },
+        { label: "Companion type", value: summary.companionType || titleCase(form.companionType) },
+        { label: "Timeline moments", value: totalMoments },
+      ]
+    : [];
 
   return (
     <div className="ai-planner">
       <div className="ai-planner__bg" />
       <div className="ai-planner__container">
-        <header className="ai-planner__hero">
-          <div className="ai-planner__hero-copy">
-            <p className="ai-planner__kicker">AI Trip Planner</p>
-            <h1>Build a sharper Nepal itinerary without the planning mess.</h1>
-            <p className="ai-planner__lead">
-              Choose a destination, budget, trip length, and interests. The planner turns that into a cleaner
-              day-by-day route with estimated costs and stop ideas.
-            </p>
-
-            <div className="ai-planner__hero-chips">
-              <span><Sparkles size={15} />Smarter trip flow</span>
-              <span><Coins size={15} />Budget-aware suggestions</span>
-              <span><CalendarRange size={15} />Day-by-day structure</span>
-            </div>
+        <header className="ai-hero">
+          <div>
+            <p className="ai-kicker">AI Trip Planner</p>
+            <h1>Build a better itinerary with less effort.</h1>
+            <p className="ai-lead">A guided planner that helps users choose the right trip basics, travel vibe, and review details before generating the route.</p>
+            {prefillLabel ? <div className="ai-prefill"><MapPinned size={15} />Prefilled from destination hub: <strong>{prefillLabel}</strong></div> : null}
           </div>
-
-          <div className="ai-planner__hero-card">
-            <div className="ai-planner__mini-head">
-              <span>Trip Snapshot</span>
-              <Wand2 size={16} />
-            </div>
-
-            <div className="ai-planner__mini-grid">
-              <div className="ai-mini-stat">
-                <span>Destination</span>
-                <strong>{form.destination || "Choose a place"}</strong>
+          <div className="ai-summary-bar">
+            {summaryBarItems.map((item) => (
+              <div key={item.label} className="ai-summary-bar__item">
+                <span>{item.label}</span>
+                <strong>{item.value}</strong>
               </div>
-              <div className="ai-mini-stat">
-                <span>Budget</span>
-                <strong>{formatCurrency(form.budget)}</strong>
-              </div>
-              <div className="ai-mini-stat">
-                <span>Days</span>
-                <strong>{form.durationDays || 0} day trip</strong>
-              </div>
-              <div className="ai-mini-stat">
-                <span>Interests</span>
-                <strong>{selectedInterests.length || 0} selected</strong>
-              </div>
-            </div>
-
-            <div className="ai-planner__destinations">
-              {DESTINATION_SUGGESTIONS.map((item) => (
-                <button
-                  key={item}
-                  type="button"
-                  className={`ai-chip ${form.destination === item ? "is-active" : ""}`}
-                  onClick={() => applyDestination(item)}
-                >
-                  {item}
-                </button>
-              ))}
-            </div>
+            ))}
           </div>
         </header>
 
-        <section className="ai-planner__workspace">
-          <form onSubmit={onGenerate} className="ai-form">
-            <div className="ai-form__head">
-              <div>
-                <p className="ai-form__eyebrow">Planner Input</p>
-                <h2>Tell the planner what kind of trip you want</h2>
-              </div>
-              <button type="button" className="ai-reset" onClick={onReset}>
-                <TimerReset size={15} />
-                Reset
-              </button>
-            </div>
+        <section className="ai-steps">
+          {[{ id: 1, label: "Trip basics" }, { id: 2, label: "Travel vibe" }, { id: 3, label: "Review" }].map((item) => (
+            <button
+              key={item.id}
+              type="button"
+              className={`ai-step ${step === item.id ? "is-active" : ""} ${step > item.id ? "is-complete" : ""}`}
+              onClick={() => setStep(item.id)}
+            >
+              <span>{item.id}</span>
+              <strong>{item.label}</strong>
+            </button>
+          ))}
+        </section>
 
-            <div className="ai-form__grid">
+        <form onSubmit={onGenerate} className="ai-panel">
+          <div className="ai-panel__head">
+            <div>
+              <p className="ai-panel__eyebrow">Planner Setup</p>
+              <h2>{step === 1 ? "Start with the trip basics" : step === 2 ? "Choose the travel vibe" : "Review before generating"}</h2>
+            </div>
+            <button type="button" className="ai-reset" onClick={onReset}>
+              <TimerReset size={15} />
+              Reset
+            </button>
+          </div>
+
+          {step === 1 ? (
+            <div className="ai-grid">
               <label className="ai-field">
                 <span>Destination</span>
-                <div className="ai-field__control">
+                <div className={`ai-field__control ${fieldErrors.destination ? "has-error" : ""}`}>
                   <MapPinned size={16} />
                   <input
                     name="destination"
                     value={form.destination}
-                    onChange={onChange}
+                    onChange={(e) => updateField("destination", e.target.value)}
                     placeholder="Pokhara, Kathmandu, Mustang"
+                    list="ai-destination-options"
                   />
                 </div>
+                {fieldErrors.destination ? <small className="ai-field__error">{fieldErrors.destination}</small> : null}
               </label>
 
               <label className="ai-field">
-                <span>Budget (NPR)</span>
-                <div className="ai-field__control">
+                <span>Total budget (NPR)</span>
+                <div className={`ai-field__control ${fieldErrors.budget ? "has-error" : ""}`}>
                   <Coins size={16} />
-                  <input name="budget" value={form.budget} onChange={onChange} placeholder="15000" />
+                  <input name="budget" value={form.budget} onChange={(e) => updateField("budget", e.target.value)} placeholder="15000" />
                 </div>
+                {fieldErrors.budget ? <small className="ai-field__error">{fieldErrors.budget}</small> : null}
               </label>
 
               <label className="ai-field">
                 <span>Duration (days)</span>
+                <div className={`ai-field__control ${fieldErrors.durationDays ? "has-error" : ""}`}>
+                  <CalendarRange size={16} />
+                  <input name="durationDays" value={form.durationDays} onChange={(e) => updateField("durationDays", e.target.value)} placeholder="3" />
+                </div>
+                {fieldErrors.durationDays ? <small className="ai-field__error">{fieldErrors.durationDays}</small> : null}
+              </label>
+
+              <label className="ai-field">
+                <span>Trip start date</span>
                 <div className="ai-field__control">
                   <CalendarRange size={16} />
-                  <input name="durationDays" value={form.durationDays} onChange={onChange} placeholder="3" />
-                </div>
-              </label>
-
-              <label className="ai-field ai-field--wide">
-                <span>Interests</span>
-                <div className="ai-field__control ai-field__control--text">
                   <input
-                    name="interests"
-                    value={form.interests}
-                    onChange={onChange}
-                    placeholder="food, nature, hiking, lakes"
+                    type="date"
+                    name="startDate"
+                    min={new Date().toISOString().split("T")[0]}
+                    value={form.startDate}
+                    onChange={(e) => updateField("startDate", e.target.value)}
                   />
                 </div>
-                <small>Use commas, or tap the quick tags below.</small>
               </label>
-            </div>
 
-            <div className="ai-interest-picks">
-              {INTEREST_OPTIONS.map((interest) => (
-                <button
-                  key={interest}
-                  type="button"
-                  className={`ai-pill ${selectedInterests.includes(interest) ? "is-active" : ""}`}
-                  onClick={() => toggleInterest(interest)}
-                >
-                  {interest}
+              <div className="ai-inline-help ai-inline-help--wide">
+                <strong>What makes this step good UX</strong>
+                <p>Users only answer the minimum questions first: where, how long, and roughly how much they want to spend.</p>
+              </div>
+              <datalist id="ai-destination-options">
+                {DESTINATION_SUGGESTIONS.map((item) => <option key={item} value={item} />)}
+              </datalist>
+            </div>
+          ) : null}
+
+          {step === 2 ? (
+            <div className="ai-stack">
+              <div className="ai-choice-group">
+                <div className="ai-choice-group__head">
+                  <h3>Pace</h3>
+                  <p>Make this a visual choice instead of a plain dropdown.</p>
+                </div>
+                <div className="ai-choice-grid ai-choice-grid--three">
+                  {PACE_OPTIONS.map((item) => (
+                    <button
+                      key={item.value}
+                      type="button"
+                      className={`ai-choice ${form.pace === item.value ? "is-active" : ""}`}
+                      onClick={() => updateField("pace", item.value)}
+                    >
+                      <strong>{item.label}</strong>
+                      <p>{item.copy}</p>
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              <div className="ai-choice-group">
+                <div className="ai-choice-group__head">
+                  <h3>Trip style</h3>
+                  <p>Choose the travel focus you want the itinerary to optimize for.</p>
+                </div>
+                <div className="ai-choice-grid">
+                  {STYLE_OPTIONS.map((item) => {
+                    const Icon = item.icon;
+                    return (
+                      <button
+                        key={item.value}
+                        type="button"
+                        className={`ai-choice ${form.tripStyle === item.value ? "is-active" : ""}`}
+                        onClick={() => updateField("tripStyle", item.value)}
+                      >
+                        <span className="ai-choice__icon"><Icon size={16} /></span>
+                        <strong>{item.label}</strong>
+                        <p>{item.copy}</p>
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+
+              <div className="ai-choice-group">
+                <div className="ai-choice-group__head">
+                  <h3>Who are you traveling with?</h3>
+                  <p>This helps shape stop density and route tone.</p>
+                </div>
+                <div className="ai-choice-grid ai-choice-grid--four">
+                  {COMPANION_OPTIONS.map((item) => (
+                    <button
+                      key={item.value}
+                      type="button"
+                      className={`ai-choice ${form.companionType === item.value ? "is-active" : ""}`}
+                      onClick={() => updateField("companionType", item.value)}
+                    >
+                      <strong>{item.label}</strong>
+                      <p>{item.copy}</p>
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              <div className="ai-choice-group">
+                <div className="ai-choice-group__head">
+                  <h3>Interests</h3>
+                  <p>Pick at least one so the planner has a clear signal.</p>
+                </div>
+                <div className="ai-interest-picks">
+                  {INTEREST_OPTIONS.map((interest) => (
+                    <button
+                      key={interest}
+                      type="button"
+                      className={`ai-pill ${selectedInterests.includes(interest) ? "is-active" : ""}`}
+                      onClick={() => toggleInterest(interest)}
+                    >
+                      {interest}
+                    </button>
+                  ))}
+                </div>
+                <label className="ai-field">
+                  <span>Custom interests</span>
+                  <div className={`ai-field__control ${fieldErrors.interests ? "has-error" : ""}`}>
+                    <Sparkles size={16} />
+                    <input
+                      name="interests"
+                      value={form.interests}
+                      onChange={(e) => updateField("interests", e.target.value)}
+                      placeholder="food, nature, sunrise"
+                    />
+                  </div>
+                  {fieldErrors.interests ? <small className="ai-field__error">{fieldErrors.interests}</small> : <small>Use commas if you want to add custom interests.</small>}
+                </label>
+              </div>
+            </div>
+          ) : null}
+
+          {step === 3 ? (
+            <div className="ai-review">
+              <div className="ai-review__grid">
+                <article className="ai-review__card">
+                  <span>Destination</span>
+                  <strong>{form.destination || "Not set"}</strong>
+                </article>
+                <article className="ai-review__card">
+                  <span>Budget</span>
+                  <strong>{formatCurrency(form.budget)}</strong>
+                </article>
+                <article className="ai-review__card">
+                  <span>Duration</span>
+                  <strong>{form.durationDays || "--"} days</strong>
+                </article>
+                <article className="ai-review__card">
+                  <span>Daily budget</span>
+                  <strong>{budgetPerDay ? formatCurrency(budgetPerDay) : "--"}</strong>
+                </article>
+                <article className="ai-review__card">
+                  <span>Pace</span>
+                  <strong>{titleCase(form.pace)}</strong>
+                </article>
+                <article className="ai-review__card">
+                  <span>Style</span>
+                  <strong>{titleCase(form.tripStyle)}</strong>
+                </article>
+                <article className="ai-review__card">
+                  <span>Companion</span>
+                  <strong>{titleCase(form.companionType)}</strong>
+                </article>
+                <article className="ai-review__card">
+                  <span>Interests</span>
+                  <strong>{selectedInterests.length ? selectedInterests.join(", ") : "None selected"}</strong>
+                </article>
+              </div>
+              <div className="ai-inline-help">
+                <strong>Before generating</strong>
+                <p>The route will be saved automatically to My Trips. If the result feels off, you can immediately regenerate a cheaper, calmer, or more adventurous version.</p>
+              </div>
+            </div>
+          ) : null}
+
+          <div className="ai-actions">
+            <button type="button" className="ai-nav-btn ai-nav-btn--ghost" onClick={goBack} disabled={step === 1 || loading}>
+              <ChevronLeft size={16} />
+              Back
+            </button>
+
+            <div className="ai-actions__right">
+              {step < 3 ? (
+                <button type="button" className="ai-nav-btn ai-nav-btn--primary" onClick={goNext}>
+                  Next
+                  <ChevronRight size={16} />
                 </button>
+              ) : (
+                <button type="submit" className="ai-nav-btn ai-nav-btn--primary" disabled={loading}>
+                  {loading ? "Generating..." : "Generate itinerary"}
+                </button>
+              )}
+            </div>
+          </div>
+        </form>
+
+        {error ? <p className="ai-error">{error}</p> : null}
+
+        {loading ? (
+          <section className="ai-loading">
+            <div className="ai-loading__pulse" />
+            <div>
+              <p className="ai-panel__eyebrow">Generating</p>
+              <h2>Building a better day-by-day route</h2>
+              <p>Matching destinations, balancing cost, and spreading your stops into a more usable itinerary.</p>
+            </div>
+          </section>
+        ) : null}
+
+        {summary ? (
+          <>
+            <section className="ai-results-head">
+              <div className="ai-results-head__grid">
+                <article className="ai-review__card"><span>Estimated cost</span><strong>{formatCurrency(summary.totalEstimatedCost)}</strong></article>
+                <article className="ai-review__card"><span>Budget gap</span><strong>{formatCurrency(summary.budgetGap)}</strong></article>
+                <article className="ai-review__card"><span>Planned stops</span><strong>{totalPlaces}</strong></article>
+                <article className="ai-review__card"><span>Route distance</span><strong>{routeDistanceKm > 0 ? `${routeDistanceKm.toFixed(1)} km` : "Map data pending"}</strong></article>
+              </div>
+              <div className="ai-result-strip">
+                {resultHighlights.map((item) => (
+                  <article key={item.label} className="ai-result-strip__item">
+                    <span>{item.label}</span>
+                    <strong>{item.value}</strong>
+                  </article>
+                ))}
+              </div>
+              <div className="ai-quick-actions">
+                {quickAdjustments.map((item) => (
+                  <button key={item.label} type="button" className="ai-quick-actions__btn" onClick={item.run} disabled={loading}>
+                    {item.label}
+                  </button>
+                ))}
+              </div>
+            </section>
+
+            <div className="ai-days">
+              {(itinerary?.days || []).map((day) => (
+                <article key={day.day} className="ai-day">
+                  <div className="ai-day__head">
+                    <div>
+                      <p className="ai-day__badge">Day {day.day}</p>
+                      <h2>{day.title}</h2>
+                    </div>
+                    <p className="ai-day__cost">Estimated {formatCurrency(day.estimatedCost)}</p>
+                  </div>
+
+                  {day.notes ? <p className="ai-day__notes">{day.notes}</p> : null}
+
+                  <div className="ai-day__body">
+                    <div>
+                      <p className="ai-section-label">Timeline</p>
+                      <div className="ai-timeline">
+                        {(day.timeline || []).length > 0 ? (
+                          day.timeline.map((item, index) => (
+                            <div key={`${item.time}-${index}`} className="ai-timeline__item">
+                              <div className="ai-timeline__time">{item.time}</div>
+                              <div>
+                                <p className="ai-timeline__title">{item.title}</p>
+                                <p className="ai-timeline__detail">{item.details}</p>
+                              </div>
+                            </div>
+                          ))
+                        ) : (
+                          <div className="ai-block">No timeline details for this day yet.</div>
+                        )}
+                      </div>
+                    </div>
+
+                    <div>
+                      <p className="ai-section-label">Places</p>
+                      <div className="ai-day__places">
+                        {(day.places || []).length > 0 ? (
+                          day.places.map((place, index) => (
+                            <div key={`${place.name}-${index}`} className="ai-place">
+                              <div>
+                                <p className="ai-place__name">{place.name}</p>
+                                <p className="ai-place__meta">{place.category || "Attraction"}</p>
+                                {place.notes ? <p className="ai-place__detail">{place.notes}</p> : null}
+                              </div>
+                              <p className="ai-place__cost">{formatCurrency(place.estimatedCost)}</p>
+                            </div>
+                          ))
+                        ) : (
+                          <div className="ai-block">No places planned yet for this day.</div>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                </article>
               ))}
             </div>
 
-            <div className="ai-form__footer">
-              <button className="ai-btn" disabled={loading}>
-                {loading ? "Generating your plan..." : "Generate itinerary"}
-              </button>
+            <div className="ai-result-actions">
+              <Link to={`/itineraries/${itinerary?._id}`} className="ai-link ai-link--primary">Open itinerary details</Link>
+              <Link to="/my-trips" className="ai-link ai-link--ghost">View in My Trips</Link>
             </div>
-          </form>
-        </section>
-
-        {error && <p className="ai-error">{error}</p>}
-
-        {summary && (
-          <section className="ai-summary">
-            <article className="ai-summary__card">
-              <span>Destination</span>
-              <strong>{summary.destination}</strong>
-            </article>
-            <article className="ai-summary__card">
-              <span>Duration</span>
-              <strong>{summary.durationDays} days</strong>
-            </article>
-            <article className="ai-summary__card">
-              <span>Budget</span>
-              <strong>{summary.budget}</strong>
-            </article>
-            <article className="ai-summary__card">
-              <span>Estimated Cost</span>
-              <strong>{summary.totalEstimatedCost}</strong>
-            </article>
-            <article className="ai-summary__card">
-              <span>Budget Gap</span>
-              <strong>{summary.budgetGap}</strong>
-            </article>
-            <article className="ai-summary__card">
-              <span>Planned Stops</span>
-              <strong>{totalPlaces}</strong>
-            </article>
-            <article className="ai-summary__card">
-              <span>Timeline Moments</span>
-              <strong>{totalMoments}</strong>
-            </article>
-          </section>
-        )}
-
-        <div className="ai-days">
-          {(itinerary?.days || []).map((day) => (
-            <article key={day.day} className="ai-day">
-              <div className="ai-day__head">
-                <div>
-                  <p className="ai-day__badge">Day {day.day}</p>
-                  <h2>{day.title}</h2>
-                </div>
-                <p className="ai-day__cost">Estimated {formatCurrency(day.estimatedCost)}</p>
-              </div>
-
-              {day.notes && <p className="ai-day__notes">{day.notes}</p>}
-
-              <div className="ai-day__body">
-                <div className="ai-day__timeline-col">
-                  <p className="ai-section-label">Timeline</p>
-                  {day.timeline && day.timeline.length > 0 ? (
-                    <div className="ai-timeline">
-                      {day.timeline.map((item, index) => (
-                        <div key={`${item.time}-${index}`} className="ai-timeline__item">
-                          <div className="ai-timeline__time">{item.time}</div>
-                          <div>
-                            <p className="ai-timeline__title">{item.title}</p>
-                            <p className="ai-timeline__detail">{item.details}</p>
-                          </div>
-                        </div>
-                      ))}
-                    </div>
-                  ) : (
-                    <div className="ai-block ai-block--muted">No timeline details for this day yet.</div>
-                  )}
-                </div>
-
-                <div className="ai-day__places-col">
-                  <p className="ai-section-label">Places</p>
-                  <div className="ai-day__places">
-                    {(day.places || []).length > 0 ? (
-                      (day.places || []).map((place, index) => (
-                        <div key={`${place.name}-${index}`} className="ai-place">
-                          <div>
-                            <p className="ai-place__name">{place.name}</p>
-                            <p className="ai-place__meta">{place.category || "Attraction"}</p>
-                          </div>
-                          <p className="ai-place__cost">{formatCurrency(place.estimatedCost)}</p>
-                        </div>
-                      ))
-                    ) : (
-                      <div className="ai-place ai-place--empty">
-                        <div>
-                          <p className="ai-place__name">More local details coming soon</p>
-                          <p className="ai-place__meta">This day can be refined with specific nearby places.</p>
-                        </div>
-                      </div>
-                    )}
-                  </div>
-                </div>
-              </div>
-            </article>
-          ))}
-        </div>
+          </>
+        ) : null}
       </div>
 
       <style>{`
         :root {
-          --ai-navy: #11365d;
-          --ai-sky: #3ea2dc;
-          --ai-teal: #1f8d84;
-          --ai-coral: #ff7a5c;
+          --ai-navy: #133b61;
+          --ai-sky: #2788c5;
+          --ai-teal: #16806f;
+          --ai-coral: #f6724a;
           --ai-ink: #13283f;
-          --ai-muted: #5f7891;
-          --ai-line: rgba(183, 201, 220, 0.42);
-          --ai-card: rgba(255, 255, 255, 0.84);
-          --ai-shadow: 0 20px 48px rgba(19, 40, 63, 0.08);
+          --ai-muted: #627d96;
+          --ai-line: rgba(190, 208, 223, 0.44);
+          --ai-card: rgba(255, 255, 255, 0.88);
+          --ai-shadow: 0 18px 42px rgba(19, 40, 63, 0.08);
+          --ai-soft: rgba(245, 249, 252, 0.94);
         }
 
         .ai-planner {
@@ -348,241 +694,278 @@ export default function ItineraryPlanner() {
           color: var(--ai-ink);
           font-family: "Plus Jakarta Sans", "Sora", "DM Sans", system-ui, sans-serif;
           background:
-            radial-gradient(circle at top left, rgba(102, 183, 243, 0.18), transparent 24%),
-            radial-gradient(circle at 92% 10%, rgba(255, 164, 133, 0.16), transparent 18%),
-            linear-gradient(180deg, #f8fbff 0%, #f4f8fc 54%, #edf3f9 100%);
+            radial-gradient(circle at top left, rgba(102, 183, 243, 0.16), transparent 24%),
+            radial-gradient(circle at 92% 10%, rgba(255, 164, 133, 0.14), transparent 18%),
+            linear-gradient(180deg, #f8fbff 0%, #f2f7fb 54%, #edf3f9 100%);
         }
 
         .ai-planner__bg {
           position: absolute;
           inset: 0;
           background:
-            radial-gradient(circle at 22% 16%, rgba(72, 153, 255, 0.12), transparent 24%),
-            radial-gradient(circle at 82% 8%, rgba(40, 190, 165, 0.11), transparent 20%);
+            radial-gradient(circle at 22% 16%, rgba(72, 153, 255, 0.1), transparent 24%),
+            radial-gradient(circle at 82% 8%, rgba(40, 190, 165, 0.08), transparent 20%);
           pointer-events: none;
         }
 
         .ai-planner__container {
           position: relative;
-          max-width: 1240px;
+          max-width: 1180px;
           margin: 0 auto;
-          padding: 32px 20px 64px;
+          padding: 20px 18px 48px;
         }
 
-        .ai-planner__hero {
-          display: grid;
-          grid-template-columns: minmax(0, 1.25fr) minmax(320px, 0.75fr);
-          gap: 22px;
-          align-items: stretch;
-          margin-bottom: 22px;
-        }
-
-        .ai-planner__hero-copy,
-        .ai-planner__hero-card,
-        .ai-form,
-        .ai-sidecard,
-        .ai-summary,
-        .ai-empty,
+        .ai-hero,
+        .ai-panel,
+        .ai-loading,
+        .ai-results-head,
         .ai-day {
           border: 1px solid var(--ai-line);
+          border-radius: 28px;
           background: var(--ai-card);
           box-shadow: var(--ai-shadow);
           backdrop-filter: blur(18px);
           -webkit-backdrop-filter: blur(18px);
         }
 
-        .ai-planner__hero-copy {
-          border-radius: 34px;
-          padding: 30px;
-          background:
-            radial-gradient(circle at top right, rgba(255, 255, 255, 0.18), transparent 28%),
-            linear-gradient(135deg, rgba(14, 52, 90, 0.98) 0%, rgba(29, 98, 151, 0.94) 54%, rgba(73, 171, 196, 0.82) 100%);
-          color: #fff;
-        }
-
-        .ai-planner__kicker,
-        .ai-form__eyebrow,
-        .ai-sidecard__eyebrow,
-        .ai-empty__eyebrow,
-        .ai-section-label {
-          margin: 0 0 10px;
-          font-size: 0.74rem;
-          font-weight: 700;
-          text-transform: uppercase;
-          letter-spacing: 0.16em;
-        }
-
-        .ai-planner__kicker {
-          color: rgba(230, 241, 251, 0.74);
-        }
-
-        .ai-planner__hero-copy h1 {
-          margin: 0;
-          max-width: 11ch;
-          font-size: clamp(2.2rem, 4.2vw, 4.1rem);
-          line-height: 0.94;
-          letter-spacing: -0.05em;
-        }
-
-        .ai-planner__lead {
-          margin: 18px 0 0;
-          max-width: 620px;
-          color: rgba(236, 244, 252, 0.84);
-          font-size: 1rem;
-          line-height: 1.7;
-        }
-
-        .ai-planner__hero-chips {
-          display: flex;
-          flex-wrap: wrap;
-          gap: 10px;
-          margin-top: 20px;
-        }
-
-        .ai-planner__hero-chips span {
-          display: inline-flex;
-          align-items: center;
-          gap: 8px;
-          padding: 9px 12px;
-          border-radius: 999px;
-          border: 1px solid rgba(255, 255, 255, 0.15);
-          background: rgba(255, 255, 255, 0.1);
-          color: rgba(245, 249, 253, 0.96);
-          font-size: 0.82rem;
-          font-weight: 700;
-        }
-
-        .ai-planner__hero-card {
-          border-radius: 30px;
-          padding: 24px;
+        .ai-hero {
           display: grid;
+          grid-template-columns: minmax(0, 1.2fr) minmax(300px, 0.8fr);
           gap: 18px;
+          padding: 22px;
         }
 
-        .ai-planner__mini-head {
-          display: flex;
-          align-items: center;
-          justify-content: space-between;
-          color: var(--ai-navy);
-          font-weight: 700;
-        }
-
-        .ai-planner__mini-grid {
-          display: grid;
-          grid-template-columns: repeat(2, minmax(0, 1fr));
-          gap: 12px;
-        }
-
-        .ai-mini-stat {
-          padding: 14px;
-          border-radius: 20px;
-          background: linear-gradient(180deg, rgba(246, 250, 253, 0.98), rgba(236, 244, 250, 0.96));
-          border: 1px solid rgba(216, 228, 239, 0.94);
-          min-width: 0;
-        }
-
-        .ai-mini-stat span,
-        .ai-summary__card span {
-          display: block;
-          color: var(--ai-muted);
-          font-size: 0.76rem;
+        .ai-kicker,
+        .ai-panel__eyebrow,
+        .ai-section-label {
+          margin: 0 0 8px;
+          font-size: 0.74rem;
+          font-weight: 800;
+          letter-spacing: 0.16em;
           text-transform: uppercase;
-          letter-spacing: 0.12em;
-          margin-bottom: 6px;
+          color: var(--ai-sky);
         }
 
-        .ai-mini-stat strong,
-        .ai-summary__card strong {
-          display: block;
-          color: var(--ai-navy);
-          font-size: 1rem;
-          line-height: 1.35;
-          word-break: break-word;
-        }
-
-        .ai-planner__destinations,
-        .ai-interest-picks {
-          display: flex;
-          flex-wrap: wrap;
-          gap: 10px;
-        }
-
-        .ai-chip,
-        .ai-pill,
-        .ai-reset {
-          border: 1px solid rgba(209, 223, 236, 0.96);
-          background: rgba(244, 248, 252, 0.96);
-          color: #315170;
-          border-radius: 999px;
-          cursor: pointer;
-          transition: transform 0.22s ease, box-shadow 0.22s ease, border-color 0.22s ease, background 0.22s ease;
-        }
-
-        .ai-chip,
-        .ai-pill {
-          padding: 9px 12px;
-          font-size: 0.83rem;
-          font-weight: 700;
-          text-transform: capitalize;
-        }
-
-        .ai-chip.is-active,
-        .ai-pill.is-active {
-          color: #fff;
-          background: linear-gradient(135deg, var(--ai-navy), #3f95cb);
-          border-color: transparent;
-          box-shadow: 0 14px 28px rgba(26, 72, 113, 0.16);
-        }
-
-        .ai-chip:hover,
-        .ai-pill:hover,
-        .ai-reset:hover,
-        .ai-btn:hover {
-          transform: translateY(-2px);
-        }
-
-        .ai-planner__workspace {
-          display: grid;
-          grid-template-columns: minmax(0, 1.18fr) minmax(260px, 0.56fr);
-          gap: 22px;
-          align-items: start;
-          margin-bottom: 18px;
-        }
-
-        .ai-form,
-        .ai-sidecard,
-        .ai-summary,
-        .ai-empty,
-        .ai-day {
-          border-radius: 28px;
-        }
-
-        .ai-form {
-          padding: 24px;
-          display: grid;
-          gap: 20px;
-        }
-
-        .ai-form__head,
-        .ai-form__footer {
-          display: flex;
-          align-items: center;
-          justify-content: space-between;
-          gap: 14px;
-          flex-wrap: wrap;
-        }
-
-        .ai-form__head h2,
-        .ai-empty h2,
+        .ai-hero h1,
+        .ai-panel__head h2,
+        .ai-loading h2,
         .ai-day__head h2 {
           margin: 0;
           color: var(--ai-navy);
         }
 
-        .ai-form__grid {
+        .ai-hero h1 {
+          font-size: clamp(1.9rem, 3vw, 3rem);
+          line-height: 1.02;
+          letter-spacing: -0.04em;
+          max-width: 12ch;
+        }
+
+        .ai-lead {
+          margin: 12px 0 0;
+          max-width: 56ch;
+          color: var(--ai-muted);
+          line-height: 1.65;
+        }
+
+        .ai-prefill {
+          display: inline-flex;
+          align-items: center;
+          gap: 8px;
+          margin-top: 14px;
+          padding: 8px 12px;
+          border-radius: 999px;
+          background: rgba(39, 136, 197, 0.08);
+          color: var(--ai-navy);
+          font-weight: 700;
+        }
+
+        .ai-summary-bar {
           display: grid;
           grid-template-columns: repeat(2, minmax(0, 1fr));
-          gap: 16px;
+          gap: 10px;
+        }
+
+        .ai-summary-bar__item,
+        .ai-review__card,
+        .ai-result-strip__item {
+          padding: 14px;
+          border-radius: 18px;
+          background: var(--ai-soft);
+          border: 1px solid rgba(214, 227, 238, 0.95);
+        }
+
+        .ai-summary-bar__item span,
+        .ai-review__card span,
+        .ai-result-strip__item span {
+          display: block;
+          margin-bottom: 6px;
+          color: var(--ai-muted);
+          font-size: 0.74rem;
+          letter-spacing: 0.12em;
+          text-transform: uppercase;
+        }
+
+        .ai-summary-bar__item strong,
+        .ai-review__card strong,
+        .ai-result-strip__item strong {
+          color: var(--ai-navy);
+          display: block;
+        }
+
+        .ai-steps {
+          display: grid;
+          grid-template-columns: repeat(3, minmax(0, 1fr));
+          gap: 10px;
+          margin: 14px 0;
+        }
+
+        .ai-step {
+          display: flex;
+          align-items: center;
+          gap: 12px;
+          padding: 14px 16px;
+          border-radius: 18px;
+          border: 1px solid rgba(214, 227, 238, 0.95);
+          background: rgba(255, 255, 255, 0.7);
+          cursor: pointer;
+        }
+
+        .ai-step span {
+          width: 28px;
+          height: 28px;
+          border-radius: 999px;
+          display: grid;
+          place-items: center;
+          background: rgba(39, 136, 197, 0.08);
+          color: var(--ai-sky);
+          font-size: 0.84rem;
+          font-weight: 800;
+        }
+
+        .ai-step strong {
+          color: var(--ai-navy);
+        }
+
+        .ai-step.is-active {
+          border-color: rgba(39, 136, 197, 0.4);
+          background: rgba(39, 136, 197, 0.08);
+        }
+
+        .ai-step.is-complete span {
+          background: rgba(22, 128, 111, 0.12);
+          color: var(--ai-teal);
+        }
+
+        .ai-panel {
+          padding: 20px;
+        }
+
+        .ai-panel__head,
+        .ai-actions {
+          display: flex;
+          align-items: center;
+          justify-content: space-between;
+          gap: 12px;
+          flex-wrap: wrap;
+        }
+
+        .ai-grid,
+        .ai-review__grid,
+        .ai-choice-grid,
+        .ai-results-head__grid {
+          display: grid;
+          gap: 14px;
+        }
+
+        .ai-grid,
+        .ai-review__grid,
+        .ai-results-head__grid {
+          grid-template-columns: repeat(2, minmax(0, 1fr));
+        }
+
+        .ai-choice-grid {
+          grid-template-columns: repeat(2, minmax(0, 1fr));
+        }
+
+        .ai-choice-grid--three {
+          grid-template-columns: repeat(3, minmax(0, 1fr));
+        }
+
+        .ai-choice-grid--four {
+          grid-template-columns: repeat(4, minmax(0, 1fr));
+        }
+
+        .ai-stack {
+          display: grid;
+          gap: 20px;
+        }
+
+        .ai-choice-group__head h3 {
+          margin: 0;
+          color: var(--ai-navy);
+        }
+
+        .ai-choice-group__head p,
+        .ai-inline-help p,
+        .ai-day__notes,
+        .ai-timeline__detail,
+        .ai-place__meta,
+        .ai-place__detail,
+        .ai-loading p {
+          margin: 6px 0 0;
+          color: var(--ai-muted);
+          line-height: 1.6;
+        }
+
+        .ai-choice {
+          text-align: left;
+          padding: 16px;
+          border-radius: 18px;
+          border: 1px solid rgba(214, 227, 238, 0.95);
+          background: rgba(255, 255, 255, 0.76);
+          cursor: pointer;
+          transition: transform 0.18s ease, border-color 0.18s ease, box-shadow 0.18s ease;
+        }
+
+        .ai-choice:hover,
+        .ai-nav-btn:hover,
+        .ai-pill:hover,
+        .ai-quick-actions__btn:hover,
+        .ai-link:hover,
+        .ai-reset:hover {
+          transform: translateY(-1px);
+        }
+
+        .ai-choice.is-active {
+          border-color: rgba(39, 136, 197, 0.45);
+          background: rgba(39, 136, 197, 0.08);
+          box-shadow: 0 12px 24px rgba(39, 136, 197, 0.08);
+        }
+
+        .ai-choice strong {
+          display: block;
+          color: var(--ai-navy);
+          margin-bottom: 4px;
+        }
+
+        .ai-choice p {
+          margin: 0;
+          color: var(--ai-muted);
+          line-height: 1.5;
+        }
+
+        .ai-choice__icon {
+          display: inline-flex;
+          margin-bottom: 10px;
+          color: var(--ai-sky);
+        }
+
+        .ai-interest-picks {
+          display: flex;
+          flex-wrap: wrap;
+          gap: 10px;
+          margin-top: 12px;
         }
 
         .ai-field {
@@ -598,28 +981,27 @@ export default function ItineraryPlanner() {
 
         .ai-field small {
           color: var(--ai-muted);
-          font-size: 0.82rem;
         }
 
         .ai-field__control {
           display: flex;
           align-items: center;
           gap: 10px;
-          padding: 0 14px;
           min-height: 52px;
+          padding: 0 14px;
           border-radius: 16px;
           border: 1px solid rgba(194, 210, 224, 0.9);
           background: rgba(250, 252, 255, 0.98);
           color: #5b7894;
         }
 
-        .ai-field__control--text {
-          padding-right: 0;
+        .ai-field__control.has-error {
+          border-color: rgba(215, 80, 80, 0.55);
+          box-shadow: 0 0 0 4px rgba(215, 80, 80, 0.08);
         }
 
-        .ai-field input {
+        .ai-field__control input {
           width: 100%;
-          min-width: 0;
           border: none;
           outline: none;
           background: transparent;
@@ -627,138 +1009,141 @@ export default function ItineraryPlanner() {
           font-size: 0.96rem;
         }
 
-        .ai-field__control:focus-within {
-          border-color: rgba(63, 149, 203, 0.74);
-          box-shadow: 0 0 0 4px rgba(63, 149, 203, 0.12);
+        .ai-field__error,
+        .ai-error {
+          color: #b34040;
+          font-weight: 700;
         }
 
-        .ai-field--wide {
+        .ai-inline-help {
+          padding: 16px 18px;
+          border-radius: 18px;
+          background: rgba(39, 136, 197, 0.06);
+          border: 1px solid rgba(39, 136, 197, 0.12);
+        }
+
+        .ai-inline-help strong {
+          color: var(--ai-navy);
+          display: block;
+        }
+
+        .ai-inline-help--wide {
           grid-column: 1 / -1;
         }
 
-        .ai-reset {
+        .ai-pill,
+        .ai-reset,
+        .ai-nav-btn,
+        .ai-quick-actions__btn {
+          border: 1px solid rgba(209, 223, 236, 0.96);
+          background: rgba(244, 248, 252, 0.96);
+          color: #315170;
+          border-radius: 999px;
+          cursor: pointer;
+          transition: transform 0.18s ease, border-color 0.18s ease, background 0.18s ease;
+        }
+
+        .ai-pill {
+          padding: 9px 12px;
+          font-size: 0.83rem;
+          font-weight: 700;
+          text-transform: capitalize;
+        }
+
+        .ai-pill.is-active {
+          color: #fff;
+          background: linear-gradient(135deg, var(--ai-navy), #3f95cb);
+          border-color: transparent;
+        }
+
+        .ai-reset,
+        .ai-nav-btn {
           display: inline-flex;
           align-items: center;
           gap: 8px;
-          padding: 10px 14px;
-          font-weight: 700;
+          min-height: 44px;
+          padding: 0 16px;
+          font-weight: 800;
         }
 
-        .ai-form__hint {
-          margin: 0;
-          max-width: 480px;
-          color: var(--ai-muted);
-          font-size: 0.9rem;
-        }
-
-        .ai-btn {
-          border: none;
-          border-radius: 16px;
-          padding: 13px 18px;
+        .ai-nav-btn--primary,
+        .ai-link--primary {
           background: linear-gradient(135deg, var(--ai-coral), #ff9368);
           color: #fff;
-          font-size: 0.95rem;
-          font-weight: 800;
-          cursor: pointer;
-          box-shadow: 0 18px 34px rgba(255, 122, 92, 0.22);
-          transition: transform 0.22s ease, box-shadow 0.22s ease, opacity 0.22s ease;
+          border-color: transparent;
         }
 
-        .ai-btn:disabled {
-          opacity: 0.72;
+        .ai-nav-btn:disabled,
+        .ai-quick-actions__btn:disabled {
+          opacity: 0.6;
           cursor: not-allowed;
           transform: none;
-          box-shadow: none;
         }
 
-        .ai-sidecard {
-          padding: 22px;
-          display: grid;
-          gap: 18px;
-        }
-
-        .ai-sidecard__eyebrow,
-        .ai-section-label {
-          color: #6f89a5;
-        }
-
-        .ai-sidecard__steps {
-          display: grid;
-          gap: 14px;
-        }
-
-        .ai-sidecard__steps div {
-          padding: 14px 16px;
-          border-radius: 18px;
-          background: rgba(245, 249, 253, 0.98);
-          border: 1px solid rgba(223, 232, 240, 0.96);
-        }
-
-        .ai-sidecard__steps strong {
-          display: block;
-          color: var(--ai-navy);
-          margin-bottom: 5px;
-        }
-
-        .ai-sidecard__steps p,
-        .ai-empty p,
-        .ai-day__notes,
-        .ai-timeline__detail,
-        .ai-place__meta,
-        .ai-error {
-          margin: 0;
-          color: var(--ai-muted);
-          line-height: 1.6;
+        .ai-actions__right {
+          display: flex;
+          gap: 10px;
         }
 
         .ai-error {
-          margin-bottom: 16px;
+          margin: 14px 0 0;
           padding: 14px 16px;
-          border-radius: 18px;
+          border-radius: 16px;
           border: 1px solid rgba(248, 169, 169, 0.78);
           background: rgba(255, 238, 238, 0.9);
-          color: #b34141;
-          font-weight: 700;
         }
 
-        .ai-summary {
-          padding: 18px;
+        .ai-loading,
+        .ai-results-head {
+          margin-top: 16px;
+          padding: 20px;
+        }
+
+        .ai-loading {
           display: grid;
-          grid-template-columns: repeat(7, minmax(0, 1fr));
-          gap: 12px;
-          margin-bottom: 18px;
-        }
-
-        .ai-summary__card {
-          padding: 14px;
-          border-radius: 18px;
-          background: rgba(246, 250, 253, 0.98);
-          border: 1px solid rgba(220, 230, 238, 0.96);
-          min-width: 0;
-        }
-
-        .ai-empty {
-          display: grid;
-          grid-template-columns: 120px minmax(0, 1fr);
+          grid-template-columns: 90px minmax(0, 1fr);
           gap: 18px;
           align-items: center;
-          padding: 24px;
-          margin-bottom: 18px;
         }
 
-        .ai-empty__art {
-          width: 120px;
-          height: 120px;
-          border-radius: 28px;
+        .ai-loading__pulse {
+          width: 90px;
+          height: 90px;
+          border-radius: 24px;
           background:
             radial-gradient(circle at 30% 30%, rgba(255, 255, 255, 0.82), transparent 24%),
             linear-gradient(135deg, rgba(17, 54, 93, 0.98), rgba(74, 161, 198, 0.9));
-          box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.16);
+          animation: aiPulse 1.8s ease-in-out infinite;
+        }
+
+        @keyframes aiPulse {
+          0%, 100% { transform: scale(1); opacity: 0.9; }
+          50% { transform: scale(1.04); opacity: 1; }
+        }
+
+        .ai-result-strip {
+          display: grid;
+          grid-template-columns: repeat(4, minmax(0, 1fr));
+          gap: 12px;
+          margin-top: 14px;
+        }
+
+        .ai-quick-actions {
+          display: flex;
+          flex-wrap: wrap;
+          gap: 10px;
+          margin-top: 14px;
+        }
+
+        .ai-quick-actions__btn {
+          padding: 10px 14px;
+          font-weight: 800;
         }
 
         .ai-days {
           display: grid;
           gap: 16px;
+          margin-top: 16px;
         }
 
         .ai-day {
@@ -767,40 +1152,34 @@ export default function ItineraryPlanner() {
 
         .ai-day__head {
           display: flex;
+          align-items: flex-start;
           justify-content: space-between;
-          align-items: center;
           gap: 16px;
-          margin-bottom: 14px;
+          margin-bottom: 10px;
         }
 
         .ai-day__badge {
           margin: 0 0 8px;
-          color: var(--ai-teal);
+          color: var(--ai-sky);
+          font-size: 0.78rem;
+          font-weight: 800;
+          text-transform: uppercase;
+          letter-spacing: 0.14em;
         }
 
-        .ai-day__cost {
+        .ai-day__cost,
+        .ai-place__cost {
           margin: 0;
-          padding: 10px 14px;
-          border-radius: 999px;
-          background: rgba(35, 141, 132, 0.1);
           color: var(--ai-teal);
           font-weight: 800;
           white-space: nowrap;
         }
 
-        .ai-day__notes {
-          margin-bottom: 16px;
-        }
-
         .ai-day__body {
           display: grid;
-          grid-template-columns: minmax(0, 1.05fr) minmax(280px, 0.95fr);
+          grid-template-columns: minmax(0, 0.95fr) minmax(0, 1.05fr);
           gap: 18px;
-        }
-
-        .ai-day__timeline-col,
-        .ai-day__places-col {
-          min-width: 0;
+          margin-top: 16px;
         }
 
         .ai-timeline,
@@ -812,126 +1191,106 @@ export default function ItineraryPlanner() {
         .ai-timeline__item,
         .ai-place,
         .ai-block {
+          padding: 14px 16px;
           border-radius: 18px;
-          padding: 13px 14px;
           border: 1px solid rgba(220, 230, 238, 0.96);
-          background: rgba(247, 250, 253, 0.98);
+          background: rgba(248, 251, 254, 0.96);
         }
 
         .ai-timeline__item {
           display: grid;
-          grid-template-columns: 88px minmax(0, 1fr);
+          grid-template-columns: 84px minmax(0, 1fr);
           gap: 12px;
         }
 
         .ai-timeline__time {
-          color: var(--ai-teal);
-          font-size: 0.74rem;
+          color: var(--ai-sky);
+          font-size: 0.82rem;
           font-weight: 800;
           text-transform: uppercase;
-          letter-spacing: 0.14em;
+          letter-spacing: 0.12em;
         }
 
         .ai-timeline__title,
         .ai-place__name {
-          margin: 0;
+          margin: 0 0 4px;
           color: var(--ai-navy);
           font-weight: 800;
         }
 
         .ai-place {
           display: flex;
+          align-items: flex-start;
           justify-content: space-between;
+          gap: 16px;
+        }
+
+        .ai-result-actions {
+          display: flex;
+          flex-wrap: wrap;
+          gap: 12px;
+          margin-top: 18px;
+        }
+
+        .ai-link {
+          display: inline-flex;
           align-items: center;
-          gap: 14px;
-        }
-
-        .ai-place--empty,
-        .ai-block--muted {
-          background: rgba(239, 244, 249, 0.92);
-        }
-
-        .ai-place__cost {
-          margin: 0;
-          color: #234e73;
+          justify-content: center;
+          min-height: 46px;
+          padding: 0 18px;
+          border-radius: 14px;
+          text-decoration: none;
           font-weight: 800;
-          white-space: nowrap;
         }
 
-        @media (max-width: 1080px) {
-          .ai-planner__hero,
-          .ai-planner__workspace,
-          .ai-day__body {
+        .ai-link--ghost {
+          background: rgba(255, 255, 255, 0.72);
+          color: var(--ai-navy);
+          border: 1px solid rgba(209, 223, 236, 0.96);
+        }
+
+        @media (max-width: 980px) {
+          .ai-hero,
+          .ai-loading,
+          .ai-day__body,
+          .ai-choice-grid--three,
+          .ai-choice-grid--four {
             grid-template-columns: 1fr;
           }
 
-          .ai-summary {
-            grid-template-columns: repeat(3, minmax(0, 1fr));
+          .ai-grid,
+          .ai-review__grid,
+          .ai-choice-grid,
+          .ai-result-strip,
+          .ai-results-head__grid {
+            grid-template-columns: repeat(2, minmax(0, 1fr));
           }
         }
 
-        @media (max-width: 760px) {
+        @media (max-width: 680px) {
           .ai-planner__container {
-            padding: 18px 14px 40px;
+            padding: 16px 14px 40px;
           }
 
-          .ai-planner__hero-copy,
-          .ai-planner__hero-card,
-          .ai-form,
-          .ai-sidecard,
-          .ai-summary,
-          .ai-empty,
-          .ai-day {
-            border-radius: 24px;
-          }
-
-          .ai-planner__hero-copy {
-            padding: 24px 20px;
-          }
-
-          .ai-planner__hero-copy h1 {
-            max-width: 12ch;
-            font-size: 2.45rem;
-          }
-
-          .ai-form__grid,
-          .ai-summary,
-          .ai-empty {
+          .ai-steps,
+          .ai-grid,
+          .ai-review__grid,
+          .ai-summary-bar,
+          .ai-choice-grid,
+          .ai-result-strip,
+          .ai-results-head__grid {
             grid-template-columns: 1fr;
           }
 
-          .ai-empty__art {
-            width: 100%;
-            height: 110px;
-          }
-
-          .ai-day__head {
+          .ai-day__head,
+          .ai-actions {
             flex-direction: column;
-            align-items: flex-start;
-          }
-        }
-
-        @media (max-width: 560px) {
-          .ai-planner__hero-copy h1 {
-            font-size: 2rem;
+            align-items: stretch;
           }
 
-          .ai-planner__mini-grid {
+          .ai-place,
+          .ai-timeline__item {
             grid-template-columns: 1fr;
-          }
-
-          .ai-timeline__item,
-          .ai-place {
-            grid-template-columns: 1fr;
-          }
-
-          .ai-place {
-            align-items: flex-start;
-          }
-
-          .ai-place__cost,
-          .ai-day__cost {
-            white-space: normal;
           }
         }
       `}</style>

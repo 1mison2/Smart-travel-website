@@ -112,6 +112,28 @@ const UserSchema = new mongoose.Schema({
   resetPasswordExpire: {
     type: Date,
     select: false // Don't include in queries by default
+  },
+  isEmailVerified: {
+    type: Boolean,
+    default: false
+  },
+  authCodeHash: {
+    type: String,
+    select: false
+  },
+  authCodeExpire: {
+    type: Date,
+    select: false
+  },
+  authCodePurpose: {
+    type: String,
+    enum: ["signup", "login", null],
+    default: null,
+    select: false
+  },
+  authCodeSentAt: {
+    type: Date,
+    select: false
   }
 }, { timestamps: true });
 

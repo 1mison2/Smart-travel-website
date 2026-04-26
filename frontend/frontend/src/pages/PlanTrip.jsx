@@ -13,6 +13,7 @@ const emptyForm = {
 export default function PlanTrip() {
   const [searchParams] = useSearchParams();
   const locationId = searchParams.get("locationId");
+  const minDate = new Date().toISOString().split("T")[0];
 
   const [form, setForm] = useState(emptyForm);
   const [location, setLocation] = useState(null);
@@ -35,7 +36,7 @@ export default function PlanTrip() {
           ...prev,
           title: prev.title || `Trip to ${data.name || "Destination"}`,
         }));
-      } catch (_err) {
+      } catch {
         if (!active) return;
         setLocation(null);
       } finally {
@@ -88,7 +89,7 @@ export default function PlanTrip() {
       setSaving(true);
       await api.post("/api/user/trips", payload);
       setMessage("Trip planned successfully. You can view it in My Trips.");
-      setForm((prev) => ({ ...emptyForm, title: location ? `Trip to ${location.name}` : "" }));
+      setForm({ ...emptyForm, title: location ? `Trip to ${location.name}` : "" });
     } catch (err) {
       setError(err?.response?.data?.message || "Failed to save trip plan");
     } finally {

@@ -11,6 +11,7 @@ const {
   getAllBookings,
   updateBookingStatus,
   deleteBooking,
+  reviewRefundRequest,
   getAllPosts,
   updatePostStatus,
   approvePost,
@@ -55,6 +56,7 @@ router.delete("/locations/:id", deleteLocation);
 
 router.get("/bookings", getAllBookings);
 router.put("/bookings/:id/status", updateBookingStatus);
+router.put("/bookings/:id/refund", reviewRefundRequest);
 router.delete("/bookings/:id", deleteBooking);
 
 router.get("/posts", getAllPosts);

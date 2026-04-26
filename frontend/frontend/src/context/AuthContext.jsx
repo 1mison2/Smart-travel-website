@@ -1,17 +1,34 @@
+/* eslint-disable react-refresh/only-export-components */
 import React, { createContext, useContext, useEffect, useState } from "react";
 import api from "../utils/api";
 
 const AuthContext = createContext();
 
+function readStoredUser() {
+  try {
+    const raw = localStorage.getItem("st_user");
+    return raw ? JSON.parse(raw) : null;
+  } catch {
+    return null;
+  }
+}
+
+function readStoredToken() {
+  try {
+    return localStorage.getItem("st_token") || null;
+  } catch {
+    return null;
+  }
+}
+
 export const AuthProvider = ({ children }) => {
-  const [user, setUser] = useState(() => {
-    try {
-      const raw = localStorage.getItem("st_user");
-      return raw ? JSON.parse(raw) : null;
-    } catch { return null; }
+  const [user, setUser] = useState(() => readStoredUser());
+  const [token, setToken] = useState(() => readStoredToken());
+  const [ready, setReady] = useState(() => {
+    const storedToken = readStoredToken();
+    const storedUser = readStoredUser();
+    return !storedToken || Boolean(storedUser);
   });
-  const [token, setToken] = useState(() => localStorage.getItem("st_token") || null);
-  const [ready, setReady] = useState(false);
 
   useEffect(() => {
     if (token) api.defaults.headers.common["Authorization"] = `Bearer ${token}`;

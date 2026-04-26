@@ -129,9 +129,15 @@ exports.getListings = async (req, res) => {
     if (req.query.district) query["location.district"] = { $regex: String(req.query.district), $options: "i" };
     if (req.query.active !== undefined) query.isActive = String(req.query.active) === "true";
     if (!req.query.includeInactive) query.isActive = true;
+    const requestedLimit = Number.parseInt(String(req.query.limit || ""), 10);
+    const maxLimit = req.query.includeInactive ? 5000 : 500;
+    const limit = Number.isFinite(requestedLimit) && requestedLimit > 0 ? Math.min(requestedLimit, maxLimit) : 100;
 
-    const listings = await Listing.find(query).sort({ createdAt: -1 }).limit(100);
-    res.json({ listings });
+    const [listings, total] = await Promise.all([
+      Listing.find(query).sort({ createdAt: -1 }).limit(limit),
+      Listing.countDocuments(query),
+    ]);
+    res.json({ listings, total });
   } catch (err) {
     console.error(err);
     res.status(500).json({ message: "Failed to fetch listings" });

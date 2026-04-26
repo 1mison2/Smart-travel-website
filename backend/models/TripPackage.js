@@ -48,6 +48,7 @@ const TripPackageSchema = new mongoose.Schema(
     endDate: { type: Date, required: true },
     basePrice: { type: Number, required: true, min: 0 },
     discountPrice: { type: Number, min: 0, default: 0 },
+    rating: { type: Number, min: 0, max: 5, default: 0 },
     currency: { type: String, default: "NPR", trim: true },
     capacity: { type: Number, default: 1, min: 1 },
     minGuests: { type: Number, default: 1, min: 1 },

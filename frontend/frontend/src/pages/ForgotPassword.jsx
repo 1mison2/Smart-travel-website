@@ -2,6 +2,7 @@ import React, { useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { ArrowLeft, ArrowRight, Mail } from "lucide-react";
 import api from "../utils/api";
+import { validateEmail } from "../utils/authValidation";
 import "./Auth.css";
 
 export default function ForgotPassword() {
@@ -15,8 +16,8 @@ export default function ForgotPassword() {
 
     if (!email.trim()) {
       newErrors.email = "Email is required";
-    } else if (!/\S+@\S+\.\S+/.test(email)) {
-      newErrors.email = "Email is invalid";
+    } else if (!validateEmail(email)) {
+      newErrors.email = "Enter a valid email address";
     }
 
     return newErrors;

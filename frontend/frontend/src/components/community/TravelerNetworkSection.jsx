@@ -26,7 +26,7 @@ export default function TravelerNetworkSection({ onNotify }) {
       setTravelers(nextTravelers);
       setMyPlans(Array.isArray(myPlansRes.data?.travelPlans) ? myPlansRes.data.travelPlans : []);
       setSelectedId((current) => current || nextTravelers[0]?._id || "");
-    } catch (_err) {
+    } catch {
       onNotify?.({ type: "error", message: "Failed to load traveler network." });
     } finally {
       setLoading(false);
@@ -43,7 +43,7 @@ export default function TravelerNetworkSection({ onNotify }) {
       const { data } = await api.get(`/api/user/travelers/${travelerId}`);
       setProfile(data);
       setFollowing(Boolean(data?.traveler?.isFollowing));
-    } catch (_err) {
+    } catch {
       onNotify?.({ type: "error", message: "Failed to load traveler profile." });
     } finally {
       setProfileLoading(false);
@@ -123,9 +123,7 @@ export default function TravelerNetworkSection({ onNotify }) {
     <div className="grid gap-6 xl:grid-cols-[360px,1fr]">
       <section className="overflow-hidden rounded-[30px] border border-slate-200 bg-white shadow-sm">
         <div className="border-b border-slate-200 bg-[linear-gradient(135deg,#0f172a,#1d4ed8_58%,#14b8a6)] px-5 py-5 text-white">
-          <p className="text-xs font-extrabold uppercase tracking-[0.28em] text-sky-100">Traveler Network</p>
-          <h3 className="mt-3 text-2xl font-bold leading-tight">Browse real travelers, not just usernames</h3>
-          <p className="mt-2 text-sm leading-7 text-sky-50/85">Follow, inspect their travel style, review their stories, and jump into buddy planning from one workspace.</p>
+          <h3 className="text-2xl font-bold leading-tight">Traveler Network</h3>
         </div>
 
         <div className="p-4">
@@ -191,7 +189,6 @@ export default function TravelerNetworkSection({ onNotify }) {
             <div className="border-b border-slate-200 bg-[linear-gradient(135deg,#f8fafc,#e0f2fe_55%,#dcfce7)] px-6 py-6">
               <div className="flex flex-wrap items-start justify-between gap-5">
                 <div className="max-w-3xl">
-                  <p className="text-xs font-extrabold uppercase tracking-[0.28em] text-slate-500">Traveler Profile</p>
                   <h3 className="mt-3 text-3xl font-bold text-slate-900">{profile.traveler?.name}</h3>
                   <p className="mt-3 text-sm leading-7 text-slate-600">{profile.traveler?.bio || "This traveler has not written a bio yet, but their trips and stories below still give a strong sense of fit."}</p>
                   <div className="mt-4 flex flex-wrap gap-2">
@@ -205,19 +202,6 @@ export default function TravelerNetworkSection({ onNotify }) {
                         {profile.traveler.travelStyle}
                       </span>
                     ) : null}
-                  </div>
-                </div>
-
-                <div className="grid gap-3 sm:grid-cols-2">
-                  <div className="rounded-[24px] bg-white px-4 py-4 shadow-sm ring-1 ring-slate-200">
-                    <p className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-500">Social Reach</p>
-                    <strong className="mt-2 block text-2xl text-slate-900">{profile.traveler?.followersCount || 0}</strong>
-                    <p className="text-sm text-slate-500">Followers watching their trips and stories</p>
-                  </div>
-                  <div className="rounded-[24px] bg-white px-4 py-4 shadow-sm ring-1 ring-slate-200">
-                    <p className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-500">Travel Activity</p>
-                    <strong className="mt-2 block text-2xl text-slate-900">{(profile.travelPlans || []).length}</strong>
-                    <p className="text-sm text-slate-500">Published plans ready for matching</p>
                   </div>
                 </div>
               </div>
@@ -250,12 +234,7 @@ export default function TravelerNetworkSection({ onNotify }) {
               <section className="rounded-[28px] border border-slate-200 bg-slate-50 p-5">
                 <div className="flex items-center justify-between gap-4">
                   <div>
-                    <p className="text-xs font-extrabold uppercase tracking-[0.22em] text-slate-400">Trip Plans</p>
-                    <h4 className="mt-2 text-xl font-bold text-slate-900">Travel plans you can act on right now</h4>
-                  </div>
-                  <div className="rounded-2xl bg-white px-4 py-3 ring-1 ring-slate-200">
-                    <p className="text-sm text-slate-500">Your own plans linked</p>
-                    <strong className="text-lg text-slate-900">{myPlans.length}</strong>
+                    <h4 className="text-xl font-bold text-slate-900">Trip Plans</h4>
                   </div>
                 </div>
 
@@ -305,8 +284,7 @@ export default function TravelerNetworkSection({ onNotify }) {
                       <Compass size={18} />
                     </div>
                     <div>
-                      <p className="text-xs font-extrabold uppercase tracking-[0.22em] text-slate-400">Posts & Blogs</p>
-                      <h4 className="text-xl font-bold text-slate-900">Recent stories from this traveler</h4>
+                      <h4 className="text-xl font-bold text-slate-900">Posts & Blogs</h4>
                     </div>
                   </div>
 
@@ -336,8 +314,7 @@ export default function TravelerNetworkSection({ onNotify }) {
                       <Star size={18} />
                     </div>
                     <div>
-                      <p className="text-xs font-extrabold uppercase tracking-[0.22em] text-slate-400">Reviews</p>
-                      <h4 className="text-xl font-bold text-slate-900">Destination notes from their trips</h4>
+                      <h4 className="text-xl font-bold text-slate-900">Reviews</h4>
                     </div>
                   </div>
 

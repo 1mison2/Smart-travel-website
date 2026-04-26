@@ -5,6 +5,7 @@ const {
   getMyBookings,
   getBookingById,
   cancelBooking,
+  requestRefund,
 } = require("../controllers/bookingController");
 const { protect } = require("../middleware/authMiddleware");
 
@@ -17,4 +18,5 @@ router.post("/", createBooking);
 router.get("/me", getMyBookings);
 router.get("/:id", getBookingById);
 router.put("/:id/cancel", cancelBooking);
+router.put("/:id/refund-request", requestRefund);
 module.exports = router;

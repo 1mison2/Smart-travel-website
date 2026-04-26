@@ -2,12 +2,13 @@ import { Link } from "react-router-dom";
 import { CarFront, Compass, GripVertical, Route, ShieldCheck, Timer, Trash2, Wallet } from "lucide-react";
 import { formatDistance, formatDuration } from "../../utils/openRouteService";
 
-function SummaryItem({ label, value, icon: Icon }) {
+function SummaryItem({ label, value, icon }) {
+  const SummaryIcon = icon;
   return (
     <div className="rounded-[24px] border border-white/70 bg-white/80 px-4 py-4 shadow-[0_14px_30px_rgba(15,23,42,0.06)] backdrop-blur">
       <div className="flex items-center gap-3">
         <span className="inline-flex h-10 w-10 items-center justify-center rounded-2xl bg-[linear-gradient(135deg,#e6f7f9,#ffffff)] text-[#1F7A8C] shadow-sm">
-          <Icon className="h-4 w-4" />
+          <SummaryIcon className="h-4 w-4" />
         </span>
         <div className="min-w-0">
           <p className="text-[11px] font-semibold uppercase tracking-[0.24em] text-slate-400">

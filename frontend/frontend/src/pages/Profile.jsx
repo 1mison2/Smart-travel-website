@@ -1,5 +1,6 @@
 import React from "react";
 import { Link } from "react-router-dom";
+import TravelAnalyticsPanel from "../components/TravelAnalyticsPanel";
 import { useAuth } from "../context/AuthContext";
 
 export default function Profile() {
@@ -67,6 +68,13 @@ export default function Profile() {
             Profile editing is available in Settings.
           </div>
         </section>
+
+        <TravelAnalyticsPanel
+          userId={user?._id}
+          title="Your personal travel analytics"
+          eyebrow="Profile Analytics"
+          ctaLabel="Review bookings"
+        />
       </div>
 
       <style>{`

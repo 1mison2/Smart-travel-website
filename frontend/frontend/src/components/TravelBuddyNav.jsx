@@ -1,8 +1,9 @@
 import React from "react";
-import { NavLink, useNavigate } from "react-router-dom";
-import { ArrowLeft, Compass, LayoutDashboard, MessageCircleMore, NotebookPen, Sparkles, Users } from "lucide-react";
+import { NavLink } from "react-router-dom";
+import { Compass, LayoutDashboard, MessageCircleMore, NotebookPen, Sparkles, Users } from "lucide-react";
 
 const links = [
+  { to: "/dashboard", label: "Dashboard", icon: LayoutDashboard },
   { to: "/buddy-finder", label: "Hub", icon: Users },
   { to: "/buddy/create-trip", label: "Create Trip", icon: NotebookPen },
   { to: "/buddy/browse", label: "Browse Trips", icon: Compass },
@@ -11,24 +12,9 @@ const links = [
 ];
 
 export default function TravelBuddyNav() {
-  const navigate = useNavigate();
-
   return (
     <div className="travel-social-nav">
       <div className="travel-social-nav__row">
-        <button type="button" className="travel-social-nav__pill travel-social-nav__pill--utility" onClick={() => navigate(-1)}>
-          <ArrowLeft size={16} />
-          <span>Back</span>
-        </button>
-        <button
-          type="button"
-          className="travel-social-nav__pill travel-social-nav__pill--utility travel-social-nav__pill--primary"
-          onClick={() => navigate("/dashboard")}
-        >
-          <LayoutDashboard size={16} />
-          <span>Dashboard</span>
-        </button>
-
         {links.map((link) => (
           <NavLink
             key={link.to}
@@ -93,17 +79,6 @@ export default function TravelBuddyNav() {
           background: linear-gradient(135deg, #0f172a, #0f766e);
           color: #ffffff;
           box-shadow: 0 12px 26px rgba(15, 23, 42, 0.16);
-        }
-
-        .travel-social-nav__pill--utility {
-          background: rgba(255,255,255,0.9);
-          border-color: rgba(148, 163, 184, 0.18);
-        }
-
-        .travel-social-nav__pill--primary {
-          background: linear-gradient(135deg, #ff6f61, #e25a4f);
-          color: #ffffff;
-          box-shadow: 0 12px 26px rgba(226, 90, 79, 0.18);
         }
 
         @media (max-width: 640px) {

@@ -448,7 +448,6 @@ export default function Dashboard() {
   const budgetBarPercent = totalBookedAmount > 0 ? Math.max(18, Math.min(100, Math.round((totalPaidAmount / totalBookedAmount) * 100))) : 24;
   const budgetLoading = bookingsLoading || paymentsLoading;
   const budgetError = bookingsError || paymentsError;
-
   const getTripImage = (trip) => {
     if (!trip) return "";
     const title = normalizeText(trip.title);
@@ -459,7 +458,7 @@ export default function Dashboard() {
     return matched?.image || "";
   };
 
-  const weather = {
+  const _weather = {
     label: upcomingTrip ? "Pokhara valley" : "Kathmandu",
     temp: upcomingTrip ? "18°C" : "21°C",
     summary: "Clear sky and mountain light",
@@ -1080,7 +1079,7 @@ export default function Dashboard() {
                 <Link to="/buddy-finder#finder" className="action-btn action-btn--primary">
                   Open Buddy Finder
                 </Link>
-                <Link to="/buddy-finder#community" className="action-btn action-btn--ghost">
+                <Link to="/community#community" className="action-btn action-btn--ghost">
                   Open Community
                 </Link>
               </div>

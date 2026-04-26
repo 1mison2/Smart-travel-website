@@ -1,5 +1,5 @@
-import React, { useEffect, useState } from "react";
-import { CalendarRange, HeartHandshake, MapPinned, NotebookPen, Wallet } from "lucide-react";
+import React, { useEffect, useMemo, useState } from "react";
+import { CalendarRange, HeartHandshake, MapPinned, NotebookPen, Search, Wallet } from "lucide-react";
 import api from "../../utils/api";
 import { useAuth } from "../../context/AuthContext";
 import SectionSkeleton from "./SectionSkeleton";
@@ -15,6 +15,15 @@ const emptyTripForm = {
   travelStyle: "",
 };
 
+const emptyFilters = {
+  destination: "",
+  travelStyle: "",
+  maxBudget: "",
+  interest: "",
+  startDate: "",
+  endDate: "",
+};
+
 export default function TripPostsSection({ onNotify }) {
   const { user } = useAuth();
   const [tripPosts, setTripPosts] = useState([]);
@@ -23,6 +32,9 @@ export default function TripPostsSection({ onNotify }) {
   const [creating, setCreating] = useState(false);
   const [sendingId, setSendingId] = useState("");
   const [form, setForm] = useState(emptyTripForm);
+  const [filters, setFilters] = useState(emptyFilters);
+  const [appliedFilters, setAppliedFilters] = useState(emptyFilters);
+  const [hasAppliedFilters, setHasAppliedFilters] = useState(false);
 
   const loadTripPosts = async () => {
     try {
@@ -33,7 +45,7 @@ export default function TripPostsSection({ onNotify }) {
       ]);
       setTripPosts(postsRes.data?.travelPlans || []);
       setMyPlans(mineRes.data?.travelPlans || []);
-    } catch (_err) {
+    } catch {
       onNotify?.({ type: "error", message: "Failed to load trip posts." });
     } finally {
       setLoading(false);
@@ -78,24 +90,50 @@ export default function TripPostsSection({ onNotify }) {
     }
   };
 
+  const filteredTripPosts = useMemo(() => {
+    const destination = appliedFilters.destination.trim().toLowerCase();
+    const travelStyle = appliedFilters.travelStyle.trim().toLowerCase();
+    const interest = appliedFilters.interest.trim().toLowerCase();
+    const maxBudget = Number(appliedFilters.maxBudget || 0);
+    const startDate = appliedFilters.startDate;
+    const endDate = appliedFilters.endDate;
+
+    return tripPosts.filter((plan) => {
+      const matchesDestination = !destination || String(plan.destination || "").toLowerCase().includes(destination);
+      const matchesStyle = !travelStyle || String(plan.travelStyle || "").toLowerCase().includes(travelStyle);
+      const matchesInterest = !interest || (Array.isArray(plan.interests) ? plan.interests : [])
+        .some((item) => String(item || "").toLowerCase().includes(interest));
+      const matchesBudget = !maxBudget || Number(plan.budget || 0) <= maxBudget;
+      const matchesDate = isDateRangeMatch(plan.startDate, plan.endDate, startDate, endDate);
+      return matchesDestination && matchesStyle && matchesInterest && matchesBudget && matchesDate;
+    });
+  }, [appliedFilters, tripPosts]);
+
+  const applyFilters = () => {
+    const hasAnyFilter = Object.values(filters).some((value) => String(value || "").trim() !== "");
+    setAppliedFilters({ ...filters });
+    setHasAppliedFilters(hasAnyFilter);
+  };
+
+  const resetFilters = () => {
+    setFilters(emptyFilters);
+    setAppliedFilters(emptyFilters);
+    setHasAppliedFilters(false);
+  };
+
   if (loading) return <SectionSkeleton cards={2} />;
 
   return (
     <div className="grid gap-6">
       <section className="overflow-hidden rounded-[30px] border border-slate-200 bg-white shadow-sm">
-        <div className="border-b border-slate-200 bg-[linear-gradient(135deg,#0f172a,#0f766e_55%,#22c55e)] px-6 py-6 text-white">
-          <p className="text-xs font-extrabold uppercase tracking-[0.28em] text-emerald-100">Trip Posts</p>
-          <h3 className="mt-3 text-3xl font-bold leading-tight md:text-4xl">Create a trip and let the right travelers find it</h3>
-          <p className="mt-3 max-w-3xl text-sm leading-7 text-emerald-50/90">
-            Publish destination, dates, budget, and expectations so your trip reads like a real plan, not just a notice.
-          </p>
+        <div className="border-b border-slate-200 bg-[linear-gradient(135deg,#0f172a,#0f766e_55%,#22c55e)] px-6 py-5 text-white">
+          <h3 className="text-2xl font-bold">Trip Posts</h3>
         </div>
 
         <div className="grid gap-6 p-6">
           <form onSubmit={createTripPost} className="grid gap-4 rounded-[28px] border border-slate-200 bg-slate-50 p-5 lg:grid-cols-2">
             <div className="lg:col-span-2">
-              <p className="text-xs font-extrabold uppercase tracking-[0.22em] text-slate-400">New Trip Post</p>
-              <h4 className="mt-2 text-xl font-bold text-slate-900">Trip details</h4>
+              <h4 className="text-xl font-bold text-slate-900">New Trip Post</h4>
             </div>
             <input value={form.title} onChange={(e) => setForm((c) => ({ ...c, title: e.target.value }))} placeholder="Trip title" className="rounded-2xl border border-slate-200 bg-white px-4 py-3.5 outline-none" />
             <input value={form.destination} onChange={(e) => setForm((c) => ({ ...c, destination: e.target.value }))} placeholder="Destination" className="rounded-2xl border border-slate-200 bg-white px-4 py-3.5 outline-none" />
@@ -115,8 +153,105 @@ export default function TripPostsSection({ onNotify }) {
         </div>
       </section>
 
+      <section className="rounded-[30px] border border-slate-200 bg-white p-5 shadow-sm">
+        <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
+          <div>
+            <h4 className="text-xl font-bold text-slate-900">Filter Trip Posts</h4>
+            <p className="text-sm text-slate-500">
+              {hasAppliedFilters ? `${filteredTripPosts.length} result${filteredTripPosts.length === 1 ? "" : "s"}` : "0 results"}
+            </p>
+          </div>
+        </div>
+
+        <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-5">
+          <label className="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3">
+            <span className="mb-2 flex items-center gap-2 text-xs font-semibold uppercase tracking-[0.18em] text-slate-500">
+              <Search size={14} />
+              Destination
+            </span>
+            <input
+              value={filters.destination}
+              onChange={(e) => setFilters((current) => ({ ...current, destination: e.target.value }))}
+              placeholder="Pokhara, Chitwan..."
+              className="w-full bg-transparent text-sm text-slate-900 outline-none"
+            />
+          </label>
+
+          <label className="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3">
+            <span className="mb-2 block text-xs font-semibold uppercase tracking-[0.18em] text-slate-500">Travel style</span>
+            <input
+              value={filters.travelStyle}
+              onChange={(e) => setFilters((current) => ({ ...current, travelStyle: e.target.value }))}
+              placeholder="Backpacking, luxury..."
+              className="w-full bg-transparent text-sm text-slate-900 outline-none"
+            />
+          </label>
+
+          <label className="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3">
+            <span className="mb-2 block text-xs font-semibold uppercase tracking-[0.18em] text-slate-500">Max budget</span>
+            <input
+              value={filters.maxBudget}
+              onChange={(e) => setFilters((current) => ({ ...current, maxBudget: e.target.value }))}
+              placeholder="30000"
+              className="w-full bg-transparent text-sm text-slate-900 outline-none"
+            />
+          </label>
+
+          <label className="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3">
+            <span className="mb-2 block text-xs font-semibold uppercase tracking-[0.18em] text-slate-500">Start date</span>
+            <input
+              type="date"
+              value={filters.startDate}
+              onChange={(e) => setFilters((current) => ({ ...current, startDate: e.target.value }))}
+              className="w-full bg-transparent text-sm text-slate-900 outline-none"
+            />
+          </label>
+
+          <label className="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3">
+            <span className="mb-2 block text-xs font-semibold uppercase tracking-[0.18em] text-slate-500">End date</span>
+            <input
+              type="date"
+              value={filters.endDate}
+              min={filters.startDate || undefined}
+              onChange={(e) => setFilters((current) => ({ ...current, endDate: e.target.value }))}
+              className="w-full bg-transparent text-sm text-slate-900 outline-none"
+            />
+          </label>
+
+          <label className="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3">
+            <span className="mb-2 block text-xs font-semibold uppercase tracking-[0.18em] text-slate-500">Interest</span>
+            <input
+              value={filters.interest}
+              onChange={(e) => setFilters((current) => ({ ...current, interest: e.target.value }))}
+              placeholder="Hiking, food..."
+              className="w-full bg-transparent text-sm text-slate-900 outline-none"
+            />
+          </label>
+        </div>
+
+        <div className="mt-4 flex flex-wrap gap-3">
+          <button type="button" onClick={applyFilters} className="rounded-full bg-slate-900 px-4 py-2.5 text-sm font-semibold text-white">
+            Apply filters
+          </button>
+          <button
+            type="button"
+            onClick={resetFilters}
+            disabled={!Object.values(filters).some((value) => String(value || "").trim() !== "") && !hasAppliedFilters}
+            className="rounded-full border border-slate-200 bg-white px-4 py-2.5 text-sm font-semibold text-slate-700 disabled:opacity-60"
+          >
+            Reset filters
+          </button>
+        </div>
+      </section>
+
       <div className="grid gap-5 xl:grid-cols-2">
-        {tripPosts.map((plan) => (
+        {!hasAppliedFilters ? (
+          <div className="rounded-[30px] border border-dashed border-slate-300 bg-white p-10 text-center text-slate-500 xl:col-span-2">
+            Use the filters above to view trip posts.
+          </div>
+        ) : null}
+
+        {hasAppliedFilters ? filteredTripPosts.map((plan) => (
           <article key={plan._id} className="overflow-hidden rounded-[30px] border border-slate-200 bg-white shadow-sm">
             <div className="bg-[linear-gradient(135deg,#0ea5e9,#22c55e)] p-5 text-white">
               <p className="text-xs font-bold uppercase tracking-[0.24em] text-sky-100">Trip Post</p>
@@ -150,14 +285,37 @@ export default function TripPostsSection({ onNotify }) {
               </div>
             </div>
           </article>
-        ))}
+        )) : null}
 
-        {tripPosts.length === 0 ? (
+        {hasAppliedFilters && filteredTripPosts.length === 0 ? (
           <div className="rounded-[30px] border border-dashed border-slate-300 bg-white p-10 text-center text-slate-500 xl:col-span-2">
-            No trip posts yet. Create the first trip and start finding travel buddies.
+            No trip posts matched your filters.
           </div>
         ) : null}
       </div>
     </div>
   );
+}
+
+function isDateRangeMatch(rawStart, rawEnd, filterStart, filterEnd) {
+  if (!filterStart && !filterEnd) return true;
+
+  const start = rawStart ? new Date(rawStart) : null;
+  const end = rawEnd ? new Date(rawEnd) : start;
+
+  if (!start || Number.isNaN(start.getTime()) || !end || Number.isNaN(end.getTime())) return false;
+
+  if (filterStart) {
+    const selectedStart = new Date(filterStart);
+    selectedStart.setHours(0, 0, 0, 0);
+    if (end < selectedStart) return false;
+  }
+
+  if (filterEnd) {
+    const selectedEnd = new Date(filterEnd);
+    selectedEnd.setHours(23, 59, 59, 999);
+    if (start > selectedEnd) return false;
+  }
+
+  return true;
 }

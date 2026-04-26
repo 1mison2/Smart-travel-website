@@ -11,6 +11,7 @@ import {
   Sparkles,
   Users,
   Briefcase,
+  LogOut,
 } from "lucide-react";
 import NotificationCountBadge from "../NotificationCountBadge";
 
@@ -23,10 +24,9 @@ const links = [
   { to: "/admin/trip-packages", label: "Trip Packages", icon: Briefcase },
   { to: "/admin/payments", label: "Payments", icon: CreditCard },
   { to: "/admin/posts", label: "Community", icon: MessageSquare },
-  { to: "/admin/notifications", label: "Notifications", icon: Bell },
 ];
 
-export default function Sidebar() {
+export default function Sidebar({ onLogout }) {
   return (
     <aside className="admin-sidebar">
       <div className="admin-brand admin-brand--merged">
@@ -41,19 +41,35 @@ export default function Sidebar() {
       </div>
 
       <nav className="admin-nav">
-        {links.map(({ to, label, icon: Icon, end }) => (
-          <NavLink
-            key={to}
-            to={to}
-            end={end}
-            className={({ isActive }) => `admin-nav__link ${isActive ? "is-active" : ""}`}
-          >
-            <span className="admin-nav__icon"><Icon size={17} /></span>
-            <span>{label}</span>
-            {label === "Notifications" && <NotificationCountBadge className="admin-nav__badge" />}
-          </NavLink>
-        ))}
+        {links.map(({ to, label, icon, end }) => {
+          const LinkIcon = icon;
+          return (
+            <NavLink
+              key={to}
+              to={to}
+              end={end}
+              className={({ isActive }) => `admin-nav__link ${isActive ? "is-active" : ""}`}
+            >
+              <span className="admin-nav__icon"><LinkIcon size={17} /></span>
+              <span>{label}</span>
+            </NavLink>
+          );
+        })}
       </nav>
+      <NavLink
+        to="/admin/notifications"
+        className={({ isActive }) => `admin-nav__link ${isActive ? "is-active" : ""}`}
+      >
+        <span className="admin-nav__icon"><Bell size={17} /></span>
+        <span>Notifications</span>
+        <NotificationCountBadge className="admin-nav__badge" />
+      </NavLink>
+      <button type="button" className="admin-sidebar__logout" onClick={onLogout}>
+        <span className="admin-nav__icon">
+          <LogOut size={17} />
+        </span>
+        <span>Logout</span>
+      </button>
     </aside>
   );
 }

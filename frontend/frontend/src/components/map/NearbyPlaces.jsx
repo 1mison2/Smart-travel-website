@@ -16,7 +16,8 @@ function NearbySkeletonCard() {
   );
 }
 
-function NearbyCard({ place, isActive, onSelectNearbyPlace, onAddNearbyStop, icon: Icon }) {
+function NearbyCard({ place, isActive, onSelectNearbyPlace, onAddNearbyStop, icon }) {
+  const PlaceIcon = icon;
   return (
     <article
       className={`group min-w-[320px] rounded-[28px] border p-4 transition duration-300 ${
@@ -38,7 +39,7 @@ function NearbyCard({ place, isActive, onSelectNearbyPlace, onAddNearbyStop, ico
           </p>
         </div>
         <span className="inline-flex h-10 w-10 items-center justify-center rounded-2xl bg-[#1F7A8C]/10 text-[#1F7A8C]">
-          <Icon className="h-5 w-5" />
+          <PlaceIcon className="h-5 w-5" />
         </span>
       </div>
 
@@ -73,7 +74,6 @@ function NearbyCard({ place, isActive, onSelectNearbyPlace, onAddNearbyStop, ico
 }
 
 export default function NearbyPlaces({
-  selectedDestination,
   nearbyTypes,
   nearbyType,
   onNearbyTypeChange,
