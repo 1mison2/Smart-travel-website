@@ -1,8 +1,9 @@
 import React, { useCallback, useEffect, useRef, useState } from "react";
-import { Link, useNavigate } from "react-router-dom";
+import { Link, useLocation, useNavigate } from "react-router-dom";
 import {
   Bell,
   Calendar,
+  BedDouble,
   CheckCircle2,
   ChevronRight,
   Clock3,
@@ -81,6 +82,7 @@ const safeNumber = (value, fallback = 0) => {
   const next = Number(value);
   return Number.isFinite(next) ? next : fallback;
 };
+const formatCurrency = (value) => `NPR ${safeNumber(value, 0).toLocaleString()}`;
 const scenicGradients = [
   "linear-gradient(135deg, rgba(14, 53, 88, 0.95), rgba(64, 131, 181, 0.72))",
   "linear-gradient(135deg, rgba(12, 72, 94, 0.94), rgba(111, 179, 167, 0.74))",
@@ -93,6 +95,15 @@ const fallbackDestinationMeta = [
 ];
 const mapFallbackAttractions = ["Sarangkot", "World Peace Pagoda", "Phewa Lake"];
 const savedPlaceNotes = ["Sunrise view", "Cultural stay", "Lake escape"];
+const dashboardSidebarItems = [
+  { label: "Overview", to: "/dashboard", icon: Compass },
+  { label: "My Trips", to: "/my-trips", icon: Calendar },
+  { label: "Explore", to: "/explore", icon: Mountain },
+  { label: "Bookings", to: "/bookings", icon: Wallet },
+  { label: "Packages", to: "/trip-packages", icon: Sparkles },
+  { label: "Buddy Finder", to: "/buddy-finder", icon: Users },
+  { label: "Settings", to: "/settings", icon: Settings },
+];
 
 const mapLocationSummary = (location, index = 0) => ({
   id: location?._id || `${location?.name || "destination"}-${index}`,
@@ -115,6 +126,7 @@ const mapLocationSummary = (location, index = 0) => ({
 export default function Dashboard() {
   const { user, logout } = useAuth();
   const navigate = useNavigate();
+  const location = useLocation();
   const [showProfileMenu, setShowProfileMenu] = useState(false);
   const [unreadCount, setUnreadCount] = useState(0);
   const [notifPulse, setNotifPulse] = useState(false);
@@ -420,14 +432,15 @@ export default function Dashboard() {
   const itineraryDays = Array.isArray(itinerary?.days) ? itinerary.days.slice(0, 4) : [];
   const recommendedDestinations = liveDestinations.slice(0, 3).map((destination, index) => {
     const fallback = fallbackDestinationMeta[index % fallbackDestinationMeta.length];
+    const shortDescription = String(destination.description || "").trim();
     return {
       ...destination,
       rating: fallback.rating,
       tags: destination.category ? [destination.category, ...fallback.tags].slice(0, 3) : fallback.tags,
       shortLocation: [destination.district, destination.province].filter(Boolean).join(", ") || "Nepal",
       blurb:
-        destination.description && destination.description.length <= 150
-          ? destination.description
+        shortDescription
+          ? `${shortDescription.slice(0, 88).trim()}${shortDescription.length > 88 ? "..." : ""}`
           : fallback.blurb,
       scenicBackground: scenicGradients[index % scenicGradients.length],
     };
@@ -470,12 +483,77 @@ export default function Dashboard() {
     icon: upcomingTrip ? Sun : MountainSnow,
   };
 
-  const nearbyActivities = [
-    { icon: Trees, title: "Forest hikes", detail: "Shivapuri ridge trails and pine walks." },
-    { icon: Sunrise, title: "Sunrise points", detail: "Sarangkot and Nagarkot golden-hour stops." },
-    { icon: Umbrella, title: "Boating escapes", detail: "Phewa Lake and calm waterfront cafes." },
-    { icon: Flame, title: "Local food finds", detail: "Thakali kitchens, rooftop brunch, and momo spots." },
+  const hotelHighlights =
+    bookings
+      .filter((booking) => booking?.hotel || booking?.listingTitle || booking?.destination)
+      .sort((a, b) => new Date(a?.checkIn || a?.travelDate || a?.createdAt || 0) - new Date(b?.checkIn || b?.travelDate || b?.createdAt || 0))
+      .slice(0, 3)
+      .map((booking, index) => ({
+        id: booking?._id || `hotel-booking-${index}`,
+        listingId: booking?.listingId?._id || booking?.listingId || "",
+        locationId: booking?.locationId?._id || booking?.locationId || "",
+        hotelName: booking?.hotel || booking?.listingTitle || "Curated stay",
+        destination:
+          booking?.destination ||
+          booking?.locationId?.name ||
+          booking?.location ||
+          itinerary?.destination ||
+          "Nepal",
+        checkIn: booking?.checkIn || booking?.travelDate || booking?.createdAt || "",
+        checkOut: booking?.checkOut || booking?.returnDate || "",
+        guests: safeNumber(booking?.guests, 1),
+        amount: safeNumber(booking?.amount || booking?.totalAmount, 0),
+        bookingStatus: booking?.bookingStatus || booking?.status || "planned",
+        note:
+          booking?.paymentStatus === "paid"
+            ? "Paid and ready to check in"
+            : booking?.paymentStatus === "pending"
+              ? "Payment still pending"
+              : "Stay details ready for review",
+      }));
+
+  const fallbackHotels = [
+    {
+      id: "fallback-hotel-1",
+      hotelName: "Temple Tree Resort & Spa",
+      destination: "Pokhara",
+      checkIn: upcomingTrip?.startDate || "",
+      checkOut: upcomingTrip?.endDate || "",
+      guests: 2,
+      amount: 14500,
+      bookingStatus: "recommended",
+      note: "Lakeside luxury with relaxed evening views",
+      listingId: "",
+      locationId: "",
+    },
+    {
+      id: "fallback-hotel-2",
+      hotelName: "Hotel Barahi",
+      destination: "Pokhara",
+      checkIn: upcomingTrip?.startDate || "",
+      checkOut: upcomingTrip?.endDate || "",
+      guests: 2,
+      amount: 11800,
+      bookingStatus: "recommended",
+      note: "Reliable premium stay close to the lakefront",
+      listingId: "",
+      locationId: "",
+    },
+    {
+      id: "fallback-hotel-3",
+      hotelName: "Aloft Kathmandu Thamel",
+      destination: "Kathmandu",
+      checkIn: "",
+      checkOut: "",
+      guests: 2,
+      amount: 13200,
+      bookingStatus: "recommended",
+      note: "Modern city base for short cultural trips",
+      listingId: "",
+      locationId: "",
+    },
   ];
+  const displayedHotels = hotelHighlights.length > 0 ? hotelHighlights : fallbackHotels;
 
   const heroImage = getTripImage(upcomingTrip);
   const heroDestination =
@@ -523,6 +601,18 @@ export default function Dashboard() {
       return;
     }
     navigate("/explore");
+  };
+
+  const openHotelStay = (hotelStay) => {
+    if (hotelStay?.listingId) {
+      navigate(`/places/${hotelStay.listingId}`);
+      return;
+    }
+    if (hotelStay?.locationId) {
+      navigate(`/locations/${hotelStay.locationId}`);
+      return;
+    }
+    navigate("/bookings");
   };
 
   const onDashboardSearch = (event) => {
@@ -584,21 +674,21 @@ export default function Dashboard() {
             <span className="travel-brand__mark"><Mountain size={18} /></span>
             <span>
               <strong>Smart Travel Nepal</strong>
+              <small>Trips, stays, and payments in one workspace</small>
             </span>
           </button>
 
-          <nav className="travel-topbar__nav" aria-label="Primary">
-            <button type="button" className="travel-topbar__link" onClick={() => navigate("/my-trips")}><Calendar size={15} />My Trips</button>
-            <button type="button" className="travel-topbar__link" onClick={() => navigate("/explore")}><Mountain size={15} />Explore</button>
-            <button type="button" className="travel-topbar__link" onClick={() => navigate("/bookings")}><Wallet size={15} />Bookings</button>
-            <button type="button" className="travel-topbar__link" onClick={() => navigate("/trip-packages")}><Sparkles size={15} />Packages</button>
-          </nav>
+          <div className="travel-topbar__meta" aria-label="Workspace summary">
+            <span><ShieldCheck size={15} />Trusted booking flow</span>
+            <span><Wallet size={15} />NPR {totalPaidAmount.toLocaleString()} paid</span>
+            <span><Hotel size={15} />{confirmedBookings} confirmed stays</span>
+          </div>
 
           <form className="travel-search" onSubmit={onDashboardSearch}>
             <Search size={16} />
             <input
               type="text"
-              placeholder="Search destinations, stays, sunrise spots..."
+              placeholder="Search destinations, stays, and smart recommendations..."
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
               onFocus={handleSearchFocus}
@@ -606,7 +696,7 @@ export default function Dashboard() {
             />
             {searchFocused && (searchLoading || searchError || searchResults.length > 0) && (
               <div className="travel-search__dropdown">
-                {searchLoading && <div className="travel-search__row">Searching beautiful places...</div>}
+                {searchLoading && <div className="travel-search__row">Searching curated destinations...</div>}
                 {!searchLoading && searchError && <div className="travel-search__row">{searchError}</div>}
                 {!searchLoading && !searchError && searchResults.length === 0 && <div className="travel-search__row">No matching places found yet.</div>}
                 {!searchLoading && !searchError && searchResults.length > 0 && (
@@ -649,7 +739,7 @@ export default function Dashboard() {
                 <span className="travel-profile__avatar">{initialsFromName(displayName)}</span>
                 <span className="travel-profile__text">
                   <strong>{displayName}</strong>
-                  <small>Explorer</small>
+                  <small>Premium member</small>
                 </span>
               </button>
 
@@ -674,19 +764,23 @@ export default function Dashboard() {
         </header>
 
         <section className="hero">
-          <div className="hero__content">
+            <div className="hero__content">
+            <p className="hero__eyebrow">Travel Dashboard</p>
             <h1>
-              Design your next Nepal escape with
-              <span> calm planning and confident next steps.</span>
+              Plan your next Nepal trip
+              <span> with bookings, stays, and trips in one place.</span>
             </h1>
+            <p className="hero__journal-note">
+              Keep your next journey clear, compact, and easy to manage.
+            </p>
             <div className="hero__highlights">
-              <span><ShieldCheck size={14} />Trusted routes</span>
-              <span><Sparkles size={14} />AI trip planning</span>
-              <span><CheckCircle2 size={14} />Verified stays</span>
+              <span><ShieldCheck size={14} />Verified bookings</span>
+              <span><Sparkles size={14} />Smart planning</span>
+              <span><Hotel size={14} />Stay overview</span>
             </div>
             <div className="hero__actions">
-              <button type="button" className="hero__primary" onClick={() => navigate("/explore")}>Explore Destinations</button>
-              <button type="button" className="hero__secondary" onClick={() => navigate("/my-trips")}>View My Trips</button>
+              <button type="button" className="hero__primary" onClick={() => navigate("/explore")}>Browse Destinations</button>
+              <button type="button" className="hero__secondary" onClick={() => navigate("/my-trips")}>Open My Trips</button>
             </div>
             <div className="hero__stats">
               <div className="glass-card hero__stat"><span>Upcoming trip</span><strong>{upcomingTrip?.title || "No trip scheduled yet"}</strong></div>
@@ -698,7 +792,7 @@ export default function Dashboard() {
           <div className="hero__visual">
             <div className="hero__visual-shell" />
             {heroVisualImage ? (
-              <img src={heroVisualImage} alt={upcomingTrip?.title || heroDestination?.name || "Scenic Nepal travel"} />
+              <img className="journal-photo" src={heroVisualImage} alt={upcomingTrip?.title || heroDestination?.name || "Scenic Nepal travel"} />
             ) : (
               <div className="hero__visual-empty">
                 <strong>No posted destination image yet</strong>
@@ -706,6 +800,7 @@ export default function Dashboard() {
               </div>
             )}
             <div className="hero__image-tint" />
+            <div className="hero__sunwash" />
             <div className="glass-card hero__overlay hero__overlay--location">
               <span>Destination</span>
               <strong>{heroDestination?.name || itinerary?.destination || "Nepal"}</strong>
@@ -713,7 +808,7 @@ export default function Dashboard() {
             </div>
             <div className="glass-card hero__overlay hero__overlay--preview">
               <span>Trip preview</span>
-              <strong>{upcomingTrip?.title || "Slow adventure itinerary"}</strong>
+              <strong>{upcomingTrip?.title || "Smart itinerary draft"}</strong>
               <small>{daysUntilNextTrip === null ? "Ready when you are" : `${daysUntilNextTrip} days until departure`}</small>
             </div>
             <div className="glass-card hero__trip-preview">
@@ -728,6 +823,52 @@ export default function Dashboard() {
         </section>
 
         <div className="dashboard-grid">
+          <aside className="dashboard-grid__nav">
+            <button type="button" className="travel-brand travel-brand--sidebar" onClick={() => navigate("/dashboard")}>
+              <span className="travel-brand__mark"><Mountain size={18} /></span>
+              <span>
+                <strong>Smart Travel Nepal</strong>
+                <small>Premium traveler workspace</small>
+              </span>
+            </button>
+
+            <nav className="travel-sidebar__nav" aria-label="Dashboard navigation">
+              {dashboardSidebarItems.map((item) => {
+                const Icon = item.icon;
+                const isActive = location.pathname === item.to;
+                return (
+                  <button
+                    key={item.to}
+                    type="button"
+                    className={`travel-sidebar__link ${isActive ? "is-active" : ""}`}
+                    onClick={() => navigate(item.to)}
+                  >
+                    <Icon size={17} />
+                    <span>{item.label}</span>
+                  </button>
+                );
+              })}
+            </nav>
+
+            <section className="travel-sidebar__panel">
+              <span className="travel-sidebar__label">Workspace health</span>
+              <strong>{confirmedBookings} confirmed bookings</strong>
+              <p>{unreadCount > 0 ? `${unreadCount} new notifications need attention.` : "Everything is up to date right now."}</p>
+              <div className="travel-sidebar__mini-stats">
+                <div>
+                  <span>Trips</span>
+                  <strong>{trips.length}</strong>
+                </div>
+                <div>
+                  <span>Saved</span>
+                  <strong>{savedPlaces.length}</strong>
+                </div>
+              </div>
+              <button type="button" className="action-btn action-btn--primary travel-sidebar__cta" onClick={() => navigate("/itinerary-planner")}>
+                Plan New Trip
+              </button>
+            </section>
+          </aside>
           <main className="dashboard-grid__main">
             <section className="stats-strip">
               {statsCards.map((card) => {
@@ -752,9 +893,9 @@ export default function Dashboard() {
                 <p className="dashboard-note">Loading your latest adventure...</p>
               ) : upcomingTrip ? (
                 <div className="trip-focus">
-                  <div className="trip-focus__image">
+                  <div className="trip-focus__image polaroid-frame">
                     {getTripImage(upcomingTrip) ? (
-                      <img src={getTripImage(upcomingTrip)} alt={upcomingTrip.title} />
+                      <img className="journal-photo" src={getTripImage(upcomingTrip)} alt={upcomingTrip.title} />
                     ) : (
                       <div className="trip-focus__image-empty">
                         <strong>No posted trip image yet</strong>
@@ -855,7 +996,7 @@ export default function Dashboard() {
                     >
                       <div className="destination-card__image">
                         {destination.image ? (
-                          <img src={destination.image} alt={destination.name} />
+                          <img className="journal-photo" src={destination.image} alt={destination.name} />
                         ) : (
                           <div className="destination-card__fallback" style={{ background: destination.scenicBackground }}>
                             <strong>{destination.name}</strong>
@@ -897,17 +1038,33 @@ export default function Dashboard() {
 
             <section className="premium-card">
               <div className="section-head">
-                <div><p className="section-head__eyebrow">Nearby Activities</p><h2>Calm moments and adventure nearby</h2></div>
+                <div><p className="section-head__eyebrow">Hotel Stays</p><h2>Comfortable places to stay</h2></div>
+                <button type="button" className="section-head__link" onClick={() => navigate("/bookings")}>View bookings</button>
               </div>
-              <div className="activity-grid">
-                {nearbyActivities.map((activity) => {
-                  const Icon = activity.icon;
+              <div className="hotel-grid">
+                {displayedHotels.map((hotelStay) => {
+                  const statusLabel = String(hotelStay.bookingStatus || "planned")
+                    .replace(/_/g, " ")
+                    .replace(/\b\w/g, (char) => char.toUpperCase());
                   return (
-                    <article key={activity.title} className="activity-card">
-                      <span className="activity-card__icon"><Icon size={18} /></span>
-                      <h3>{activity.title}</h3>
-                      <p>{activity.detail}</p>
-                      <small>Discover more</small>
+                    <article key={hotelStay.id} className="hotel-card">
+                      <div className="hotel-card__head">
+                        <span className="hotel-card__icon"><BedDouble size={18} /></span>
+                        <span className="hotel-card__status">{statusLabel}</span>
+                      </div>
+                      <h3>{hotelStay.hotelName}</h3>
+                      <p className="hotel-card__location"><MapPin size={14} />{hotelStay.destination}</p>
+                      <p className="hotel-card__note">{hotelStay.note}</p>
+                      <div className="hotel-card__meta">
+                        <span><Calendar size={14} />{hotelStay.checkIn ? formatDate(hotelStay.checkIn, { month: "short", day: "numeric" }) : "Flexible dates"}</span>
+                        <span><Users size={14} />{hotelStay.guests} guest{hotelStay.guests > 1 ? "s" : ""}</span>
+                      </div>
+                      <div className="hotel-card__footer">
+                        <strong>{hotelStay.amount > 0 ? formatCurrency(hotelStay.amount) : "Custom quote"}</strong>
+                        <button type="button" className="hotel-card__cta" onClick={() => openHotelStay(hotelStay)}>
+                          Open stay
+                        </button>
+                      </div>
                     </article>
                   );
                 })}
@@ -927,7 +1084,7 @@ export default function Dashboard() {
                   {savedPlaces.map((place) => (
                     <article key={place.id} className="mini-list__item">
                       {place.image ? (
-                        <img src={place.image} alt={place.name} />
+                        <img className="journal-photo" src={place.image} alt={place.name} />
                       ) : (
                         <div className="mini-list__fallback" style={{ background: scenicGradients[0] }}>
                           <MapPin size={18} />

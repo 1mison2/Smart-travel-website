@@ -54,27 +54,27 @@ export default function BookingSection() {
 
   const getStatusColor = (status) => {
     switch(status) {
-      case 'confirmed': return 'bg-green-100 text-green-800';
-      case 'pending': return 'bg-yellow-100 text-yellow-800';
-      case 'cancelled': return 'bg-red-100 text-red-800';
-      default: return 'bg-gray-100 text-gray-800';
+      case 'confirmed': return 'bg-emerald-50 text-emerald-700 ring-1 ring-emerald-200';
+      case 'pending': return 'bg-blue-50 text-blue-700 ring-1 ring-blue-200';
+      case 'cancelled': return 'bg-rose-50 text-rose-700 ring-1 ring-rose-200';
+      default: return 'bg-slate-100 text-slate-700 ring-1 ring-slate-200';
     }
   };
 
   const getPaymentStatusColor = (status) => {
     switch(status) {
-      case 'paid': return 'bg-green-100 text-green-800';
-      case 'pending': return 'bg-yellow-100 text-yellow-800';
-      case 'failed': return 'bg-red-100 text-red-800';
-      default: return 'bg-gray-100 text-gray-800';
+      case 'paid': return 'bg-emerald-50 text-emerald-700 ring-1 ring-emerald-200';
+      case 'pending': return 'bg-blue-50 text-blue-700 ring-1 ring-blue-200';
+      case 'failed': return 'bg-rose-50 text-rose-700 ring-1 ring-rose-200';
+      default: return 'bg-slate-100 text-slate-700 ring-1 ring-slate-200';
     }
   };
 
   return (
-    <section className="bg-white rounded-2xl p-6 shadow-sm border border-gray-100">
+    <section className="rounded-[30px] border border-white/70 bg-white/78 p-6 shadow-[0_22px_56px_rgba(15,23,42,0.08)] backdrop-blur-xl">
       <div className="flex items-center justify-between mb-6">
-        <h2 className="text-2xl font-bold text-gray-900">Bookings & Payments</h2>
-        <button className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors">
+        <h2 className="text-2xl font-semibold text-slate-950">Bookings & Payments</h2>
+        <button className="rounded-full bg-[linear-gradient(135deg,#1d4ed8_0%,#2563eb_50%,#38bdf8_100%)] px-4 py-2.5 text-sm font-semibold text-white shadow-[0_16px_36px_rgba(37,99,235,0.32)] transition-all hover:-translate-y-0.5 hover:shadow-[0_20px_42px_rgba(37,99,235,0.4)]">
           New Booking
         </button>
       </div>
@@ -82,28 +82,28 @@ export default function BookingSection() {
       {/* Search and Filter */}
       <div className="flex flex-col sm:flex-row gap-4 mb-6">
         <div className="flex-1 relative">
-          <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-400" />
+          <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
           <input
             type="text"
             placeholder="Search bookings..."
             value={searchTerm}
             onChange={(e) => setSearchTerm(e.target.value)}
-            className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+            className="w-full rounded-2xl border border-slate-200 bg-white/85 py-3 pl-10 pr-4 text-slate-700 shadow-[inset_0_1px_0_rgba(255,255,255,0.85)] outline-none transition focus:border-blue-400 focus:ring-4 focus:ring-blue-100"
           />
         </div>
         <div className="flex gap-2">
           <select
             value={filterStatus}
             onChange={(e) => setFilterStatus(e.target.value)}
-            className="px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+            className="rounded-2xl border border-slate-200 bg-white/85 px-4 py-3 text-slate-700 outline-none transition focus:border-blue-400 focus:ring-4 focus:ring-blue-100"
           >
             <option value="all">All Status</option>
             <option value="confirmed">Confirmed</option>
             <option value="pending">Pending</option>
             <option value="cancelled">Cancelled</option>
           </select>
-          <button className="p-2 border border-gray-300 rounded-lg hover:bg-gray-50">
-            <Filter className="h-4 w-4 text-gray-500" />
+          <button className="rounded-2xl border border-slate-200 bg-white/85 p-3 text-slate-500 transition hover:border-blue-200 hover:bg-blue-50 hover:text-blue-700">
+            <Filter className="h-4 w-4" />
           </button>
         </div>
       </div>
@@ -112,47 +112,47 @@ export default function BookingSection() {
       <div className="overflow-x-auto">
         <table className="w-full">
           <thead>
-            <tr className="border-b border-gray-200">
-              <th className="text-left py-3 px-4 font-semibold text-gray-900">Booking ID</th>
-              <th className="text-left py-3 px-4 font-semibold text-gray-900">Destination</th>
-              <th className="text-left py-3 px-4 font-semibold text-gray-900">Details</th>
-              <th className="text-left py-3 px-4 font-semibold text-gray-900">Dates</th>
-              <th className="text-left py-3 px-4 font-semibold text-gray-900">Amount</th>
-              <th className="text-left py-3 px-4 font-semibold text-gray-900">Status</th>
-              <th className="text-left py-3 px-4 font-semibold text-gray-900">Payment</th>
-              <th className="text-left py-3 px-4 font-semibold text-gray-900">Actions</th>
+            <tr className="border-b border-slate-200/80">
+              <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-[0.18em] text-slate-500">Booking ID</th>
+              <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-[0.18em] text-slate-500">Destination</th>
+              <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-[0.18em] text-slate-500">Details</th>
+              <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-[0.18em] text-slate-500">Dates</th>
+              <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-[0.18em] text-slate-500">Amount</th>
+              <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-[0.18em] text-slate-500">Status</th>
+              <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-[0.18em] text-slate-500">Payment</th>
+              <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-[0.18em] text-slate-500">Actions</th>
             </tr>
           </thead>
           <tbody>
             {filteredBookings.map((booking) => (
-              <tr key={booking.id} className="border-b border-gray-100 hover:bg-gray-50">
+              <tr key={booking.id} className="border-b border-slate-100 transition hover:bg-blue-50/40">
                 <td className="py-3 px-4">
-                  <span className="font-medium text-gray-900">{booking.id}</span>
+                  <span className="font-medium text-slate-950">{booking.id}</span>
                 </td>
                 <td className="py-3 px-4">
                   <div className="flex items-center gap-2">
-                    <MapPin className="h-4 w-4 text-gray-400" />
-                    <span className="font-medium">{booking.destination}</span>
+                    <MapPin className="h-4 w-4 text-blue-600" />
+                    <span className="font-medium text-slate-800">{booking.destination}</span>
                   </div>
                 </td>
                 <td className="py-3 px-4">
                   <div className="text-sm">
                     {booking.hotel && (
-                      <div className="text-gray-900">{booking.hotel}</div>
+                      <div className="text-slate-900">{booking.hotel}</div>
                     )}
                     {booking.flight && (
-                      <div className="text-gray-600">Flight: {booking.flight}</div>
+                      <div className="text-slate-600">Flight: {booking.flight}</div>
                     )}
-                    <div className="text-gray-500">{booking.guests} guest{booking.guests > 1 ? 's' : ''}</div>
+                    <div className="text-slate-500">{booking.guests} guest{booking.guests > 1 ? 's' : ''}</div>
                   </div>
                 </td>
                 <td className="py-3 px-4">
                   <div className="text-sm">
-                    <div className="flex items-center gap-1 text-gray-600">
+                    <div className="flex items-center gap-1 text-slate-600">
                       <Calendar className="h-3 w-3" />
                       {booking.checkIn || booking.departure}
                     </div>
-                    <div className="flex items-center gap-1 text-gray-600">
+                    <div className="flex items-center gap-1 text-slate-600">
                       <Calendar className="h-3 w-3" />
                       {booking.checkOut || booking.return}
                     </div>
@@ -160,30 +160,30 @@ export default function BookingSection() {
                 </td>
                 <td className="py-3 px-4">
                   <div className="flex items-center gap-1">
-                    <DollarSign className="h-4 w-4 text-gray-400" />
-                    <span className="font-semibold">${booking.totalAmount}</span>
+                    <DollarSign className="h-4 w-4 text-blue-600" />
+                    <span className="font-semibold text-slate-950">${booking.totalAmount}</span>
                   </div>
                 </td>
                 <td className="py-3 px-4">
-                  <span className={`px-2 py-1 text-xs font-medium rounded-full ${getStatusColor(booking.status)}`}>
+                  <span className={`rounded-full px-2.5 py-1 text-xs font-semibold ${getStatusColor(booking.status)}`}>
                     {booking.status.charAt(0).toUpperCase() + booking.status.slice(1)}
                   </span>
                 </td>
                 <td className="py-3 px-4">
-                  <span className={`px-2 py-1 text-xs font-medium rounded-full ${getPaymentStatusColor(booking.paymentStatus)}`}>
+                  <span className={`rounded-full px-2.5 py-1 text-xs font-semibold ${getPaymentStatusColor(booking.paymentStatus)}`}>
                     {booking.paymentStatus.charAt(0).toUpperCase() + booking.paymentStatus.slice(1)}
                   </span>
                 </td>
                 <td className="py-3 px-4">
                   <div className="flex items-center gap-2">
-                    <button className="p-1 text-gray-500 hover:text-blue-600" title="View Details">
+                    <button className="rounded-full p-2 text-slate-500 transition hover:bg-blue-50 hover:text-blue-700" title="View Details">
                       <Eye className="h-4 w-4" />
                     </button>
-                    <button className="p-1 text-gray-500 hover:text-green-600" title="Download Receipt">
+                    <button className="rounded-full p-2 text-slate-500 transition hover:bg-blue-50 hover:text-blue-700" title="Download Receipt">
                       <Download className="h-4 w-4" />
                     </button>
                     {booking.paymentStatus === 'pending' && (
-                      <button className="p-1 text-gray-500 hover:text-orange-600" title="Process Payment">
+                      <button className="rounded-full p-2 text-slate-500 transition hover:bg-blue-50 hover:text-blue-700" title="Process Payment">
                         <CreditCard className="h-4 w-4" />
                       </button>
                     )}
@@ -197,38 +197,38 @@ export default function BookingSection() {
 
       {filteredBookings.length === 0 && (
         <div className="text-center py-12">
-          <div className="w-16 h-16 bg-gray-100 rounded-full flex items-center justify-center mx-auto mb-4">
-            <Search className="h-8 w-8 text-gray-400" />
+          <div className="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-full bg-blue-50">
+            <Search className="h-8 w-8 text-blue-500" />
           </div>
-          <p className="text-gray-500 mb-2">No bookings found</p>
-          <p className="text-sm text-gray-400">Try adjusting your search or filter criteria</p>
+          <p className="mb-2 text-slate-600">No bookings found</p>
+          <p className="text-sm text-slate-400">Try adjusting your search or filter criteria</p>
         </div>
       )}
 
       {/* Summary Stats */}
-      <div className="mt-6 pt-6 border-t border-gray-200">
+      <div className="mt-6 border-t border-slate-200/80 pt-6">
         <div className="grid grid-cols-1 sm:grid-cols-4 gap-4">
-          <div className="text-center">
-            <div className="text-2xl font-bold text-blue-600">{bookings.length}</div>
-            <div className="text-sm text-gray-600">Total Bookings</div>
+          <div className="rounded-2xl border border-white/70 bg-white/70 py-4 text-center shadow-[0_12px_28px_rgba(15,23,42,0.04)]">
+            <div className="text-2xl font-semibold text-blue-700">{bookings.length}</div>
+            <div className="text-sm text-slate-500">Total Bookings</div>
           </div>
-          <div className="text-center">
-            <div className="text-2xl font-bold text-green-600">
+          <div className="rounded-2xl border border-white/70 bg-white/70 py-4 text-center shadow-[0_12px_28px_rgba(15,23,42,0.04)]">
+            <div className="text-2xl font-semibold text-slate-900">
               {bookings.filter(b => b.status === 'confirmed').length}
             </div>
-            <div className="text-sm text-gray-600">Confirmed</div>
+            <div className="text-sm text-slate-500">Confirmed</div>
           </div>
-          <div className="text-center">
-            <div className="text-2xl font-bold text-yellow-600">
+          <div className="rounded-2xl border border-white/70 bg-white/70 py-4 text-center shadow-[0_12px_28px_rgba(15,23,42,0.04)]">
+            <div className="text-2xl font-semibold text-slate-900">
               {bookings.filter(b => b.status === 'pending').length}
             </div>
-            <div className="text-sm text-gray-600">Pending</div>
+            <div className="text-sm text-slate-500">Pending</div>
           </div>
-          <div className="text-center">
-            <div className="text-2xl font-bold text-purple-600">
+          <div className="rounded-2xl border border-white/70 bg-white/70 py-4 text-center shadow-[0_12px_28px_rgba(15,23,42,0.04)]">
+            <div className="text-2xl font-semibold text-slate-900">
               ${bookings.reduce((sum, b) => sum + b.totalAmount, 0)}
             </div>
-            <div className="text-sm text-gray-600">Total Value</div>
+            <div className="text-sm text-slate-500">Total Value</div>
           </div>
         </div>
       </div>

@@ -3,33 +3,32 @@
 @import './styles/booking-ui.css';
 
 /* Google Fonts */
-@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Poppins:wght@400;500;600;700&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap');
 
 :root {
-  /* Dashboard-aligned color palette */
-  --primary: #ff6f61;
-  --primary-dark: #e25a4f;
-  --primary-light: #ff8a7f;
-  --secondary: #f59e0b;
-  --accent: #fb7185;
-  --dark: #1E293B;
-  --light: #F8FAFC;
-  --gray-50: #F8FAFC;
-  --gray-100: #F1F5F9;
-  --gray-200: #E2E8F0;
-  --gray-300: #CBD5E1;
-  --gray-400: #94A3B8;
-  --gray-500: #64748B;
-  --gray-600: #475569;
-  --gray-700: #334155;
-  --gray-800: #1E293B;
-  --gray-900: #0F172A;
+  --primary: #2563eb;
+  --primary-dark: #1d4ed8;
+  --primary-light: #60a5fa;
+  --secondary: #0f172a;
+  --accent: #38bdf8;
+  --dark: #0f172a;
+  --light: #f8fbff;
+  --gray-50: #f8fbff;
+  --gray-100: #eef4ff;
+  --gray-200: #dbe7f5;
+  --gray-300: #c7d6ea;
+  --gray-400: #8ea3bf;
+  --gray-500: #61748f;
+  --gray-600: #42526b;
+  --gray-700: #22324b;
+  --gray-800: #142033;
+  --gray-900: #0b1628;
   
   /* Shadows */
   --shadow-soft: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
   --shadow-medium: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05);
   --shadow-large: 0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04);
-  --shadow-glow: 0 0 20px rgba(255, 111, 97, 0.3);
+  --shadow-glow: 0 0 24px rgba(37, 99, 235, 0.28);
 
   font-family: 'Inter', system-ui, -apple-system, sans-serif;
   line-height: 1.6;
@@ -45,7 +44,7 @@
 
 /* Typography */
 h1, h2, h3, h4, h5, h6 { 
-  font-family: 'Poppins', 'Inter', sans-serif; 
+  font-family: 'Inter', system-ui, -apple-system, sans-serif; 
   color: inherit;
   font-weight: 600;
   line-height: 1.2;
@@ -124,7 +123,7 @@ body {
 }
 
 .btn-primary {
-  background: linear-gradient(135deg, var(--primary) 0%, var(--primary-dark) 100%);
+  background: linear-gradient(135deg, var(--primary-dark) 0%, var(--primary) 55%, var(--accent) 100%);
   color: white;
 }
 
