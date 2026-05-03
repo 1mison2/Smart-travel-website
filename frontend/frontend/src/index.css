@@ -283,3 +283,116 @@ body {
     --bg-tertiary: var(--gray-100);
   }
 }
+
+/* Shared UI primitives */
+.ui-panel {
+  background: rgba(255, 255, 255, 0.84);
+  border: 1px solid rgba(220, 231, 245, 0.88);
+  border-radius: 28px;
+  box-shadow: 0 20px 55px rgba(15, 23, 42, 0.08);
+  backdrop-filter: blur(18px);
+  -webkit-backdrop-filter: blur(18px);
+}
+
+.ui-panel--soft {
+  background: rgba(248, 251, 255, 0.92);
+}
+
+.ui-section-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 14px;
+}
+
+.ui-kicker {
+  margin: 0 0 8px;
+  color: var(--gray-400);
+  text-transform: uppercase;
+  letter-spacing: 0.16em;
+  font-size: 0.74rem;
+  font-weight: 700;
+}
+
+.ui-title {
+  margin: 0;
+  color: var(--gray-900);
+  font-size: clamp(1.2rem, 2vw, 1.55rem);
+  line-height: 1.12;
+}
+
+.ui-subtitle {
+  margin: 8px 0 0;
+  color: var(--gray-500);
+  font-size: 0.92rem;
+  line-height: 1.65;
+}
+
+.ui-empty-state {
+  display: grid;
+  gap: 12px;
+  place-items: center;
+  padding: 28px;
+  text-align: center;
+  border-radius: 24px;
+  background: rgba(246, 249, 255, 0.94);
+  border: 1px dashed rgba(193, 208, 231, 0.94);
+}
+
+.ui-empty-state--left {
+  place-items: start;
+  text-align: left;
+}
+
+.ui-empty-state__icon {
+  width: 52px;
+  height: 52px;
+  display: grid;
+  place-items: center;
+  border-radius: 18px;
+  background: rgba(224, 242, 254, 0.9);
+  color: var(--primary);
+}
+
+.ui-toast {
+  position: fixed;
+  right: 20px;
+  bottom: 20px;
+  z-index: 60;
+  padding: 14px 18px;
+  border-radius: 18px;
+  color: #fff;
+  font-weight: 700;
+  box-shadow: 0 18px 40px rgba(15, 23, 42, 0.2);
+}
+
+.ui-toast--error {
+  background: #ef4444;
+}
+
+.ui-toast--success {
+  background: #10b981;
+}
+
+.ui-toast--info {
+  background: #0f172a;
+}
+
+.ui-skeleton-block {
+  border-radius: 16px;
+  background: linear-gradient(90deg, var(--gray-100) 0%, var(--gray-200) 50%, var(--gray-100) 100%);
+  background-size: 200% 100%;
+  animation: shimmer 1.5s ease-in-out infinite;
+}
+
+@media (max-width: 720px) {
+  .ui-panel {
+    border-radius: 24px;
+  }
+
+  .ui-toast {
+    right: 12px;
+    left: 12px;
+    bottom: 12px;
+  }
+}

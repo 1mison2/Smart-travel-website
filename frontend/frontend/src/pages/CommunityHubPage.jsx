@@ -65,18 +65,18 @@ export default function CommunityHubPage() {
       <div className="community-hub-page__container">
         <TravelBuddyNav />
 
-        <section className="community-hub-page__hero">
+        <section className="community-hub-page__hero ui-panel">
           <div className="community-hub-page__hero-main">
-            <p className="community-hub-page__hero-kicker">{location.pathname === "/community" ? "Community" : "Travel Buddy"}</p>
-            <h1>{activeTabMeta.label}</h1>
+            <p className="community-hub-page__hero-kicker ui-kicker">{location.pathname === "/community" ? "Community" : "Travel Buddy"}</p>
+            <h1 className="ui-title">{activeTabMeta.label}</h1>
           </div>
         </section>
 
         <section className="community-hub-page__workspace">
-          <aside className="community-hub-page__sidebar">
+          <aside className="community-hub-page__sidebar ui-panel">
             <div className="community-hub-page__sidebar-head">
-              <p>Sections</p>
-              <h3>Choose a section.</h3>
+              <p className="ui-kicker">Sections</p>
+              <h3 className="ui-title">Choose a section.</h3>
             </div>
             <div className="community-hub-page__tab-list">
               {tabs.map((tab) => (
@@ -110,7 +110,7 @@ export default function CommunityHubPage() {
       </div>
 
       {toast ? (
-        <div className={`community-hub-page__toast community-hub-page__toast--${toast.type || "info"}`}>
+        <div className={`community-hub-page__toast ui-toast ui-toast--${toast.type || "info"}`}>
           {toast.message}
         </div>
       ) : null}
@@ -150,11 +150,9 @@ export default function CommunityHubPage() {
           margin-top: 20px;
           padding: 20px 24px;
           border-radius: 28px;
-          border: 1px solid rgba(255,255,255,0.6);
           background:
             linear-gradient(135deg, rgba(8,47,73,0.98), rgba(14,165,233,0.92) 68%, rgba(34,197,94,0.88)),
             #0f172a;
-          box-shadow: 0 20px 60px rgba(15, 23, 42, 0.14);
           color: #fff;
         }
 
@@ -169,10 +167,6 @@ export default function CommunityHubPage() {
         .community-hub-page__hero-kicker,
         .community-hub-page__sidebar-head p {
           margin: 0 0 8px;
-          font-size: 0.74rem;
-          font-weight: 700;
-          letter-spacing: 0.16em;
-          text-transform: uppercase;
         }
 
         .community-hub-page__sidebar-head h3 {
@@ -192,10 +186,6 @@ export default function CommunityHubPage() {
           align-self: start;
           padding: 22px;
           border-radius: 30px;
-          border: 1px solid rgba(226,232,240,0.9);
-          background: rgba(255,255,255,0.9);
-          box-shadow: 0 20px 55px rgba(15, 23, 42, 0.06);
-          backdrop-filter: blur(18px);
         }
 
         .community-hub-page__sidebar-head {
@@ -278,30 +268,6 @@ export default function CommunityHubPage() {
         .community-hub-page__content {
           min-width: 0;
           margin-top: 22px;
-        }
-
-        .community-hub-page__toast {
-          position: fixed;
-          right: 20px;
-          bottom: 20px;
-          z-index: 60;
-          padding: 14px 18px;
-          border-radius: 18px;
-          color: #fff;
-          font-weight: 700;
-          box-shadow: 0 18px 40px rgba(15,23,42,0.2);
-        }
-
-        .community-hub-page__toast--error {
-          background: #ef4444;
-        }
-
-        .community-hub-page__toast--success {
-          background: #10b981;
-        }
-
-        .community-hub-page__toast--info {
-          background: #0f172a;
         }
 
         @media (max-width: 1100px) {

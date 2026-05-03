@@ -35,7 +35,7 @@ export default function CreatePostPage() {
       stats={[
         { label: "Story type", value: "Blog" },
         { label: "Images", value: files.length },
-        { label: "Status", value: "Draft" },
+        { label: "Status", value: "Needs review" },
       ]}
       actions={[
         { label: "Community feed", to: "/community", variant: "ghost" },
@@ -50,7 +50,7 @@ export default function CreatePostPage() {
             </span>
             <div>
               <h2 className="text-2xl font-bold text-slate-900">Story editor</h2>
-              <p className="text-sm text-slate-500">Write a blog, review, or travel reflection.</p>
+              <p className="text-sm text-slate-500">Write a blog, review, or travel reflection. New posts enter the moderation queue before they go live.</p>
             </div>
           </div>
 
@@ -64,7 +64,7 @@ export default function CreatePostPage() {
               <span>Add post images</span>
               <input type="file" multiple accept="image/*" onChange={(e) => setFiles(e.target.files || [])} className="hidden" />
             </label>
-            <button className="rounded-2xl bg-gradient-to-r from-emerald-500 to-sky-500 px-5 py-3.5 font-semibold text-white shadow-lg shadow-emerald-100">Publish post</button>
+            <button className="rounded-2xl bg-gradient-to-r from-emerald-500 to-sky-500 px-5 py-3.5 font-semibold text-white shadow-lg shadow-emerald-100">Submit for review</button>
           </form>
           {error && <p className="mt-4 text-sm font-medium text-rose-700">{error}</p>}
         </section>

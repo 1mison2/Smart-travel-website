@@ -96,13 +96,10 @@ const fallbackDestinationMeta = [
 const mapFallbackAttractions = ["Sarangkot", "World Peace Pagoda", "Phewa Lake"];
 const savedPlaceNotes = ["Sunrise view", "Cultural stay", "Lake escape"];
 const dashboardSidebarItems = [
-  { label: "Overview", to: "/dashboard", icon: Compass },
   { label: "My Trips", to: "/my-trips", icon: Calendar },
-  { label: "Explore", to: "/explore", icon: Mountain },
   { label: "Bookings", to: "/bookings", icon: Wallet },
   { label: "Packages", to: "/trip-packages", icon: Sparkles },
   { label: "Buddy Finder", to: "/buddy-finder", icon: Users },
-  { label: "Settings", to: "/settings", icon: Settings },
 ];
 
 const mapLocationSummary = (location, index = 0) => ({
@@ -585,6 +582,20 @@ export default function Dashboard() {
       accent: "mint",
     },
   ];
+  const heroPulseItems = [
+    {
+      label: "Trip status",
+      value: upcomingTrip ? (daysUntilNextTrip !== null && daysUntilNextTrip >= 0 ? `${daysUntilNextTrip} days left` : "Trip in progress") : "Ready to plan",
+    },
+    {
+      label: "Pending payments",
+      value: totalPendingAmount > 0 ? formatCurrency(totalPendingAmount) : "All clear",
+    },
+    {
+      label: "Saved places",
+      value: `${savedPlaces.length} ready`,
+    },
+  ];
   const tripPreviewMeta = [
     { label: "Trip pace", value: itineraryDays.length > 2 ? "Balanced" : "Easy" },
     { label: "Best window", value: upcomingTrip ? formatDate(upcomingTrip.startDate, { month: "short", day: "numeric" }) : "Anytime" },
@@ -674,21 +685,32 @@ export default function Dashboard() {
             <span className="travel-brand__mark"><Mountain size={18} /></span>
             <span>
               <strong>Smart Travel Nepal</strong>
-              <small>Trips, stays, and payments in one workspace</small>
             </span>
           </button>
 
-          <div className="travel-topbar__meta" aria-label="Workspace summary">
-            <span><ShieldCheck size={15} />Trusted booking flow</span>
-            <span><Wallet size={15} />NPR {totalPaidAmount.toLocaleString()} paid</span>
-            <span><Hotel size={15} />{confirmedBookings} confirmed stays</span>
-          </div>
+          <nav className="travel-topbar__nav" aria-label="Dashboard navigation">
+            {dashboardSidebarItems.map((item) => {
+              const Icon = item.icon;
+              const isActive = location.pathname === item.to;
+              return (
+                <button
+                  key={item.to}
+                  type="button"
+                  className={`travel-topbar__link ${isActive ? "is-active" : ""}`}
+                  onClick={() => navigate(item.to)}
+                >
+                  <Icon size={15} />
+                  <span>{item.label}</span>
+                </button>
+              );
+            })}
+          </nav>
 
           <form className="travel-search" onSubmit={onDashboardSearch}>
             <Search size={16} />
             <input
               type="text"
-              placeholder="Search destinations, stays, and smart recommendations..."
+              placeholder="Search"
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
               onFocus={handleSearchFocus}
@@ -764,28 +786,23 @@ export default function Dashboard() {
         </header>
 
         <section className="hero">
-            <div className="hero__content">
+          <div className="hero__content">
             <p className="hero__eyebrow">Travel Dashboard</p>
             <h1>
               Plan your next Nepal trip
               <span> with bookings, stays, and trips in one place.</span>
             </h1>
-            <p className="hero__journal-note">
-              Keep your next journey clear, compact, and easy to manage.
-            </p>
-            <div className="hero__highlights">
-              <span><ShieldCheck size={14} />Verified bookings</span>
-              <span><Sparkles size={14} />Smart planning</span>
-              <span><Hotel size={14} />Stay overview</span>
+            <div className="hero__pulse">
+              {heroPulseItems.map((item) => (
+                <div key={item.label} className="hero__pulse-item">
+                  <span>{item.label}</span>
+                  <strong>{item.value}</strong>
+                </div>
+              ))}
             </div>
             <div className="hero__actions">
               <button type="button" className="hero__primary" onClick={() => navigate("/explore")}>Browse Destinations</button>
               <button type="button" className="hero__secondary" onClick={() => navigate("/my-trips")}>Open My Trips</button>
-            </div>
-            <div className="hero__stats">
-              <div className="glass-card hero__stat"><span>Upcoming trip</span><strong>{upcomingTrip?.title || "No trip scheduled yet"}</strong></div>
-              <div className="glass-card hero__stat"><span>Countdown</span><strong>{daysUntilNextTrip === null ? "Start planning" : `${daysUntilNextTrip} days left`}</strong></div>
-              <div className="glass-card hero__stat"><span>Saved places</span><strong>{savedPlaces.length} ready to revisit</strong></div>
             </div>
           </div>
 
@@ -823,52 +840,6 @@ export default function Dashboard() {
         </section>
 
         <div className="dashboard-grid">
-          <aside className="dashboard-grid__nav">
-            <button type="button" className="travel-brand travel-brand--sidebar" onClick={() => navigate("/dashboard")}>
-              <span className="travel-brand__mark"><Mountain size={18} /></span>
-              <span>
-                <strong>Smart Travel Nepal</strong>
-                <small>Premium traveler workspace</small>
-              </span>
-            </button>
-
-            <nav className="travel-sidebar__nav" aria-label="Dashboard navigation">
-              {dashboardSidebarItems.map((item) => {
-                const Icon = item.icon;
-                const isActive = location.pathname === item.to;
-                return (
-                  <button
-                    key={item.to}
-                    type="button"
-                    className={`travel-sidebar__link ${isActive ? "is-active" : ""}`}
-                    onClick={() => navigate(item.to)}
-                  >
-                    <Icon size={17} />
-                    <span>{item.label}</span>
-                  </button>
-                );
-              })}
-            </nav>
-
-            <section className="travel-sidebar__panel">
-              <span className="travel-sidebar__label">Workspace health</span>
-              <strong>{confirmedBookings} confirmed bookings</strong>
-              <p>{unreadCount > 0 ? `${unreadCount} new notifications need attention.` : "Everything is up to date right now."}</p>
-              <div className="travel-sidebar__mini-stats">
-                <div>
-                  <span>Trips</span>
-                  <strong>{trips.length}</strong>
-                </div>
-                <div>
-                  <span>Saved</span>
-                  <strong>{savedPlaces.length}</strong>
-                </div>
-              </div>
-              <button type="button" className="action-btn action-btn--primary travel-sidebar__cta" onClick={() => navigate("/itinerary-planner")}>
-                Plan New Trip
-              </button>
-            </section>
-          </aside>
           <main className="dashboard-grid__main">
             <section className="stats-strip">
               {statsCards.map((card) => {
@@ -977,7 +948,16 @@ export default function Dashboard() {
                 <button type="button" className="section-head__link" onClick={() => navigate("/explore")}>See all</button>
               </div>
               {destinationsLoading ? (
-                <p className="dashboard-note">Loading premium picks...</p>
+                <div className="dashboard-skeleton-grid">
+                  {[0, 1, 2].map((item) => (
+                    <article key={item} className="dashboard-skeleton-card">
+                      <div className="dashboard-skeleton dashboard-skeleton--media" />
+                      <div className="dashboard-skeleton dashboard-skeleton--title" />
+                      <div className="dashboard-skeleton dashboard-skeleton--line" />
+                      <div className="dashboard-skeleton dashboard-skeleton--line dashboard-skeleton--line-short" />
+                    </article>
+                  ))}
+                </div>
               ) : (
                 <div className="destination-grid">
                   {recommendedDestinations.map((destination) => (
@@ -1078,7 +1058,17 @@ export default function Dashboard() {
                 <div><p className="section-head__eyebrow">Saved Places</p><h2>Ready when you are</h2></div>
               </div>
               {savedPlacesLoading ? (
-                <p className="dashboard-note">Loading saved places...</p>
+                <div className="dashboard-skeleton-list">
+                  {[0, 1, 2].map((item) => (
+                    <div key={item} className="dashboard-skeleton-row">
+                      <div className="dashboard-skeleton dashboard-skeleton--thumb" />
+                      <div className="dashboard-skeleton-row__body">
+                        <div className="dashboard-skeleton dashboard-skeleton--line" />
+                        <div className="dashboard-skeleton dashboard-skeleton--line dashboard-skeleton--line-short" />
+                      </div>
+                    </div>
+                  ))}
+                </div>
               ) : savedPlaces.length > 0 ? (
                 <div className="mini-list">
                   {savedPlaces.map((place) => (

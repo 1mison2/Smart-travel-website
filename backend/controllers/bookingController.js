@@ -4,6 +4,11 @@ const Location = require("../models/Location");
 const Listing = require("../models/Listing");
 const { createNotification, notifyAdmins } = require("../utils/notificationService");
 const {
+  isSingleSessionBookingType,
+  calculateNights,
+  buildPriceBreakdown,
+} = require("../utils/bookingPricing");
+const {
   canSendEmail,
   sendBookingCancelledEmail,
   sendBookingCreatedEmail,
@@ -16,22 +21,6 @@ const canAccessBooking = (booking, user) => {
   const bookingUserId =
     booking?.userId?._id?.toString?.() || booking?.userId?.toString?.() || "";
   return bookingUserId === user?._id?.toString?.();
-};
-
-const isSingleSessionBookingType = (type) => ["activity", "cafe", "restaurant"].includes(type);
-
-const calculateNights = (checkIn, checkOut) => {
-  const dayMs = 24 * 60 * 60 * 1000;
-  const diff = Math.ceil((checkOut - checkIn) / dayMs);
-  return diff > 0 ? diff : 1;
-};
-
-const buildPriceBreakdown = ({ unitPrice, nights }) => {
-  const subtotal = Number((unitPrice * nights).toFixed(2));
-  const serviceFee = Number((subtotal * 0.08).toFixed(2));
-  const tax = Number((subtotal * 0.13).toFixed(2));
-  const total = Number((subtotal + serviceFee + tax).toFixed(2));
-  return { unitPrice, nights, subtotal, serviceFee, tax, total };
 };
 
 exports.quoteBooking = async (req, res) => {

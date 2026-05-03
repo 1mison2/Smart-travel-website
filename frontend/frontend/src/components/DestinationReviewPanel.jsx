@@ -40,11 +40,10 @@ export default function DestinationReviewPanel({
     event.preventDefault();
     try {
       setSubmitting(true);
-      await api.post("/api/reviews/create", { destination, rating, reviewText });
+      const { data } = await api.post("/api/reviews/create", { destination, rating, reviewText });
       setReviewText("");
-      setMessage("Review submitted successfully.");
+      setMessage(data?.message || "Review submitted for moderation.");
       setError("");
-      await loadReviews();
     } catch (err) {
       setError(err?.response?.data?.message || "Failed to submit review");
       setMessage("");
@@ -61,7 +60,7 @@ export default function DestinationReviewPanel({
         <div>
           <p className="section-head__eyebrow">Reviews</p>
           <h2>{title}</h2>
-          <p>{subtitle}</p>
+          <p>{subtitle} New submissions appear after moderation.</p>
         </div>
         <span className="travel-badge">For {destination}</span>
       </div>

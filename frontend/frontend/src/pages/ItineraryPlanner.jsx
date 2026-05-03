@@ -102,6 +102,8 @@ export default function ItineraryPlanner() {
   const [step, setStep] = useState(1);
   const [itinerary, setItinerary] = useState(null);
   const [summary, setSummary] = useState(null);
+  const [alternatives, setAlternatives] = useState([]);
+  const [activeOptionKey, setActiveOptionKey] = useState("recommended");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   const [prefillLabel, setPrefillLabel] = useState("");
@@ -225,6 +227,8 @@ export default function ItineraryPlanner() {
     setError("");
     setItinerary(null);
     setSummary(null);
+    setAlternatives([]);
+    setActiveOptionKey("recommended");
     setStep(1);
     try {
       localStorage.removeItem(DRAFT_KEY);
@@ -254,15 +258,26 @@ export default function ItineraryPlanner() {
         companionType: merged.companionType,
       };
       const { data } = await api.post("/api/itineraries/generate", payload);
+      const nextAlternatives = Array.isArray(data?.alternatives) ? data.alternatives : [];
+      const recommendedOption = nextAlternatives.find((item) => item?.isRecommended) || nextAlternatives[0] || null;
       setForm(merged);
-      setItinerary(data?.itinerary || null);
-      setSummary(data?.summary || null);
+      setAlternatives(nextAlternatives);
+      setActiveOptionKey(recommendedOption?.key || "recommended");
+      setItinerary(recommendedOption?.itinerary || data?.itinerary || null);
+      setSummary(recommendedOption?.summary || data?.summary || null);
     } catch (err) {
       setError(err?.response?.data?.message || "Failed to generate itinerary");
     } finally {
       setLoading(false);
     }
   };
+
+  useEffect(() => {
+    const activeOption = alternatives.find((item) => item?.key === activeOptionKey) || null;
+    if (!activeOption) return;
+    setItinerary(activeOption.itinerary || null);
+    setSummary(activeOption.summary || null);
+  }, [alternatives, activeOptionKey]);
 
   const onGenerate = async (e) => {
     e.preventDefault();
@@ -543,7 +558,7 @@ export default function ItineraryPlanner() {
               </div>
               <div className="ai-inline-help">
                 <strong>Before generating</strong>
-                <p>The route will be saved automatically to My Trips. If the result feels off, you can immediately regenerate a cheaper, calmer, or more adventurous version.</p>
+                <p>The recommended route will be saved automatically to My Trips, and you can still compare two extra planner options before regenerating.</p>
               </div>
             </div>
           ) : null}
@@ -585,6 +600,29 @@ export default function ItineraryPlanner() {
         {summary ? (
           <>
             <section className="ai-results-head">
+              {alternatives.length > 0 ? (
+                <div className="ai-option-grid">
+                  {alternatives.map((option) => (
+                    <button
+                      key={option.key}
+                      type="button"
+                      className={`ai-option-card ${activeOptionKey === option.key ? "is-active" : ""}`}
+                      onClick={() => setActiveOptionKey(option.key)}
+                    >
+                      <div className="ai-option-card__head">
+                        <strong>{option.label}</strong>
+                        <span>{option.isRecommended ? "Saved" : "Preview"}</span>
+                      </div>
+                      <p>{option.description}</p>
+                      <div className="ai-option-card__meta">
+                        <span>{formatCurrency(option?.summary?.totalEstimatedCost)}</span>
+                        <span>{option?.summary?.pace || "--"}</span>
+                        <span>{option?.summary?.tripStyle || "--"}</span>
+                      </div>
+                    </button>
+                  ))}
+                </div>
+              ) : null}
               <div className="ai-results-head__grid">
                 <article className="ai-review__card"><span>Estimated cost</span><strong>{formatCurrency(summary.totalEstimatedCost)}</strong></article>
                 <article className="ai-review__card"><span>Budget gap</span><strong>{formatCurrency(summary.budgetGap)}</strong></article>
@@ -666,7 +704,7 @@ export default function ItineraryPlanner() {
             </div>
 
             <div className="ai-result-actions">
-              <Link to={`/itineraries/${itinerary?._id}`} className="ai-link ai-link--primary">Open itinerary details</Link>
+              {itinerary?._id ? <Link to={`/itineraries/${itinerary?._id}`} className="ai-link ai-link--primary">Open itinerary details</Link> : <span className="ai-link ai-link--muted">Preview option only</span>}
               <Link to="/my-trips" className="ai-link ai-link--ghost">View in My Trips</Link>
             </div>
           </>
@@ -873,7 +911,8 @@ export default function ItineraryPlanner() {
         .ai-grid,
         .ai-review__grid,
         .ai-choice-grid,
-        .ai-results-head__grid {
+        .ai-results-head__grid,
+        .ai-option-grid {
           display: grid;
           gap: 14px;
         }
@@ -886,6 +925,11 @@ export default function ItineraryPlanner() {
 
         .ai-choice-grid {
           grid-template-columns: repeat(2, minmax(0, 1fr));
+        }
+
+        .ai-option-grid {
+          grid-template-columns: repeat(3, minmax(0, 1fr));
+          margin-bottom: 14px;
         }
 
         .ai-choice-grid--three {
@@ -929,6 +973,7 @@ export default function ItineraryPlanner() {
         }
 
         .ai-choice:hover,
+        .ai-option-card:hover,
         .ai-nav-btn:hover,
         .ai-pill:hover,
         .ai-quick-actions__btn:hover,
@@ -941,6 +986,59 @@ export default function ItineraryPlanner() {
           border-color: rgba(39, 136, 197, 0.45);
           background: rgba(39, 136, 197, 0.08);
           box-shadow: 0 12px 24px rgba(39, 136, 197, 0.08);
+        }
+
+        .ai-option-card {
+          text-align: left;
+          padding: 16px;
+          border-radius: 20px;
+          border: 1px solid rgba(214, 227, 238, 0.95);
+          background: rgba(255, 255, 255, 0.76);
+          cursor: pointer;
+          transition: transform 0.18s ease, border-color 0.18s ease, box-shadow 0.18s ease;
+        }
+
+        .ai-option-card.is-active {
+          border-color: rgba(39, 136, 197, 0.45);
+          background: rgba(39, 136, 197, 0.08);
+          box-shadow: 0 12px 24px rgba(39, 136, 197, 0.08);
+        }
+
+        .ai-option-card__head,
+        .ai-option-card__meta {
+          display: flex;
+          align-items: center;
+          justify-content: space-between;
+          gap: 10px;
+        }
+
+        .ai-option-card__head strong {
+          color: var(--ai-navy);
+        }
+
+        .ai-option-card__head span {
+          padding: 4px 10px;
+          border-radius: 999px;
+          background: rgba(19, 59, 97, 0.08);
+          color: var(--ai-navy);
+          font-size: 0.72rem;
+          font-weight: 800;
+          letter-spacing: 0.08em;
+          text-transform: uppercase;
+        }
+
+        .ai-option-card p {
+          margin: 8px 0 0;
+          color: var(--ai-muted);
+          line-height: 1.6;
+        }
+
+        .ai-option-card__meta {
+          margin-top: 12px;
+          flex-wrap: wrap;
+          color: var(--ai-sky);
+          font-size: 0.8rem;
+          font-weight: 700;
         }
 
         .ai-choice strong {
@@ -1249,12 +1347,19 @@ export default function ItineraryPlanner() {
           border: 1px solid rgba(209, 223, 236, 0.96);
         }
 
+        .ai-link--muted {
+          background: rgba(19, 59, 97, 0.08);
+          color: var(--ai-muted);
+          border: 1px solid rgba(209, 223, 236, 0.96);
+        }
+
         @media (max-width: 980px) {
           .ai-hero,
           .ai-loading,
           .ai-day__body,
           .ai-choice-grid--three,
-          .ai-choice-grid--four {
+          .ai-choice-grid--four,
+          .ai-option-grid {
             grid-template-columns: 1fr;
           }
 
@@ -1278,7 +1383,8 @@ export default function ItineraryPlanner() {
           .ai-summary-bar,
           .ai-choice-grid,
           .ai-result-strip,
-          .ai-results-head__grid {
+          .ai-results-head__grid,
+          .ai-option-grid {
             grid-template-columns: 1fr;
           }
 

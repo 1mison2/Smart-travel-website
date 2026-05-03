@@ -84,11 +84,11 @@ exports.createPost = async (req, res) => {
       destination: sanitizeText(destination, 120),
       tags: normalizeList(tags),
       images,
-      status: "approved",
+      status: "pending",
     });
 
     const populated = await Post.findById(post._id).populate("userId", "name email profilePicture");
-    return res.status(201).json({ message: "Post created", post: populated });
+    return res.status(201).json({ message: "Post submitted for moderation", post: populated });
   } catch (err) {
     console.error(err);
     return res.status(500).json({ message: "Failed to create post" });
@@ -267,10 +267,10 @@ exports.createReview = async (req, res) => {
       rating: numericRating,
       reviewText: sanitizeText(reviewText, 1500),
       images: normalizeList(images).slice(0, 6),
-      status: "approved",
+      status: "pending",
     });
     const populated = await Review.findById(review._id).populate("userId", "name email profilePicture");
-    return res.status(201).json({ message: "Review created", review: populated });
+    return res.status(201).json({ message: "Review submitted for moderation", review: populated });
   } catch (err) {
     console.error(err);
     return res.status(500).json({ message: "Failed to create review" });
