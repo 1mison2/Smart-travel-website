@@ -11,7 +11,7 @@ export default function Profile() {
 
   return (
     <div className="travel-shell">
-      <div className="travel-container" style={{ maxWidth: 1000 }}>
+      <div className="travel-container profile-page__container">
         <header className="travel-hero profile-hero">
           <div>
             <p className="travel-kicker">Profile</p>
@@ -78,6 +78,10 @@ export default function Profile() {
       </div>
 
       <style>{`
+        .profile-page__container {
+          max-width: 1180px;
+        }
+
         .profile-hero {
           display: flex;
           justify-content: space-between;
@@ -158,6 +162,13 @@ export default function Profile() {
         @media (max-width: 900px) {
           .profile-card__grid {
             grid-template-columns: repeat(2, minmax(0, 1fr));
+          }
+        }
+
+        @media (min-width: 1200px) {
+          .profile-page__container {
+            padding-left: 28px;
+            padding-right: 28px;
           }
         }
 
