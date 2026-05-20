@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useState } from "react";
-import { Calendar, CheckCircle2, MapPin, ShieldCheck, Sparkles, Star } from "lucide-react";
+import { Calendar, CheckCircle2, MapPin, Search, ShieldCheck, Sparkles, Star } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import api, { resolveImageUrl } from "../utils/api";
 
@@ -11,6 +11,12 @@ export default function TripPackages() {
   const [activeLocation, setActiveLocation] = useState("All");
   const [startDateFilter, setStartDateFilter] = useState("");
   const [endDateFilter, setEndDateFilter] = useState("");
+  const [searchTerm, setSearchTerm] = useState("");
+  const [sortBy, setSortBy] = useState("featured");
+  const [maxPrice, setMaxPrice] = useState("");
+  const [durationFilter, setDurationFilter] = useState("all");
+  const [difficultyFilter, setDifficultyFilter] = useState("all");
+  const [tripTypeFilter, setTripTypeFilter] = useState("all");
   const navigate = useNavigate();
 
   useEffect(() => {
@@ -49,14 +55,76 @@ export default function TripPackages() {
     [packages]
   );
 
-  const filteredPackages = useMemo(
-    () =>
-      packages.filter((pkg) => {
+  const difficultyOptions = useMemo(
+    () => Array.from(new Set(packages.map((pkg) => String(pkg.difficulty || "").trim()).filter(Boolean))),
+    [packages]
+  );
+
+  const tripTypeOptions = useMemo(
+    () => Array.from(new Set(packages.map((pkg) => String(pkg.tripType || "").trim()).filter(Boolean))),
+    [packages]
+  );
+
+  const filteredPackages = useMemo(() => {
+      const keyword = searchTerm.trim().toLowerCase();
+      const maxPriceNumber = Number(maxPrice || 0);
+
+      const nextPackages = packages.filter((pkg) => {
+        const price = getPackagePrice(pkg);
+        const days = Number(pkg.durationDays || getTripDays(pkg.startDate, pkg.endDate));
+        const haystack = [
+          pkg.title,
+          pkg.location,
+          pkg.region,
+          pkg.tripType,
+          pkg.difficulty,
+          pkg.bestSeason,
+          pkg.shortDescription,
+          pkg.description,
+          pkg.highlights,
+          pkg.included,
+        ]
+          .flat()
+          .filter(Boolean)
+          .join(" ")
+          .toLowerCase();
+
+        const matchesSearch = !keyword || haystack.includes(keyword);
         const matchesLocation = activeLocation === "All" || pkg.location === activeLocation;
         const matchesDate = isDateRangeMatch(pkg.startDate, pkg.endDate, startDateFilter, endDateFilter);
-        return matchesLocation && matchesDate;
-      }),
-    [packages, activeLocation, startDateFilter, endDateFilter]
+        const matchesPrice = !maxPrice || price <= maxPriceNumber;
+        const matchesDifficulty = difficultyFilter === "all" || pkg.difficulty === difficultyFilter;
+        const matchesTripType = tripTypeFilter === "all" || pkg.tripType === tripTypeFilter;
+        const matchesDuration =
+          durationFilter === "all" ||
+          (durationFilter === "short" && days <= 3) ||
+          (durationFilter === "medium" && days >= 4 && days <= 7) ||
+          (durationFilter === "long" && days >= 8);
+
+        return matchesSearch && matchesLocation && matchesDate && matchesPrice && matchesDifficulty && matchesTripType && matchesDuration;
+      });
+
+      return nextPackages.sort((a, b) => {
+        if (sortBy === "price_asc") return getPackagePrice(a) - getPackagePrice(b);
+        if (sortBy === "price_desc") return getPackagePrice(b) - getPackagePrice(a);
+        if (sortBy === "duration_asc") return getPackageDays(a) - getPackageDays(b);
+        if (sortBy === "rating_desc") return Number(b.rating || 0) - Number(a.rating || 0);
+        if (sortBy === "newest") return new Date(b.createdAt || 0) - new Date(a.createdAt || 0);
+        return Number(b.isFeatured || 0) - Number(a.isFeatured || 0) || new Date(a.startDate || 0) - new Date(b.startDate || 0);
+      });
+    },
+    [
+      packages,
+      activeLocation,
+      startDateFilter,
+      endDateFilter,
+      searchTerm,
+      sortBy,
+      maxPrice,
+      durationFilter,
+      difficultyFilter,
+      tripTypeFilter,
+    ]
   );
 
   const featuredPackage = useMemo(() => {
@@ -90,6 +158,26 @@ export default function TripPackages() {
     resolveImageUrl(pkg?.coverImage) ||
     "https://images.unsplash.com/photo-1500530855697-b586d89ba3ee?auto=format&fit=crop&w=1400&q=80";
 
+  const hasActiveFilters =
+    activeLocation !== "All" ||
+    Boolean(startDateFilter || endDateFilter || searchTerm.trim() || maxPrice) ||
+    durationFilter !== "all" ||
+    difficultyFilter !== "all" ||
+    tripTypeFilter !== "all" ||
+    sortBy !== "featured";
+
+  const resetFilters = () => {
+    setActiveLocation("All");
+    setStartDateFilter("");
+    setEndDateFilter("");
+    setSearchTerm("");
+    setSortBy("featured");
+    setMaxPrice("");
+    setDurationFilter("all");
+    setDifficultyFilter("all");
+    setTripTypeFilter("all");
+  };
+
   return (
     <div className="trip-packages-page">
       <header className="trip-packages-hero">
@@ -117,7 +205,7 @@ export default function TripPackages() {
               {cheapestPackage
                 ? `${cheapestPackage.currency || "NPR"} ${Number(
                     cheapestPackage.discountPrice || cheapestPackage.basePrice || 0
-                  )}`
+                  ).toLocaleString()}`
                 : "-"}
             </strong>
           </div>
@@ -135,6 +223,26 @@ export default function TripPackages() {
       {!loading && packages.length > 0 && (
         <>
           <section className="trip-filter-bar">
+            <div className="trip-filter-topline">
+              <label className="trip-filter-search">
+                <Search size={18} />
+                <input
+                  type="search"
+                  value={searchTerm}
+                  onChange={(event) => setSearchTerm(event.target.value)}
+                  placeholder="Search package, region, season, difficulty..."
+                />
+              </label>
+              <select value={sortBy} onChange={(event) => setSortBy(event.target.value)}>
+                <option value="featured">Featured first</option>
+                <option value="price_asc">Price: low to high</option>
+                <option value="price_desc">Price: high to low</option>
+                <option value="duration_asc">Shortest duration</option>
+                <option value="rating_desc">Highest rated</option>
+                <option value="newest">Newest packages</option>
+              </select>
+            </div>
+
             <div className="trip-filter-group">
               <span className="trip-filter-label">Destination</span>
               <div className="trip-filter-chips">
@@ -152,8 +260,8 @@ export default function TripPackages() {
             </div>
 
             <div className="trip-filter-group">
-              <span className="trip-filter-label">Travel dates</span>
-              <div className="trip-filter-dates">
+              <span className="trip-filter-label">Details</span>
+              <div className="trip-filter-controls">
                 <input type="date" value={startDateFilter} onChange={(event) => setStartDateFilter(event.target.value)} />
                 <input
                   type="date"
@@ -161,6 +269,31 @@ export default function TripPackages() {
                   min={startDateFilter || undefined}
                   onChange={(event) => setEndDateFilter(event.target.value)}
                 />
+                <input
+                  type="number"
+                  min="0"
+                  value={maxPrice}
+                  onChange={(event) => setMaxPrice(event.target.value)}
+                  placeholder="Max price NPR"
+                />
+                <select value={durationFilter} onChange={(event) => setDurationFilter(event.target.value)}>
+                  <option value="all">Any duration</option>
+                  <option value="short">1-3 days</option>
+                  <option value="medium">4-7 days</option>
+                  <option value="long">8+ days</option>
+                </select>
+                <select value={difficultyFilter} onChange={(event) => setDifficultyFilter(event.target.value)}>
+                  <option value="all">Any difficulty</option>
+                  {difficultyOptions.map((item) => (
+                    <option key={item} value={item}>{item}</option>
+                  ))}
+                </select>
+                <select value={tripTypeFilter} onChange={(event) => setTripTypeFilter(event.target.value)}>
+                  <option value="all">Any trip type</option>
+                  {tripTypeOptions.map((item) => (
+                    <option key={item} value={item}>{item}</option>
+                  ))}
+                </select>
               </div>
             </div>
 
@@ -198,7 +331,7 @@ export default function TripPackages() {
                     <span>From</span>
                     <strong>
                       {featuredPackage.currency || "NPR"}{" "}
-                      {Number(featuredPackage.discountPrice || featuredPackage.basePrice || 0)}
+                      {getPackagePrice(featuredPackage).toLocaleString()}
                     </strong>
                   </div>
                 </div>
@@ -209,29 +342,16 @@ export default function TripPackages() {
           <div className="trip-results-head">
             <div>
               <h2>Available packages</h2>
-              <p>{listPackages.length} package{listPackages.length === 1 ? "" : "s"} match your current view.</p>
+              <p>
+                {filteredPackages.length} package{filteredPackages.length === 1 ? "" : "s"} match your filters
+                {featuredPackage ? ", with one highlighted above." : "."}
+              </p>
             </div>
-            {activeLocation !== "All" && (
+            {hasActiveFilters && (
               <button
                 type="button"
                 className="trip-package-toggle"
-                onClick={() => {
-                  setActiveLocation("All");
-                  setStartDateFilter("");
-                  setEndDateFilter("");
-                }}
-              >
-                Reset filters
-              </button>
-            )}
-            {activeLocation === "All" && (startDateFilter || endDateFilter) && (
-              <button
-                type="button"
-                className="trip-package-toggle"
-                onClick={() => {
-                  setStartDateFilter("");
-                  setEndDateFilter("");
-                }}
+                onClick={resetFilters}
               >
                 Reset filters
               </button>
@@ -242,7 +362,7 @@ export default function TripPackages() {
 
       <section className="trip-packages-grid">
         {listPackages.map((pkg) => {
-          const price = Number(pkg.discountPrice || pkg.basePrice || 0);
+          const price = getPackagePrice(pkg);
           return (
             <article key={pkg._id} className="trip-package-card trip-package-card--browse">
               <div className="trip-package-card__media">
@@ -276,7 +396,7 @@ export default function TripPackages() {
                   </button>
                   <div className="trip-package-card__price">
                     <span>From</span>
-                    <strong>{pkg.currency || "NPR"} {price}</strong>
+                    <strong>{pkg.currency || "NPR"} {price.toLocaleString()}</strong>
                   </div>
                 </div>
               </div>
@@ -286,7 +406,12 @@ export default function TripPackages() {
         {!loading && packages.length > 0 && listPackages.length === 0 && (
           <article className="trip-packages-empty">
             <h3>{featuredPackage ? "No more packages in this view" : "No packages match these filters"}</h3>
-            <p>{featuredPackage ? "The top featured package is shown above." : "Try switching destination to see more curated options."}</p>
+            <p>{featuredPackage ? "The top featured package is shown above." : "Try changing search, price, dates, destination, or trip type."}</p>
+            {hasActiveFilters && (
+              <button type="button" className="trip-package-toggle" onClick={resetFilters}>
+                Reset filters
+              </button>
+            )}
           </article>
         )}
       </section>
@@ -391,18 +516,45 @@ export default function TripPackages() {
           display: grid;
           gap: 10px;
         }
-        .trip-filter-dates {
+        .trip-filter-topline,
+        .trip-filter-controls {
           display: grid;
-          grid-template-columns: repeat(2, minmax(180px, 220px));
           gap: 10px;
         }
-        .trip-filter-dates input {
+
+        .trip-filter-topline {
+          grid-template-columns: minmax(260px, 1fr) minmax(190px, 240px);
+        }
+
+        .trip-filter-controls {
+          grid-template-columns: repeat(6, minmax(140px, 1fr));
+        }
+
+        .trip-filter-search {
+          display: flex;
+          align-items: center;
+          gap: 10px;
+        }
+
+        .trip-filter-search,
+        .trip-filter-topline select,
+        .trip-filter-controls input,
+        .trip-filter-controls select {
           min-height: 44px;
           border-radius: 14px;
           border: 1px solid rgba(203, 213, 225, 0.95);
           background: rgba(255, 255, 255, 0.88);
           padding: 0 14px;
           color: #334155;
+          font: inherit;
+        }
+
+        .trip-filter-search input {
+          width: 100%;
+          border: 0;
+          outline: 0;
+          background: transparent;
+          color: inherit;
           font: inherit;
         }
         .trip-filter-label {
@@ -662,6 +814,9 @@ export default function TripPackages() {
           margin: 0;
           color: #64748b;
         }
+        .trip-packages-empty .trip-package-toggle {
+          margin-top: 16px;
+        }
         @media (max-width: 960px) {
           .trip-packages-hero,
           .trip-spotlight,
@@ -675,6 +830,10 @@ export default function TripPackages() {
           .trip-package-card__media {
             min-height: 170px;
           }
+          .trip-filter-topline,
+          .trip-filter-controls {
+            grid-template-columns: 1fr;
+          }
         }
         @media (max-width: 640px) {
           .trip-packages-page {
@@ -686,9 +845,6 @@ export default function TripPackages() {
           .trip-spotlight__content,
           .trip-package-card__content {
             padding: 16px;
-          }
-          .trip-filter-dates {
-            grid-template-columns: 1fr;
           }
           .trip-spotlight__content h2,
           .trip-package-card__head h3 {
@@ -706,6 +862,14 @@ function getTripDays(startDate, endDate) {
   if (Number.isNaN(start.getTime()) || Number.isNaN(end.getTime())) return 1;
   const diff = end.setHours(0, 0, 0, 0) - start.setHours(0, 0, 0, 0);
   return Math.max(1, Math.round(diff / (1000 * 60 * 60 * 24)) + 1);
+}
+
+function getPackageDays(pkg) {
+  return Number(pkg?.durationDays || getTripDays(pkg?.startDate, pkg?.endDate));
+}
+
+function getPackagePrice(pkg) {
+  return Number(pkg?.effectivePrice || pkg?.discountPrice || pkg?.basePrice || 0);
 }
 
 function isDateRangeMatch(startDate, endDate, filterStart, filterEnd) {

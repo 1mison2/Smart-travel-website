@@ -299,6 +299,9 @@ export default function Bookings() {
                       </td>
                       <td>
                         <div className="booking-table__actions">
+                          <Link to={`/bookings/${booking._id}`} className="travel-btn travel-btn-soft">
+                            Details
+                          </Link>
                           <button
                             onClick={() => cancelBooking(booking._id)}
                             disabled={!canCancel}

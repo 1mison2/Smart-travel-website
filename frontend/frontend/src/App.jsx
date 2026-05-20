@@ -10,6 +10,7 @@ import ExploreLocations from "./pages/ExploreLocations";
 import LocationDetails from "./pages/LocationDetails";
 import MyTrips from "./pages/MyTrips";
 import Bookings from "./pages/Bookings";
+import BookingDetails from "./pages/BookingDetails";
 import Notifications from "./pages/Notifications";
 import DestinationSearch from "./pages/DestinationSearch";
 import MapExplorer from "./pages/MapExplorer";
@@ -46,6 +47,7 @@ import AdminNotifications from "./pages/admin/Notifications";
 import NotificationPopups from "./components/NotificationPopups";
 import GlobalHeader from "./components/GlobalHeader";
 import GlobalFooter from "./components/GlobalFooter";
+import { FloatingGlobalSearch } from "./components/GlobalSearch";
 import { useAuth } from "./context/AuthContext";
 import { getAuthRedirect, setAuthRedirect } from "./utils/authRedirect";
 
@@ -149,6 +151,7 @@ export default function App() {
     <>
       <ScrollToTop />
       <GlobalHeader />
+      <FloatingGlobalSearch />
       <NotificationPopups key={user?._id || "guest"} />
       <Routes>
         <Route path="/" element={<LandingRoute />} />
@@ -163,6 +166,7 @@ export default function App() {
         <Route path="/profile" element={<UserOnly><Profile /></UserOnly>} />
         <Route path="/settings" element={<UserOnly><Settings /></UserOnly>} />
         <Route path="/bookings" element={<UserOnly><Bookings /></UserOnly>} />
+        <Route path="/bookings/:id" element={<UserOnly><BookingDetails /></UserOnly>} />
         <Route path="/notifications" element={<Protected><Notifications /></Protected>} />
         <Route path="/destination-search" element={<UserOnly><DestinationSearch /></UserOnly>} />
         <Route path="/places/:id" element={<UserOnly><PlaceDetails /></UserOnly>} />

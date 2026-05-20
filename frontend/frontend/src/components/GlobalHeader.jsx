@@ -3,6 +3,7 @@ import { useLocation, useNavigate } from "react-router-dom";
 import { ArrowLeft, LayoutDashboard } from "lucide-react";
 import { useAuth } from "../context/AuthContext";
 import NotificationBell from "./NotificationBell";
+import GlobalSearch from "./GlobalSearch";
 
 const HIDE_ON_PATHS = new Set(["/", "/login", "/signup", "/forgot-password", "/reset-password", "/map-explorer", "/dashboard"]);
 const HIDE_ON_PREFIXES = ["/buddy", "/community"];
@@ -33,6 +34,7 @@ export default function GlobalHeader() {
             Dashboard
           </button>
           <div className="global-header__spacer" />
+          <GlobalSearch />
           <NotificationBell className="global-header__notif" />
         </div>
       </header>

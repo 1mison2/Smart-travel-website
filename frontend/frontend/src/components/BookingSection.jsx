@@ -331,12 +331,14 @@ export default function BookingSection() {
                     </td>
                     <td className="px-4 py-4">
                       <div className="flex items-center gap-2">
-                        <Link to="/bookings" className="rounded-full p-2 text-slate-500 transition hover:bg-blue-50 hover:text-blue-700" title="View details">
+                        <Link to={`/bookings/${booking._id}`} className="rounded-full p-2 text-slate-500 transition hover:bg-blue-50 hover:text-blue-700" title="View details">
                           <Eye className="h-4 w-4" />
                         </Link>
+                        {booking?.paymentStatus === "paid" || booking?.paymentStatus === "refunded" ? (
                         <Link to="/payments" className="rounded-full p-2 text-slate-500 transition hover:bg-blue-50 hover:text-blue-700" title="Payment history">
                           <Download className="h-4 w-4" />
                         </Link>
+                        ) : null}
                         {booking?.paymentStatus !== "paid" ? (
                           <Link to={`/payment?bookingId=${booking._id}`} className="rounded-full p-2 text-slate-500 transition hover:bg-blue-50 hover:text-blue-700" title="Process payment">
                             <CreditCard className="h-4 w-4" />
@@ -398,14 +400,16 @@ export default function BookingSection() {
                 </div>
 
                 <div className="mt-4 flex flex-wrap gap-2">
-                  <Link to="/bookings" className="inline-flex items-center gap-2 rounded-full border border-slate-200 bg-white px-4 py-2 text-sm font-semibold text-slate-700 transition hover:-translate-y-0.5 hover:bg-slate-50">
+                  <Link to={`/bookings/${booking._id}`} className="inline-flex items-center gap-2 rounded-full border border-slate-200 bg-white px-4 py-2 text-sm font-semibold text-slate-700 transition hover:-translate-y-0.5 hover:bg-slate-50">
                     <Eye className="h-4 w-4" />
                     Details
                   </Link>
+                  {booking?.paymentStatus === "paid" || booking?.paymentStatus === "refunded" ? (
                   <Link to="/payments" className="inline-flex items-center gap-2 rounded-full border border-slate-200 bg-white px-4 py-2 text-sm font-semibold text-slate-700 transition hover:-translate-y-0.5 hover:bg-slate-50">
                     <Download className="h-4 w-4" />
                     Payments
                   </Link>
+                  ) : null}
                   {booking?.paymentStatus !== "paid" ? (
                     <Link to={`/payment?bookingId=${booking._id}`} className="inline-flex items-center gap-2 rounded-full bg-[linear-gradient(135deg,#1d4ed8_0%,#2563eb_50%,#38bdf8_100%)] px-4 py-2 text-sm font-semibold text-white shadow-[0_14px_30px_rgba(37,99,235,0.22)] transition hover:-translate-y-0.5">
                       <CreditCard className="h-4 w-4" />
