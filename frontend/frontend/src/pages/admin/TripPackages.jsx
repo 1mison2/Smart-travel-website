@@ -349,18 +349,6 @@ export default function AdminTripPackages() {
     window.scrollTo({ top: 0, behavior: "smooth" });
   };
 
-  const onDuplicate = (pkg) => {
-    onEdit({
-      ...pkg,
-      _id: "",
-      title: pkg.title ? `${pkg.title} Copy` : "",
-      slug: pkg.slug ? `${pkg.slug}-copy` : "",
-      isFeatured: false,
-    });
-    setEditingId("");
-    showToast({ title: "Draft duplicated", message: "A new trip package draft was created from the selected package.", tone: "info" });
-  };
-
   const onSubmit = async (e) => {
     e.preventDefault();
     try {
@@ -837,7 +825,6 @@ export default function AdminTripPackages() {
                     <td>
                       <div className="trip-admin-table-actions">
                         <button type="button" className="admin-btn admin-btn--primary" onClick={() => onEdit(pkg)}>Edit</button>
-                        <button type="button" className="admin-btn admin-btn--muted" onClick={() => onDuplicate(pkg)}>Duplicate</button>
                         <button type="button" className="admin-btn admin-btn--danger" onClick={() => onDelete(pkg._id)}>Delete</button>
                       </div>
                     </td>

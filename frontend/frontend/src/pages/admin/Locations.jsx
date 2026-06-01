@@ -234,30 +234,6 @@ export default function AdminLocations() {
     }
   };
 
-  const onDuplicate = (location) => {
-    setEditingId("");
-    setForm({
-      name: location.name ? `${location.name} Copy` : "",
-      province: location.province || "",
-      district: location.district || "",
-      parentLocationId:
-        typeof location.parentLocationId === "string"
-          ? location.parentLocationId
-          : location.parentLocationId?._id || "",
-      description: location.description || "",
-      category: location.category || "",
-      averageCost: location.averageCost || 0,
-      image: null,
-      images: [],
-      latitude: location.latitude || 0,
-      longitude: location.longitude || 0,
-    });
-    setCurrentImage("");
-    setCurrentImages(Array.isArray(location.images) ? location.images : []);
-    window.scrollTo({ top: 0, behavior: "smooth" });
-    showToast({ title: "Draft duplicated", message: "A new location draft was prefilled from the existing record.", tone: "info" });
-  };
-
   const applyFilters = () => {
     setAppliedFilters({
       name: nameFilter,
@@ -427,7 +403,7 @@ export default function AdminLocations() {
           {!hasAppliedFilters ? (
             <AdminEmptyState
               title="Ready to review location records"
-              copy="Apply one or more filters to browse destination entries, then edit or duplicate them from the table."
+              copy="Apply one or more filters to browse destination entries, then edit them from the table."
             />
           ) : (
             <table className="admin-table">
@@ -467,9 +443,6 @@ export default function AdminLocations() {
                       <div className="admin-actions">
                       <button type="button" onClick={() => onEdit(location)} className="admin-btn admin-btn--primary">
                         Edit
-                      </button>
-                      <button type="button" onClick={() => onDuplicate(location)} className="admin-btn admin-btn--muted">
-                        Duplicate
                       </button>
                       <button type="button" onClick={() => onDelete(location._id, location.name)} className="admin-btn admin-btn--danger">
                         Delete

@@ -292,30 +292,6 @@ export default function AdminListings() {
     }
   };
 
-  const onDuplicate = (listing) => {
-    setEditingId("");
-    setPhotoFiles([]);
-    setForm({
-      type: listing.type || "hotel",
-      title: listing.title ? `${listing.title} Copy` : "",
-      description: listing.description || "",
-      city: listing.location?.name || "",
-      district: listing.location?.district || "",
-      province: listing.location?.province || "",
-      address: listing.location?.address || "",
-      pricePerUnit: listing.pricePerUnit ?? "",
-      capacity: listing.capacity ?? 1,
-      amenities: Array.isArray(listing.amenities) ? listing.amenities.join(", ") : "",
-      photos: Array.isArray(listing.photos) ? listing.photos.join(", ") : "",
-      rating: listing.rating ?? 0,
-      reviews: Array.isArray(listing.reviews)
-        ? listing.reviews.map((r) => `${r.author} | ${r.rating} | ${r.comment}`).join("\n")
-        : "",
-    });
-    window.scrollTo({ top: 0, behavior: "smooth" });
-    showToast({ title: "Draft duplicated", message: "A new listing draft was created from the selected record.", tone: "info" });
-  };
-
   const resetBrowseFilters = () => {
     setSearchFilter("");
     setCityFilter("all");
@@ -551,9 +527,6 @@ export default function AdminListings() {
                       <div className="admin-actions">
                         <button type="button" onClick={() => onEdit(listing)} className="admin-btn admin-btn--primary">
                           Edit
-                        </button>
-                        <button type="button" onClick={() => onDuplicate(listing)} className="admin-btn admin-btn--muted">
-                          Duplicate
                         </button>
                         <button type="button" onClick={() => onDelete(listing._id, listing.title)} className="admin-btn admin-btn--danger">
                           Delete
