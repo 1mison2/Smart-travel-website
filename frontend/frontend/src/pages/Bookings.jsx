@@ -242,11 +242,14 @@ export default function Bookings() {
               </thead>
               <tbody>
                 {filteredBookings.map((booking) => {
+                  const isPastTrip = hasBookingEnded(booking);
                   const canCancel =
+                    !isPastTrip &&
                     booking.bookingStatus !== "cancelled" &&
                     booking.paymentStatus !== "paid" &&
                     booking.paymentStatus !== "refunded";
                   const canRequestRefund =
+                    !isPastTrip &&
                     booking.paymentStatus === "paid" &&
                     booking.refundRequestStatus !== "requested" &&
                     booking.refundRequestStatus !== "approved";
@@ -295,6 +298,7 @@ export default function Bookings() {
                           {booking.cancelledAt && <span>Cancelled: {formatDateTime(booking.cancelledAt)}</span>}
                           {booking.refundRequestedAt && <span>Refund requested: {formatDateTime(booking.refundRequestedAt)}</span>}
                           {booking.refundedAt && <span>Refunded: {formatDateTime(booking.refundedAt)}</span>}
+                          {isPastTrip && <span>Trip completed</span>}
                         </div>
                       </td>
                       <td>
@@ -541,6 +545,17 @@ function formatLabel(value) {
   return String(value || "-")
     .replaceAll("_", " ")
     .replace(/\b\w/g, (char) => char.toUpperCase());
+}
+
+function getBookingEndDate(booking) {
+  return booking?.checkOut || booking?.packageSnapshot?.endDate || booking?.checkIn || booking?.date || "";
+}
+
+function hasBookingEnded(booking) {
+  const endDate = new Date(getBookingEndDate(booking));
+  if (Number.isNaN(endDate.getTime())) return false;
+  endDate.setHours(23, 59, 59, 999);
+  return endDate < new Date();
 }
 
 function isDateRangeMatch(rawStart, rawEnd, filterStart, filterEnd) {

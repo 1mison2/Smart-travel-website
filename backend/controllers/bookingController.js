@@ -23,6 +23,16 @@ const canAccessBooking = (booking, user) => {
   return bookingUserId === user?._id?.toString?.();
 };
 
+const getBookingEndDate = (booking) =>
+  booking?.checkOut || booking?.packageSnapshot?.endDate || booking?.checkIn || booking?.date || null;
+
+const hasBookingEnded = (booking, now = new Date()) => {
+  const endDate = new Date(getBookingEndDate(booking));
+  if (Number.isNaN(endDate.getTime())) return false;
+  endDate.setHours(23, 59, 59, 999);
+  return endDate < now;
+};
+
 exports.quoteBooking = async (req, res) => {
   try {
     const { listingId, checkIn, checkOut, guests = 1 } = req.body || {};
@@ -307,6 +317,9 @@ exports.cancelBooking = async (req, res) => {
       .populate("tripPackageId", "title");
     if (!booking) return res.status(404).json({ message: "Booking not found" });
     if (!canAccessBooking(booking, req.user)) return res.status(403).json({ message: "Forbidden" });
+    if (hasBookingEnded(booking)) {
+      return res.status(400).json({ message: "This trip has already ended and can no longer be cancelled" });
+    }
     if (booking.paymentStatus === "paid") {
       return res.status(400).json({ message: "Paid booking cannot be cancelled from this action" });
     }
@@ -366,6 +379,9 @@ exports.requestRefund = async (req, res) => {
       .populate("tripPackageId", "title");
     if (!booking) return res.status(404).json({ message: "Booking not found" });
     if (!canAccessBooking(booking, req.user)) return res.status(403).json({ message: "Forbidden" });
+    if (hasBookingEnded(booking)) {
+      return res.status(400).json({ message: "This trip has already ended and is no longer eligible for refund requests" });
+    }
     if (booking.paymentStatus !== "paid") {
       return res.status(400).json({ message: "Only paid bookings can request a refund" });
     }

@@ -67,6 +67,16 @@ const formatLabel = (value) =>
     .replaceAll("_", " ")
     .replace(/\b\w/g, (char) => char.toUpperCase());
 
+const getBookingEndDate = (booking) =>
+  booking?.checkOut || booking?.packageSnapshot?.endDate || booking?.checkIn || booking?.date || "";
+
+const hasBookingEnded = (booking) => {
+  const endDate = new Date(getBookingEndDate(booking));
+  if (Number.isNaN(endDate.getTime())) return false;
+  endDate.setHours(23, 59, 59, 999);
+  return endDate < new Date();
+};
+
 const buildTimeline = (booking) => [
   {
     label: "Booking created",
@@ -138,10 +148,12 @@ export default function BookingDetails() {
     ].filter(([, value]) => Number(value || 0) > 0);
   }, [booking]);
 
-  const canPay = booking && booking.paymentStatus !== "paid" && booking.bookingStatus !== "cancelled";
-  const canCancel = booking && booking.bookingStatus !== "cancelled" && booking.paymentStatus !== "paid";
+  const isPastTrip = booking ? hasBookingEnded(booking) : false;
+  const canPay = booking && !isPastTrip && booking.paymentStatus !== "paid" && booking.bookingStatus !== "cancelled";
+  const canCancel = booking && !isPastTrip && booking.bookingStatus !== "cancelled" && booking.paymentStatus !== "paid";
   const canRequestRefund =
     booking &&
+    !isPastTrip &&
     booking.paymentStatus === "paid" &&
     booking.refundRequestStatus !== "requested" &&
     booking.refundRequestStatus !== "approved";
@@ -322,6 +334,7 @@ export default function BookingDetails() {
               <span className={`booking-detail-badge ${statusTone(booking.refundRequestStatus)}`}>
                 Refund {formatLabel(booking.refundRequestStatus || "none")}
               </span>
+              {isPastTrip ? <p>This trip has already ended, so cancellation and refund requests are closed.</p> : null}
               {booking.refundReason ? <p>Reason: {booking.refundReason}</p> : null}
               {booking.refundDecisionNote ? <p>Admin note: {booking.refundDecisionNote}</p> : null}
               {canRequestRefund ? (
