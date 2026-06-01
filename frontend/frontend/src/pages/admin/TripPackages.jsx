@@ -1,4 +1,8 @@
 import React, { useEffect, useMemo, useState } from "react";
+import AdminEmptyState from "../../components/admin/AdminEmptyState";
+import AdminSectionNav from "../../components/admin/AdminSectionNav";
+import { useAdminUi } from "../../components/admin/adminUiContextValue";
+import useUnsavedChangesPrompt from "../../hooks/useUnsavedChangesPrompt";
 import api from "../../utils/api";
 
 const createEmptyFaq = () => ({ question: "", answer: "" });
@@ -89,6 +93,7 @@ export default function AdminTripPackages() {
   });
   const [hasAppliedFilters, setHasAppliedFilters] = useState(false);
   const [openSections, setOpenSections] = useState(defaultOpenSections);
+  const { showToast } = useAdminUi();
 
   const hotelListings = useMemo(
     () => listings.filter((listing) => listing.type === "hotel"),
@@ -141,6 +146,16 @@ export default function AdminTripPackages() {
   useEffect(() => {
     loadPackages();
   }, []);
+
+  const isDirty =
+    Boolean(editingId) ||
+    Boolean(form.title || form.slug || form.shortDescription || form.description || form.location || form.region || form.pickupCity || form.dropoffCity || form.startDate || form.endDate) ||
+    Boolean(form.basePrice || form.discountPrice || form.rating || form.coverImage || form.galleryImages || form.videoUrl || form.included || form.excluded || form.highlights || form.bestSeason || form.difficulty || form.tripType || form.cancellationPolicy || form.paymentPolicy) ||
+    (form.faqs || []).some((faq) => faq.question || faq.answer) ||
+    (form.itineraryDays || []).some((day) => day.title || day.summary || day.notes || (day.activities || []).length) ||
+    Boolean((form.addOnListings || []).length);
+
+  useUnsavedChangesPrompt(isDirty);
 
   const onChange = (e) => {
     const { name, value, type, checked } = e.target;
@@ -331,6 +346,19 @@ export default function AdminTripPackages() {
       isFeatured: Boolean(pkg.isFeatured),
       isActive: typeof pkg.isActive === "boolean" ? pkg.isActive : true,
     });
+    window.scrollTo({ top: 0, behavior: "smooth" });
+  };
+
+  const onDuplicate = (pkg) => {
+    onEdit({
+      ...pkg,
+      _id: "",
+      title: pkg.title ? `${pkg.title} Copy` : "",
+      slug: pkg.slug ? `${pkg.slug}-copy` : "",
+      isFeatured: false,
+    });
+    setEditingId("");
+    showToast({ title: "Draft duplicated", message: "A new trip package draft was created from the selected package.", tone: "info" });
   };
 
   const onSubmit = async (e) => {
@@ -357,10 +385,32 @@ export default function AdminTripPackages() {
           ),
         })),
       };
+      if (new Date(payload.endDate) < new Date(payload.startDate)) {
+        setError("End date must be after the start date.");
+        return;
+      }
+      if (payload.basePrice < 0 || payload.discountPrice < 0) {
+        setError("Prices cannot be negative.");
+        return;
+      }
+      if (payload.discountPrice > payload.basePrice && payload.basePrice > 0) {
+        setError("Discount price cannot be higher than the base price.");
+        return;
+      }
+      if (payload.rating < 0 || payload.rating > 5) {
+        setError("Rating must stay between 0 and 5.");
+        return;
+      }
+      if (payload.minGuests < 1 || payload.maxGuests < payload.minGuests || payload.capacity < payload.maxGuests) {
+        setError("Guest limits must be valid and stay within total capacity.");
+        return;
+      }
       if (editingId) {
         await api.put(`/api/admin/trip-packages/${editingId}`, payload);
+        showToast({ title: "Package updated", message: `${payload.title} was updated successfully.` });
       } else {
         await api.post("/api/admin/trip-packages", payload);
+        showToast({ title: "Package created", message: `${payload.title} is ready for publishing.` });
       }
       resetForm();
       await loadPackages();
@@ -375,6 +425,7 @@ export default function AdminTripPackages() {
     try {
       await api.delete(`/api/admin/trip-packages/${id}`);
       await loadPackages();
+      showToast({ title: "Package deleted", message: "The trip package was removed from the catalog." });
     } catch (err) {
       setError(err?.response?.data?.message || "Failed to delete trip package");
     }
@@ -418,7 +469,17 @@ export default function AdminTripPackages() {
             {Object.values(openSections).every(Boolean) ? "Collapse all" : "Expand all"}
           </button>
         </div>
-        <div className="trip-admin-section">
+        <AdminSectionNav
+          sections={[
+            { id: "trip-admin-core", label: "Core details" },
+            { id: "trip-admin-pricing", label: "Pricing and media" },
+            { id: "trip-admin-content", label: "Package content" },
+            { id: "trip-admin-itinerary", label: "Itinerary" },
+            { id: "trip-admin-policies", label: "Policies and FAQs" },
+            { id: "trip-admin-addons", label: "Checkout add-ons" },
+          ]}
+        />
+        <div className="trip-admin-section" id="trip-admin-core">
           <button type="button" className="trip-admin-toggle" onClick={() => toggleSection("core")}>
             <div>
               <h2>Core details</h2>
@@ -447,7 +508,7 @@ export default function AdminTripPackages() {
           )}
         </div>
 
-        <div className="trip-admin-section">
+        <div className="trip-admin-section" id="trip-admin-pricing">
           <button type="button" className="trip-admin-toggle" onClick={() => toggleSection("pricing")}>
             <div>
               <h2>Pricing and media</h2>
@@ -475,7 +536,7 @@ export default function AdminTripPackages() {
           )}
         </div>
 
-        <div className="trip-admin-section">
+        <div className="trip-admin-section" id="trip-admin-content">
           <button type="button" className="trip-admin-toggle" onClick={() => toggleSection("content")}>
             <div>
               <h2>Package content</h2>
@@ -492,7 +553,7 @@ export default function AdminTripPackages() {
           )}
         </div>
 
-        <div className="trip-admin-section">
+        <div className="trip-admin-section" id="trip-admin-itinerary">
           <button type="button" className="trip-admin-toggle" onClick={() => toggleSection("itinerary")}>
             <div>
               <h2>Day-wise itinerary</h2>
@@ -580,7 +641,7 @@ export default function AdminTripPackages() {
           )}
         </div>
 
-        <div className="trip-admin-section">
+        <div className="trip-admin-section" id="trip-admin-policies">
           <button type="button" className="trip-admin-toggle" onClick={() => toggleSection("policies")}>
             <div>
               <h2>Policies and FAQs</h2>
@@ -613,7 +674,7 @@ export default function AdminTripPackages() {
           )}
         </div>
 
-        <div className="trip-admin-section">
+        <div className="trip-admin-section" id="trip-admin-addons">
           <button type="button" className="trip-admin-toggle" onClick={() => toggleSection("addons")}>
             <div>
               <h2>Checkout add-ons</h2>
@@ -647,7 +708,7 @@ export default function AdminTripPackages() {
           )}
         </div>
 
-        <div className="admin-actions">
+        <div className="trip-admin-form-actions">
           <button type="submit" disabled={saving} className="admin-btn admin-btn--primary">
             {saving ? "Saving..." : editingId ? "Update Package" : "Create Package"}
           </button>
@@ -747,9 +808,10 @@ export default function AdminTripPackages() {
           </div>
 
           {!hasAppliedFilters ? (
-            <div className="admin-table__muted" style={{ padding: "18px 6px" }}>
-              Apply filters to view posted package details.
-            </div>
+            <AdminEmptyState
+              title="Package catalog ready to browse"
+              copy="Apply filters to inspect published, featured, or inactive packages before editing them."
+            />
           ) : (
             <table className="admin-table">
               <thead>
@@ -772,15 +834,23 @@ export default function AdminTripPackages() {
                     <td>{pkg.currency || "NPR"} {pkg.discountPrice || pkg.basePrice}</td>
                     <td>{Array.isArray(pkg.itineraryDays) && pkg.itineraryDays.length ? pkg.itineraryDays.length : getTripDays(pkg.startDate, pkg.endDate)}</td>
                     <td>{pkg.isActive ? (pkg.isFeatured ? "Featured" : "Active") : "Inactive"}</td>
-                    <td className="admin-actions">
-                      <button type="button" className="admin-btn admin-btn--primary" onClick={() => onEdit(pkg)}>Edit</button>
-                      <button type="button" className="admin-btn admin-btn--danger" onClick={() => onDelete(pkg._id)}>Delete</button>
+                    <td>
+                      <div className="trip-admin-table-actions">
+                        <button type="button" className="admin-btn admin-btn--primary" onClick={() => onEdit(pkg)}>Edit</button>
+                        <button type="button" className="admin-btn admin-btn--muted" onClick={() => onDuplicate(pkg)}>Duplicate</button>
+                        <button type="button" className="admin-btn admin-btn--danger" onClick={() => onDelete(pkg._id)}>Delete</button>
+                      </div>
                     </td>
                   </tr>
                 ))}
                 {filteredPackages.length === 0 && (
                   <tr>
-                    <td colSpan="7">No packages match the applied filters.</td>
+                    <td colSpan="7">
+                      <AdminEmptyState
+                        title="No packages matched"
+                        copy="Try changing location, trip type, or status filters, or create a new package above."
+                      />
+                    </td>
                   </tr>
                 )}
               </tbody>
@@ -827,11 +897,15 @@ export default function AdminTripPackages() {
           align-items: center;
           gap: 16px;
           width: 100%;
-          padding: 0;
+          padding: 14px 0;
           border: 0;
+          border-radius: 16px;
           background: transparent;
           text-align: left;
           cursor: pointer;
+        }
+        .trip-admin-toggle > div {
+          min-width: 0;
         }
         .trip-admin-toggle p {
           margin: 4px 0 0;
@@ -850,10 +924,44 @@ export default function AdminTripPackages() {
           color: #0f172a;
           font-size: 0.82rem;
           font-weight: 700;
+          flex: 0 0 auto;
+          transition: background 0.18s ease, border-color 0.18s ease, transform 0.18s ease;
+        }
+        .trip-admin-toggle:hover span {
+          transform: translateY(-1px);
+          border-color: rgba(14, 165, 233, 0.35);
+          background: #e0f2fe;
         }
         .trip-admin-section__body {
           display: grid;
           gap: 12px;
+        }
+        .trip-admin-form-actions {
+          display: flex;
+          justify-content: flex-end;
+          align-items: center;
+          gap: 12px;
+          flex-wrap: wrap;
+          margin-top: 8px;
+          padding: 18px 0 0;
+          border-top: 1px solid rgba(148, 163, 184, 0.22);
+        }
+        .trip-admin-form-actions .admin-btn {
+          min-width: 150px;
+        }
+        .trip-admin-table-actions {
+          display: flex;
+          justify-content: flex-end;
+          align-items: center;
+          gap: 8px;
+          flex-wrap: wrap;
+          min-width: 260px;
+        }
+        .trip-admin-table-actions .admin-btn {
+          padding: 8px 10px;
+          border-radius: 12px;
+          font-size: 0.76rem;
+          white-space: nowrap;
         }
         .admin-filter-panel {
           margin-bottom: 16px;
@@ -972,6 +1080,17 @@ export default function AdminTripPackages() {
         @media (max-width: 720px) {
           .trip-admin-overview {
             align-items: stretch;
+          }
+          .trip-admin-toggle {
+            align-items: flex-start;
+          }
+          .trip-admin-form-actions,
+          .trip-admin-table-actions {
+            justify-content: stretch;
+          }
+          .trip-admin-form-actions .admin-btn,
+          .trip-admin-table-actions .admin-btn {
+            flex: 1 1 140px;
           }
           .admin-filter-panel {
             padding: 16px;

@@ -6,8 +6,8 @@ const Location = require("../models/Location");
 const Listing = require("../models/Listing");
 const TripPackage = require("../models/TripPackage");
 const User = require("../models/User");
-const { locationSeeds, listingSeeds, nearbyRecommendations } = require("../seeds/mustangSeedData");
-const { tripPackageSeeds } = require("../seeds/mustangTripPackageSeeds");
+const { locationSeeds, listingSeeds, nearbyRecommendations } = require("../seeds/lumbiniSeedData");
+const { tripPackageSeeds } = require("../seeds/lumbiniTripPackageSeeds");
 
 async function pickCreator() {
   const adminUser = await User.findOne({ role: "admin" }).select("_id name email");
@@ -16,11 +16,11 @@ async function pickCreator() {
 }
 
 async function upsertLocations() {
-  const hubSeed = locationSeeds.find((item) => item.key === "mustang");
-  const childSeeds = locationSeeds.filter((item) => item.key !== "mustang");
+  const hubSeed = locationSeeds.find((item) => item.key === "lumbini");
+  const childSeeds = locationSeeds.filter((item) => item.key !== "lumbini");
 
   if (!hubSeed) {
-    throw new Error("Mustang hub seed is missing.");
+    throw new Error("Lumbini hub seed is missing.");
   }
 
   const preserveMedia = (seed, existing) => ({
@@ -40,7 +40,7 @@ async function upsertLocations() {
   }).select("image images");
   const hubMedia = preserveMedia(hubSeed, existingHub);
 
-  const mustangHub = await Location.findOneAndUpdate(
+  const lumbiniHub = await Location.findOneAndUpdate(
     {
       name: hubSeed.name,
       district: hubSeed.district,
@@ -64,7 +64,7 @@ async function upsertLocations() {
     { upsert: true, new: true, setDefaultsOnInsert: true }
   );
 
-  const locationMap = new Map([[hubSeed.key, mustangHub]]);
+  const locationMap = new Map([[hubSeed.key, lumbiniHub]]);
 
   for (const seed of childSeeds) {
     const existingLocation = await Location.findOne({
@@ -85,7 +85,7 @@ async function upsertLocations() {
           name: seed.name,
           province: seed.province,
           district: seed.district,
-          parentLocationId: mustangHub._id,
+          parentLocationId: lumbiniHub._id,
           description: seed.description,
           category: seed.category,
           averageCost: seed.averageCost,
@@ -238,13 +238,13 @@ async function run() {
   const locationMap = await upsertLocations();
   const listingResult = await upsertListings(creator._id);
   const tripPackageResult = await upsertTripPackages();
-  const mustang = locationMap.get("mustang");
-  const childCount = Array.from(locationMap.keys()).filter((key) => key !== "mustang").length;
+  const lumbini = locationMap.get("lumbini");
+  const childCount = Array.from(locationMap.keys()).filter((key) => key !== "lumbini").length;
 
-  console.log("Mustang seed import completed.");
+  console.log("Lumbini seed import completed.");
   console.log(`Creator account: ${creator.email}`);
-  console.log(`Destination hub: ${mustang.name}`);
-  console.log(`Child places linked under Mustang: ${childCount}`);
+  console.log(`Destination hub: ${lumbini.name}`);
+  console.log(`Child places linked under Lumbini: ${childCount}`);
   console.log(`Listings created: ${listingResult.createdCount}`);
   console.log(`Listings updated: ${listingResult.updatedCount}`);
   console.log(`Trip packages created: ${tripPackageResult.createdCount}`);
@@ -254,7 +254,7 @@ async function run() {
 
 run()
   .catch((error) => {
-    console.error("Mustang seed import failed.");
+    console.error("Lumbini seed import failed.");
     console.error(error);
     process.exitCode = 1;
   })

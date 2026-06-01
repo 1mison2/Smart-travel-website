@@ -77,6 +77,8 @@ const TYPE_TO_LISTING_TYPES = {
 };
 
 const normalizeText = (value) => String(value || "").trim().toLowerCase();
+const getGoogleMapsApiKey = () =>
+  process.env.GOOGLE_MAPS_API_KEY || process.env.GOOGLE_PLACES_API_KEY || process.env.GOOGLE_API_KEY || "";
 
 const toRadians = (degrees) => (degrees * Math.PI) / 180;
 
@@ -94,8 +96,19 @@ const haversineDistanceKm = (lat1, lon1, lat2, lon2) => {
 };
 
 const buildGooglePhotoUrl = (photoName) => {
-  if (!photoName || !process.env.GOOGLE_MAPS_API_KEY) return "";
-  return `https://places.googleapis.com/v1/${photoName}/media?maxHeightPx=400&maxWidthPx=400&key=${process.env.GOOGLE_MAPS_API_KEY}`;
+  const apiKey = getGoogleMapsApiKey();
+  if (!photoName || !apiKey) return "";
+  return `https://places.googleapis.com/v1/${photoName}/media?maxHeightPx=400&maxWidthPx=400&key=${apiKey}`;
+};
+
+const buildMapUri = ({ name, lat, lng }) => {
+  if (Number.isFinite(Number(lat)) && Number.isFinite(Number(lng))) {
+    return `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(`${lat},${lng}`)}`;
+  }
+  if (name) {
+    return `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(String(name))}`;
+  }
+  return "";
 };
 
 const mapGooglePlace = (place, lat, lng) => {
@@ -119,6 +132,11 @@ const mapGooglePlace = (place, lat, lng) => {
     photo: buildGooglePhotoUrl(place.photos?.[0]?.name),
     mapUri: place.googleMapsUri || "",
     categories: place.types || [],
+    userRatingCount: Number(place.userRatingCount || 0),
+    priceLevel: place.priceLevel || "",
+    website: place.websiteUri || "",
+    isOpenNow:
+      typeof place.currentOpeningHours?.openNow === "boolean" ? place.currentOpeningHours.openNow : null,
   };
 };
 
@@ -130,7 +148,7 @@ const fetchGooglePlacesByText = async ({ apiKey, lat, lng, radius, query, maxRes
       "Content-Type": "application/json",
       "X-Goog-Api-Key": apiKey,
       "X-Goog-FieldMask":
-        "places.id,places.displayName,places.formattedAddress,places.location,places.rating,places.photos,places.googleMapsUri,places.types",
+        "places.id,places.displayName,places.formattedAddress,places.location,places.rating,places.userRatingCount,places.photos,places.googleMapsUri,places.types,places.priceLevel,places.websiteUri,places.currentOpeningHours",
     },
     body: JSON.stringify({
       textQuery: query,
@@ -187,8 +205,12 @@ const getLocalNearbyFromLocations = async ({ lat, lng, query, type, limit = 20, 
           ? Number(haversineDistanceKm(lat, lng, location.latitude, location.longitude).toFixed(2))
           : null,
       photo: location.image || "",
-      mapUri: "",
+      mapUri: buildMapUri({ name: location.name, lat: location.latitude, lng: location.longitude }),
       categories: [location.category || "tourist_attraction"],
+      userRatingCount: 0,
+      priceLevel: "",
+      website: "",
+      isOpenNow: null,
     }))
     .sort((a, b) => (a.distanceKm ?? Number.MAX_SAFE_INTEGER) - (b.distanceKm ?? Number.MAX_SAFE_INTEGER))
     .slice(0, limit);
@@ -281,8 +303,12 @@ const getLocalNearbyFromListings = async ({ lat, lng, type, limit = 20, radiusKm
         location: coordinates,
         distanceKm,
         photo: Array.isArray(listing.photos) ? listing.photos[0] || "" : "",
-        mapUri: "",
+        mapUri: buildMapUri({ name: listing.title, lat: coordinates.lat, lng: coordinates.lng }),
         categories: [listing.type, listing.location?.name].filter(Boolean),
+        userRatingCount: 0,
+        priceLevel: "",
+        website: "",
+        isOpenNow: null,
       };
     })
     .filter(Boolean)
@@ -382,7 +408,7 @@ exports.getNearbyPlaces = async (req, res) => {
       limit: maxResultCount,
     });
 
-    const apiKey = process.env.GOOGLE_MAPS_API_KEY;
+    const apiKey = getGoogleMapsApiKey();
     if (!apiKey) {
       return res.json({ source: "local_fallback", places: localPlaces });
     }
@@ -404,7 +430,7 @@ exports.getNearbyPlaces = async (req, res) => {
         "Content-Type": "application/json",
         "X-Goog-Api-Key": apiKey,
         "X-Goog-FieldMask":
-          "places.id,places.displayName,places.formattedAddress,places.location,places.rating,places.photos,places.googleMapsUri,places.types",
+          "places.id,places.displayName,places.formattedAddress,places.location,places.rating,places.userRatingCount,places.photos,places.googleMapsUri,places.types,places.priceLevel,places.websiteUri,places.currentOpeningHours",
       },
       body: JSON.stringify({
         includedTypes: [type],
@@ -439,7 +465,7 @@ exports.getPlaceDetails = async (req, res) => {
     const { placeId } = req.params;
     if (!placeId) return res.status(400).json({ message: "placeId is required" });
 
-    const apiKey = process.env.GOOGLE_MAPS_API_KEY;
+    const apiKey = getGoogleMapsApiKey();
     if (!apiKey) return res.status(400).json({ message: "Google Maps API key is not configured" });
 
     const endpoint = `https://places.googleapis.com/v1/places/${encodeURIComponent(placeId)}`;
@@ -448,7 +474,7 @@ exports.getPlaceDetails = async (req, res) => {
       headers: {
         "X-Goog-Api-Key": apiKey,
         "X-Goog-FieldMask":
-          "id,displayName,formattedAddress,location,rating,photos,googleMapsUri,types,currentOpeningHours,websiteUri,nationalPhoneNumber,priceLevel",
+          "id,displayName,formattedAddress,location,rating,userRatingCount,photos,googleMapsUri,types,currentOpeningHours,websiteUri,nationalPhoneNumber,priceLevel",
       },
     });
 
@@ -472,6 +498,7 @@ exports.getPlaceDetails = async (req, res) => {
       },
       photos: (place.photos || []).slice(0, 5).map((photo) => buildGooglePhotoUrl(photo.name)).filter(Boolean),
       categories: place.types || [],
+      userRatingCount: Number(place.userRatingCount || 0),
       priceLevel: place.priceLevel || "",
     });
   } catch (err) {

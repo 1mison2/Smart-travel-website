@@ -2,16 +2,20 @@ import React, { useEffect, useState } from "react";
 import { Star } from "lucide-react";
 import api from "../../utils/api";
 import SectionSkeleton from "./SectionSkeleton";
+import { useAuth } from "../../context/AuthContext";
 
 export default function DestinationReviewsSection({ onNotify }) {
+  const { user } = useAuth();
   const [destination, setDestination] = useState("Pokhara");
   const [summary, setSummary] = useState({ destination: "Pokhara", averageRating: 0, total: 0, reviews: [] });
   const [loading, setLoading] = useState(true);
+  const [editingId, setEditingId] = useState("");
+  const [editForm, setEditForm] = useState({ destination: "", rating: 5, reviewText: "" });
 
   const loadReviews = async (target = destination) => {
     try {
       setLoading(true);
-      const { data } = await api.get(`/api/reviews/${encodeURIComponent(target)}`);
+      const { data } = await api.get(`/api/reviews/${encodeURIComponent(target)}`, { params: { mine: "true" } });
       setSummary({
         destination: data?.destination || target,
         averageRating: data?.averageRating || 0,
@@ -29,6 +33,45 @@ export default function DestinationReviewsSection({ onNotify }) {
   useEffect(() => {
     loadReviews("Pokhara");
   }, []);
+
+  const isMine = (review) => String(review?.userId?._id || review?.userId) === String(user?._id || user?.id);
+
+  const startEdit = (review) => {
+    setEditingId(review._id);
+    setEditForm({
+      destination: review.destination || destination,
+      rating: review.rating || 5,
+      reviewText: review.reviewText || "",
+    });
+  };
+
+  const cancelEdit = () => {
+    setEditingId("");
+    setEditForm({ destination: "", rating: 5, reviewText: "" });
+  };
+
+  const saveEdit = async (reviewId) => {
+    try {
+      const nextDestination = editForm.destination || destination;
+      await api.put(`/api/reviews/${reviewId}`, { ...editForm, destination: nextDestination });
+      cancelEdit();
+      await loadReviews(nextDestination);
+      onNotify?.({ type: "success", message: "Review updated and sent for moderation." });
+    } catch (err) {
+      onNotify?.({ type: "error", message: err?.response?.data?.message || "Failed to update review." });
+    }
+  };
+
+  const deleteReview = async (reviewId) => {
+    try {
+      await api.delete(`/api/reviews/${reviewId}`);
+      cancelEdit();
+      await loadReviews(destination);
+      onNotify?.({ type: "success", message: "Review deleted." });
+    } catch (err) {
+      onNotify?.({ type: "error", message: err?.response?.data?.message || "Failed to delete review." });
+    }
+  };
 
   if (loading) return <SectionSkeleton cards={2} />;
 
@@ -66,13 +109,44 @@ export default function DestinationReviewsSection({ onNotify }) {
                   <div>
                     <p className="font-semibold text-slate-900">{review.userId?.name || "Traveler"}</p>
                     <p className="text-sm text-slate-500">{new Date(review.createdAt).toLocaleDateString()}</p>
+                    {isMine(review) ? (
+                      <p className="mt-1 inline-flex rounded-full bg-white px-2.5 py-1 text-xs font-semibold text-slate-600 ring-1 ring-slate-200">
+                        Status: {review.status || "approved"}
+                      </p>
+                    ) : null}
                   </div>
                   <div className="inline-flex items-center gap-1 rounded-full bg-amber-50 px-3 py-1.5 text-sm font-semibold text-amber-600">
                     <Star size={14} fill="currentColor" />
                     {review.rating}
                   </div>
                 </div>
-                <p className="mt-3 text-sm leading-7 text-slate-600">{review.reviewText}</p>
+                {editingId === review._id ? (
+                  <div className="mt-4 grid gap-3 rounded-[22px] border border-slate-200 bg-white p-4">
+                    <input value={editForm.destination} onChange={(e) => setEditForm((c) => ({ ...c, destination: e.target.value }))} className="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 outline-none" />
+                    <select value={editForm.rating} onChange={(e) => setEditForm((c) => ({ ...c, rating: e.target.value }))} className="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 outline-none">
+                      {[5, 4, 3, 2, 1].map((rating) => <option key={rating} value={rating}>{rating} stars</option>)}
+                    </select>
+                    <textarea value={editForm.reviewText} onChange={(e) => setEditForm((c) => ({ ...c, reviewText: e.target.value }))} rows={3} className="rounded-[22px] border border-slate-200 bg-slate-50 px-4 py-3 outline-none" />
+                    <div className="flex flex-wrap gap-2">
+                      <button type="button" onClick={() => saveEdit(review._id)} className="rounded-full bg-emerald-500 px-4 py-2 text-sm font-semibold text-white">Save changes</button>
+                      <button type="button" onClick={cancelEdit} className="rounded-full bg-slate-200 px-4 py-2 text-sm font-semibold text-slate-700">Cancel</button>
+                    </div>
+                  </div>
+                ) : (
+                  <>
+                    <p className="mt-3 text-sm leading-7 text-slate-600">{review.reviewText}</p>
+                    {isMine(review) ? (
+                      <div className="mt-4 flex flex-wrap gap-2">
+                        <button type="button" onClick={() => startEdit(review)} className="rounded-full bg-slate-900 px-4 py-2 text-sm font-semibold text-white">
+                          Edit
+                        </button>
+                        <button type="button" onClick={() => deleteReview(review._id)} className="rounded-full bg-red-50 px-4 py-2 text-sm font-semibold text-red-700">
+                          Delete
+                        </button>
+                      </div>
+                    ) : null}
+                  </>
+                )}
               </article>
             ))}
 

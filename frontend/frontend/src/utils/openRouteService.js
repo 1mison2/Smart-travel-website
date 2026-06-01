@@ -16,7 +16,7 @@ export function formatDuration(durationInSeconds) {
   return `${hours} hr ${minutes} min`;
 }
 
-export async function fetchOpenRouteServiceRoute({ apiKey, profile, locations }) {
+export async function fetchOpenRouteServiceRoute({ apiKey, profile, locations, snapRadiusMeters = 2000 }) {
   if (!apiKey) {
     throw new Error("Missing OpenRouteService API key. Add VITE_OPENROUTESERVICE_API_KEY to your .env file.");
   }
@@ -33,12 +33,20 @@ export async function fetchOpenRouteServiceRoute({ apiKey, profile, locations })
     },
     body: JSON.stringify({
       coordinates: locations.map((location) => [location.lng, location.lat]),
+      radiuses: locations.map(() => snapRadiusMeters),
     }),
   });
 
   if (!response.ok) {
     const errorBody = await response.text();
-    throw new Error(errorBody || "OpenRouteService route request failed.");
+    let message = "OpenRouteService route request failed.";
+    try {
+      const parsed = JSON.parse(errorBody);
+      message = parsed?.error?.message || message;
+    } catch {
+      message = errorBody || message;
+    }
+    throw new Error(message);
   }
 
   const data = await response.json();

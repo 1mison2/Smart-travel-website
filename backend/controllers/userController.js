@@ -48,6 +48,87 @@ const summarizeItineraryRoute = (days = []) => {
   };
 };
 
+const buildMapUri = ({ name, lat, lng }) => {
+  if (Number.isFinite(Number(lat)) && Number.isFinite(Number(lng))) {
+    return `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(`${lat},${lng}`)}`;
+  }
+  if (name) {
+    return `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(String(name))}`;
+  }
+  return "";
+};
+
+const sanitizeTripStops = (stops = []) =>
+  (Array.isArray(stops) ? stops : [])
+    .map((stop) => {
+      const lat = Number(stop?.lat);
+      const lng = Number(stop?.lng);
+      if (!Number.isFinite(lat) || !Number.isFinite(lng) || !String(stop?.name || "").trim()) return null;
+
+      return {
+        sourceId: String(stop?.sourceId || stop?.id || "").trim(),
+        name: String(stop?.name || "").trim(),
+        kind: String(stop?.kind || "destination").trim(),
+        category: String(stop?.category || "").trim(),
+        categoryLabel: String(stop?.categoryLabel || "").trim(),
+        district: String(stop?.district || "").trim(),
+        province: String(stop?.province || "").trim(),
+        description: String(stop?.description || "").trim(),
+        image: String(stop?.image || "").trim(),
+        rating: Number(stop?.rating || 0),
+        visitTime: String(stop?.visitTime || "").trim(),
+        averageCost: Number(stop?.averageCost || 0),
+        lat,
+        lng,
+        mapUri: String(stop?.mapUri || "").trim() || buildMapUri({ name: stop?.name, lat, lng }),
+      };
+    })
+    .filter(Boolean);
+
+const summarizeTripStops = (stops = []) => {
+  const safeStops = sanitizeTripStops(stops);
+  const categories = Array.from(
+    new Set(
+      safeStops
+        .map((stop) => String(stop.categoryLabel || stop.category || "").trim())
+        .filter(Boolean)
+    )
+  ).slice(0, 6);
+
+  const totalDistanceKm = safeStops.reduce((sum, stop, index) => {
+    if (index === 0) return 0;
+    return (
+      sum +
+      calculateDistanceKm(
+        { latitude: safeStops[index - 1].lat, longitude: safeStops[index - 1].lng },
+        { latitude: stop.lat, longitude: stop.lng }
+      )
+    );
+  }, 0);
+
+  return {
+    safeStops,
+    stopCount: safeStops.length,
+    stopsPreview: safeStops.slice(0, 4).map((stop) => stop.name),
+    categories,
+    totalDistanceKm: Math.round(totalDistanceKm * 10) / 10,
+  };
+};
+
+const normalizeTrip = (trip) => ({
+  ...trip,
+  sourceType: "trip",
+  displayPrice: Number(trip.estimatedCost || trip.price || 0),
+  detailPath: trip.sourceType === "map" ? `/map-explorer?tripId=${trip._id}` : "",
+  stops: Array.isArray(trip.stops) ? trip.stops : [],
+  stopsPreview: Array.isArray(trip.stopsPreview) ? trip.stopsPreview : [],
+  categories: Array.isArray(trip.categories) ? trip.categories : [],
+  stopCount: Number(trip.stopCount || 0),
+  totalDistanceKm: Number(trip.totalDistanceKm || 0),
+  totalDurationSeconds: Number(trip.totalDurationSeconds || 0),
+  estimatedCost: Number(trip.estimatedCost || trip.price || 0),
+});
+
 exports.getStats = async (req, res) => {
   try {
     const userId = req.user._id;
@@ -78,11 +159,7 @@ exports.getRecentTrips = async (req, res) => {
       Itinerary.find({ userId }).sort({ createdAt: -1 }).limit(12).lean(),
     ]);
 
-    const mappedTrips = trips.map((trip) => ({
-      ...trip,
-      sourceType: "trip",
-      displayPrice: trip.price || 0,
-    }));
+    const mappedTrips = trips.map(normalizeTrip);
 
     const mappedItineraries = itineraries.map((itinerary) => {
       const anchorDate = itinerary.startDate ? new Date(itinerary.startDate) : new Date(itinerary.createdAt);
@@ -128,13 +205,60 @@ exports.getRecentTrips = async (req, res) => {
 exports.createTrip = async (req, res) => {
   try {
     const userId = req.user._id;
-    const { title, startDate, endDate, price, summary } = req.body;
+    const {
+      title,
+      startDate,
+      endDate,
+      price,
+      summary,
+      destination,
+      sourceType,
+      travelMode,
+      nearbySource,
+      estimatedCost,
+      totalDistanceKm,
+      totalDurationSeconds,
+      stops,
+    } = req.body || {};
     if (!title || !startDate || !endDate) return res.status(400).json({ message: 'Missing required fields' });
-    const trip = await Trip.create({ user: userId, title, startDate, endDate, price: price || 0, summary });
+
+    const routeSummary = summarizeTripStops(stops);
+    const trip = await Trip.create({
+      user: userId,
+      title,
+      startDate,
+      endDate,
+      price: Number(price || estimatedCost || 0),
+      summary,
+      destination: String(destination || "").trim(),
+      sourceType: sourceType === "map" ? "map" : "manual",
+      travelMode: String(travelMode || "").trim(),
+      nearbySource: String(nearbySource || "").trim(),
+      estimatedCost: Number(estimatedCost || price || 0),
+      totalDistanceKm: Number(totalDistanceKm || routeSummary.totalDistanceKm || 0),
+      totalDurationSeconds: Number(totalDurationSeconds || 0),
+      stopCount: routeSummary.stopCount,
+      stopsPreview: routeSummary.stopsPreview,
+      categories: routeSummary.categories,
+      stops: routeSummary.safeStops,
+    });
+
     res.status(201).json({ trip });
   } catch (err) {
     console.error(err);
     res.status(500).json({ message: 'Server error' });
+  }
+};
+
+exports.getTripById = async (req, res) => {
+  try {
+    const userId = req.user._id;
+    const trip = await Trip.findOne({ _id: req.params.id, user: userId }).lean();
+    if (!trip) return res.status(404).json({ message: "Trip not found" });
+    res.json({ trip: normalizeTrip(trip) });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ message: "Server error" });
   }
 };
 

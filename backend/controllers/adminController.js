@@ -15,14 +15,13 @@ const {
 } = require("../utils/emailService");
 
 const isValidObjectId = (id) => mongoose.Types.ObjectId.isValid(id);
-const buildImageUrl = (req, filename) =>
-  `${req.protocol}://${req.get("host")}/uploads/${filename}`;
 const uploadsDir = path.join(__dirname, "..", "uploads");
+const getUploadedUrl = (file) => file?.secure_url || file?.url || file?.path || "";
 
 const dedupeImages = (images) => Array.from(new Set((images || []).filter(Boolean)));
 const uploadedUrlsForField = (req, fieldName) =>
   Array.isArray(req.files?.[fieldName])
-    ? req.files[fieldName].map((file) => buildImageUrl(req, file.filename)).filter(Boolean)
+    ? req.files[fieldName].map(getUploadedUrl).filter(Boolean)
     : [];
 
 const extractUploadFilename = (mediaUrl) => {
@@ -58,13 +57,13 @@ const extractUploadedImages = (req) => {
   const images = [];
   const fieldFiles = req.files || {};
   if (Array.isArray(fieldFiles.images)) {
-    images.push(...fieldFiles.images.map((file) => buildImageUrl(req, file.filename)));
+    images.push(...fieldFiles.images.map(getUploadedUrl));
   }
   if (Array.isArray(fieldFiles.image)) {
-    images.push(...fieldFiles.image.map((file) => buildImageUrl(req, file.filename)));
+    images.push(...fieldFiles.image.map(getUploadedUrl));
   }
   if (req.file) {
-    images.push(buildImageUrl(req, req.file.filename));
+    images.push(getUploadedUrl(req.file));
   }
   return dedupeImages(images);
 };
@@ -533,6 +532,15 @@ exports.updatePostStatus = async (req, res) => {
     if (!post) return res.status(404).json({ message: "Post not found" });
     post.status = String(status);
     await post.save();
+    if (post.userId?._id) {
+      await createNotification({
+        recipient: post.userId._id,
+        type: `post_${status}`,
+        title: `Post ${status}`,
+        message: `Your ${post.type === "blog" ? "blog" : "post"} "${post.title || post.destination || "submission"}" is now ${status}.`,
+        meta: { postId: post._id, status },
+      });
+    }
     return res.json({ message: `Post ${status}`, post });
   } catch (err) {
     console.error(err);
@@ -586,6 +594,15 @@ exports.updateReviewStatus = async (req, res) => {
     if (!review) return res.status(404).json({ message: "Review not found" });
     review.status = String(status);
     await review.save();
+    if (review.userId?._id) {
+      await createNotification({
+        recipient: review.userId._id,
+        type: `review_${status}`,
+        title: `Review ${status}`,
+        message: `Your review for ${review.destination || "a destination"} is now ${status}.`,
+        meta: { reviewId: review._id, status },
+      });
+    }
     return res.json({ message: `Review ${status}`, review });
   } catch (err) {
     console.error(err);

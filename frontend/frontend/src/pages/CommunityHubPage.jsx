@@ -1,5 +1,5 @@
 import React, { useEffect, useRef, useState } from "react";
-import { useLocation } from "react-router-dom";
+import { useLocation, useNavigate } from "react-router-dom";
 import { BookOpenText, Compass, MessageSquareText, ScrollText, Star, Users } from "lucide-react";
 import BuddyFinderSection from "../components/community/BuddyFinderSection";
 import TravelerNetworkSection from "../components/community/TravelerNetworkSection";
@@ -33,6 +33,15 @@ const HASH_TAB_MAP = {
   "#chat": "chat",
 };
 
+const TAB_HASH_MAP = {
+  travelers: "#travelers",
+  buddies: "#finder",
+  trips: "#trips",
+  blogs: "#blogs",
+  reviews: "#reviews",
+  chat: "#chat",
+};
+
 function resolveActiveTab(pathname, hash) {
   const hashTab = HASH_TAB_MAP[hash];
   if (hashTab) return hashTab;
@@ -41,21 +50,22 @@ function resolveActiveTab(pathname, hash) {
 
 export default function CommunityHubPage() {
   const location = useLocation();
-  const [activeTab, setActiveTab] = useState(() => resolveActiveTab(location.pathname, location.hash));
+  const navigate = useNavigate();
   const [toast, setToast] = useState(null);
   const toastTimerRef = useRef(null);
+  const activeTab = resolveActiveTab(location.pathname, location.hash);
   const activeTabMeta = tabs.find((tab) => tab.key === activeTab) || tabs[0];
 
   useEffect(() => () => window.clearTimeout(toastTimerRef.current), []);
-
-  useEffect(() => {
-    setActiveTab(resolveActiveTab(location.pathname, location.hash));
-  }, [location.pathname, location.hash]);
 
   const notify = (payload) => {
     setToast(payload);
     window.clearTimeout(toastTimerRef.current);
     toastTimerRef.current = window.setTimeout(() => setToast(null), 3200);
+  };
+
+  const selectTab = (key) => {
+    navigate(`${location.pathname}${TAB_HASH_MAP[key] || ""}`, { replace: true });
   };
 
   return (
@@ -83,7 +93,7 @@ export default function CommunityHubPage() {
                 <button
                   key={tab.key}
                   type="button"
-                  onClick={() => setActiveTab(tab.key)}
+                  onClick={() => selectTab(tab.key)}
                   className={`community-hub-page__tab ${activeTab === tab.key ? "community-hub-page__tab--active" : ""}`}
                 >
                   <span className="community-hub-page__tab-icon">

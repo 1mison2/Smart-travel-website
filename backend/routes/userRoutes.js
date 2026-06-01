@@ -2,6 +2,7 @@ const express = require('express');
 const {
   getStats,
   getRecentTrips,
+  getTripById,
   createTrip,
   updateProfile,
   updatePassword,
@@ -17,6 +18,7 @@ const router = express.Router();
 
 router.get('/stats', protect, getStats);
 router.get('/recent-trips', protect, getRecentTrips);
+router.get('/trips/:id', protect, getTripById);
 router.post('/trips', protect, createTrip);
 router.get('/travelers', protect, getTravelers);
 router.get('/travelers/:id', protect, getTravelerProfile);

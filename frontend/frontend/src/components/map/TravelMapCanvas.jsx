@@ -278,33 +278,37 @@ function NearbyPlaceMarker({ place, isSelected, onSelect, onAddNearbyPlace }) {
       }}
     >
       <Popup autoPan autoPanPaddingTopLeft={[80, 190]} autoPanPaddingBottomRight={[380, 120]}>
-        <div className="travel-map__popup-card">
-          {place.photo ? (
-            <img
-              src={place.photo}
-              alt={place.name}
-              className="travel-map__popup-card-image"
-            />
-          ) : null}
-          <div className="travel-map__popup-card-body">
-            <p className="travel-map__popup-card-eyebrow">Nearby pick</p>
-            <h3 className="travel-map__popup-card-title">{place.name}</h3>
-            <p className="travel-map__popup-card-address">{place.address || "Address unavailable"}</p>
-            <div className="travel-map__popup-card-tags">
-              <span>Star {Number(place.rating || 0).toFixed(1)}</span>
-              <span>{place.distanceKm ?? "-"} km away</span>
+        {typeof place.renderNearbyPopup === "function" ? (
+          place.renderNearbyPopup(place)
+        ) : (
+          <div className="travel-map__popup-card">
+            {place.photo ? (
+              <img
+                src={place.photo}
+                alt={place.name}
+                className="travel-map__popup-card-image"
+              />
+            ) : null}
+            <div className="travel-map__popup-card-body">
+              <p className="travel-map__popup-card-eyebrow">Nearby pick</p>
+              <h3 className="travel-map__popup-card-title">{place.name}</h3>
+              <p className="travel-map__popup-card-address">{place.address || "Address unavailable"}</p>
+              <div className="travel-map__popup-card-tags">
+                <span>Star {Number(place.rating || 0).toFixed(1)}</span>
+                <span>{place.distanceKm ?? "-"} km away</span>
+              </div>
             </div>
+            {typeof onAddNearbyPlace === "function" ? (
+              <button
+                type="button"
+                className="travel-map__popup-card-button"
+                onClick={() => onAddNearbyPlace(place)}
+              >
+                Add to itinerary
+              </button>
+            ) : null}
           </div>
-          {typeof onAddNearbyPlace === "function" ? (
-            <button
-              type="button"
-              className="travel-map__popup-card-button"
-              onClick={() => onAddNearbyPlace(place)}
-            >
-              Add to itinerary
-            </button>
-          ) : null}
-        </div>
+        )}
       </Popup>
     </CircleMarker>
   );
@@ -330,6 +334,7 @@ export default function TravelMapCanvas({
   selectedLocationId,
   selectedNearbyPlaceId,
   focusTarget,
+  renderNearbyPopup,
 }) {
   return (
     <div className="travel-map__canvas-shell">
@@ -371,7 +376,7 @@ export default function TravelMapCanvas({
           .map((place) => (
             <NearbyPlaceMarker
               key={place.placeId}
-              place={place}
+              place={{ ...place, renderNearbyPopup }}
               isSelected={place.placeId === selectedNearbyPlaceId}
               onSelect={onNearbyPlaceSelect}
               onAddNearbyPlace={onAddNearbyPlace}

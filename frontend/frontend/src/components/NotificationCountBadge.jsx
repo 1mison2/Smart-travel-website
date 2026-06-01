@@ -28,10 +28,12 @@ export default function NotificationCountBadge({ className = "notif-badge" }) {
 
     fetchUnreadCount();
     const intervalId = setInterval(fetchUnreadCount, NOTIFICATION_POLL_MS);
+    window.addEventListener("notifications:changed", fetchUnreadCount);
 
     return () => {
       active = false;
       clearInterval(intervalId);
+      window.removeEventListener("notifications:changed", fetchUnreadCount);
     };
   }, [user?._id]);
 

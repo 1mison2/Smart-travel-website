@@ -6,6 +6,8 @@ import {
   ChevronLeft,
   Coffee,
   Compass,
+  ExternalLink,
+  GripVertical,
   LocateFixed,
   MapPin,
   Route,
@@ -16,7 +18,7 @@ import {
   UtensilsCrossed,
   X,
 } from "lucide-react";
-import { Link, useLocation, useNavigate } from "react-router-dom";
+import { Link, useLocation } from "react-router-dom";
 import TravelMapCanvas from "../components/map/TravelMapCanvas";
 import api from "../utils/api";
 import {
@@ -62,6 +64,35 @@ function formatCategory(value) {
   return String(value || "destination")
     .replace(/[_-]+/g, " ")
     .replace(/\b\w/g, (match) => match.toUpperCase());
+}
+
+function formatPriceLevel(value) {
+  const levels = {
+    PRICE_LEVEL_FREE: "Free",
+    PRICE_LEVEL_INEXPENSIVE: "$",
+    PRICE_LEVEL_MODERATE: "$$",
+    PRICE_LEVEL_EXPENSIVE: "$$$",
+    PRICE_LEVEL_VERY_EXPENSIVE: "$$$$",
+  };
+  return levels[String(value || "").trim()] || "";
+}
+
+function buildMapLink({ name, lat, lng, mapUri }) {
+  if (mapUri) return mapUri;
+  if (Number.isFinite(Number(lat)) && Number.isFinite(Number(lng))) {
+    return `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(`${lat},${lng}`)}`;
+  }
+  if (name) {
+    return `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(String(name))}`;
+  }
+  return "";
+}
+
+function reorderItems(items, fromIndex, toIndex) {
+  const nextItems = [...items];
+  const [moved] = nextItems.splice(fromIndex, 1);
+  nextItems.splice(toIndex, 0, moved);
+  return nextItems;
 }
 
 function normalizeCategoryToken(value) {
@@ -263,6 +294,26 @@ function normalizeNearbyToStop(place, type) {
   };
 }
 
+function normalizeItineraryPlaceToStop(place, index, dayNumber) {
+  return {
+    id: `itinerary-day-${dayNumber}-stop-${place?.placeId || index + 1}`,
+    sourceId: place?.placeId || "",
+    kind: "itinerary",
+    name: place?.name || `Stop ${index + 1}`,
+    district: "",
+    province: "",
+    category: place?.category || "Itinerary stop",
+    categoryLabel: formatCategory(place?.category || "Itinerary stop"),
+    description: place?.notes || "",
+    image: place?.image || "",
+    averageCost: Number(place?.estimatedCost || 0),
+    rating: "",
+    visitTime: "Planned stop",
+    lat: Number(place?.latitude),
+    lng: Number(place?.longitude),
+  };
+}
+
 function calculateDistanceKm(from, to) {
   const lat1 = Number(from?.lat);
   const lng1 = Number(from?.lng);
@@ -279,6 +330,25 @@ function calculateDistanceKm(from, to) {
     Math.cos(toRad(lat1)) * Math.cos(toRad(lat2)) * Math.sin(dLng / 2) * Math.sin(dLng / 2);
 
   return Number((earthKm * (2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a)))).toFixed(1));
+}
+
+function buildFallbackRoute(stops) {
+  const safeStops = (Array.isArray(stops) ? stops : []).filter((stop) => Number.isFinite(Number(stop?.lat)) && Number.isFinite(Number(stop?.lng)));
+  const distanceKm = safeStops.reduce((sum, stop, index) => {
+    if (index === 0) return sum;
+    return sum + (calculateDistanceKm(safeStops[index - 1], stop) || 0);
+  }, 0);
+
+  return {
+    distance: Math.round(distanceKm * 1000),
+    duration: Math.round((distanceKm / 25) * 3600),
+    coordinates: safeStops.map((stop) => [Number(stop.lat), Number(stop.lng)]),
+    isFallback: true,
+  };
+}
+
+function isRoutablePointError(error) {
+  return /routable point|specified coordinate|route request failed/i.test(String(error?.message || ""));
 }
 
 function FloatingChip({ active = false, children, ...props }) {
@@ -353,7 +423,14 @@ function DestinationCard({ item, isActive, onSelect, onAdd }) {
       </button>
       <div className="explorer-card__footer">
         <p>{item.distanceFromCurrent !== null ? `${item.distanceFromCurrent} km away` : "Map ready"}</p>
-        <button type="button" onClick={() => onAdd(item)}>Add to route</button>
+        <div className="explorer-card__footer-actions">
+          {item.mapUri ? (
+            <a href={item.mapUri} target="_blank" rel="noreferrer" className="explorer-card__link">
+              Open
+            </a>
+          ) : null}
+          <button type="button" onClick={() => onAdd(item)}>Add to route</button>
+        </div>
       </div>
     </article>
   );
@@ -373,18 +450,31 @@ function NearbyCard({ place, onSelect, onAdd }) {
       </div>
       <div className="explorer-card__footer">
         <button type="button" onClick={() => onSelect(place)} className="explorer-card__ghost">View</button>
-        <button type="button" onClick={() => onAdd(place)}>Add</button>
+        <div className="explorer-card__footer-actions">
+          {buildMapLink({ name: place.name, lat: place.location?.lat, lng: place.location?.lng, mapUri: place.mapUri }) ? (
+            <a
+              href={buildMapLink({ name: place.name, lat: place.location?.lat, lng: place.location?.lng, mapUri: place.mapUri })}
+              target="_blank"
+              rel="noreferrer"
+              className="explorer-card__link"
+            >
+              Open
+            </a>
+          ) : null}
+          <button type="button" onClick={() => onAdd(place)}>Add</button>
+        </div>
       </div>
     </article>
   );
 }
 
 export default function MapExplorer() {
-  const navigate = useNavigate();
   const location = useLocation();
   const searchParams = useMemo(() => new URLSearchParams(location.search), [location.search]);
   const initialQuery = useMemo(() => String(searchParams.get("query") || searchParams.get("q") || "").trim(), [searchParams]);
   const initialType = useMemo(() => String(searchParams.get("type") || DEFAULT_NEARBY_TYPE).trim(), [searchParams]);
+  const initialItineraryId = useMemo(() => String(searchParams.get("itineraryId") || "").trim(), [searchParams]);
+  const initialItineraryDay = useMemo(() => Number(searchParams.get("day") || 0), [searchParams]);
 
   const fallbackCenter = useMemo(() => {
     const lat = Number.parseFloat(searchParams.get("lat"));
@@ -409,17 +499,20 @@ export default function MapExplorer() {
   const [loadingCurrentLocation, setLoadingCurrentLocation] = useState(false);
   const [loadingRoute, setLoadingRoute] = useState(false);
   const [loadingNearby, setLoadingNearby] = useState(false);
+  const [loadingItineraryRoute, setLoadingItineraryRoute] = useState(false);
   const [travelMode, setTravelMode] = useState("driving-car");
   const [itineraryStops, setItineraryStops] = useState([]);
   const [selectedNearbyPlaceId, setSelectedNearbyPlaceId] = useState("");
   const [mapFocusTarget, setMapFocusTarget] = useState(null);
   const [hasRequestedRoute, setHasRequestedRoute] = useState(false);
-  const [categoryFilter, setCategoryFilter] = useState("all");
+  const [categoryFilter] = useState("all");
   const [ratingFilter, setRatingFilter] = useState("all");
   const [distanceFilter, setDistanceFilter] = useState("all");
   const [openFilterMenu, setOpenFilterMenu] = useState("");
   const [routeOpen, setRouteOpen] = useState(true);
   const [toast, setToast] = useState("");
+  const [trayOpen, setTrayOpen] = useState(true);
+  const [draggedStopId, setDraggedStopId] = useState("");
 
   const activeTripStops = useMemo(() => {
     if (itineraryStops.length) return itineraryStops;
@@ -482,35 +575,14 @@ export default function MapExplorer() {
     [categoryFilter, distanceFilter, ratingFilter, visibleNearbyPlaces]
   );
 
-  const destinationCards = useMemo(() => destinationResults.map((item) => ({ ...item, locationLabel: [item.district, item.province].filter(Boolean).join(", ") || "Nepal", distanceFromCurrent: calculateDistanceKm(currentLocation, item) })), [currentLocation, destinationResults]);
-  const _filteredDestinations = useMemo(() => destinationCards.filter((item) => {
+  const destinationCards = useMemo(() => destinationResults.map((item) => ({ ...item, locationLabel: [item.district, item.province].filter(Boolean).join(", ") || "Nepal", distanceFromCurrent: calculateDistanceKm(currentLocation, item), mapUri: buildMapLink(item) })), [currentLocation, destinationResults]);
+  const filteredDestinations = useMemo(() => destinationCards.filter((item) => {
     const categoryTokens = getDestinationCategoryTokens(item);
     const matchesCategory = categoryFilter === "all" || categoryTokens.includes(normalizeCategoryToken(categoryFilter));
     const matchesRating = ratingFilter === "all" || Number(item.rating) >= Number(ratingFilter);
     const matchesDistance = distanceFilter === "all" || item.distanceFromCurrent === null || item.distanceFromCurrent <= Number(distanceFilter);
     return matchesCategory && matchesRating && matchesDistance;
   }), [categoryFilter, destinationCards, distanceFilter, ratingFilter]);
-
-  const availableCategoryOptions = useMemo(() => {
-    const sourceItems = selectedDestination ? visibleNearbyPlaces : destinationCards;
-    const tokens = sourceItems.flatMap((item) =>
-      selectedDestination ? getNearbyCategoryTokens(item) : getDestinationCategoryTokens(item)
-    );
-
-    const cleaned = Array.from(new Set(tokens))
-      .filter((token) => token.length >= 3)
-      .filter((token) => !["point", "place", "local", "area", "trip", "city"].includes(token))
-      .slice(0, 8);
-
-    return [
-      { value: "all", label: "All categories", active: categoryFilter === "all" },
-      ...cleaned.map((token) => ({
-        value: token,
-        label: formatCategory(token),
-        active: categoryFilter === token,
-      })),
-    ];
-  }, [categoryFilter, destinationCards, selectedDestination, visibleNearbyPlaces]);
 
   const mapCenter = selectedDestination ? [selectedDestination.lat, selectedDestination.lng] : currentLocation ? [currentLocation.lat, currentLocation.lng] : fallbackCenter;
   const selectedLocationId =
@@ -522,7 +594,8 @@ export default function MapExplorer() {
   const estimatedCost = route ? `NPR ${Math.max(450, Math.round((route.distance / 1000) * 18))}` : "--";
   const highlightRadiusMeters = getHighlightRadiusMeters(selectedDestination);
   const nearbyTypeLabel = NEARBY_TYPES.find((item) => item.value === nearbyType)?.label || "places";
-  const activeFilterCount = [categoryFilter, ratingFilter, distanceFilter].filter((value) => value !== "all").length;
+  const activeFilterCount = [ratingFilter, distanceFilter].filter((value) => value !== "all").length;
+  const currentSelectionMapUri = buildMapLink(selectedDestination || currentLocation || {});
   const nearbyStatus = useMemo(() => {
     if (!selectedDestination) {
       return {
@@ -584,10 +657,6 @@ export default function MapExplorer() {
       message: `Showing ${filteredNearbyPlaces.length} ${nearbyTypeLabel.toLowerCase()} around ${selectedDestination.name}.`,
     };
   }, [activeFilterCount, filteredNearbyPlaces.length, loadingNearby, nearbyError, nearbySource, nearbyTypeLabel, selectedDestination]);
-  const categoryLabel =
-    categoryFilter === "all"
-      ? "Category"
-      : availableCategoryOptions.find((option) => option.value === categoryFilter)?.label || "Category";
   const ratingLabel =
     {
       all: "Rating",
@@ -696,8 +765,15 @@ export default function MapExplorer() {
       setHasRequestedRoute(true);
       setToast("Route generated");
     } catch (err) {
-      setRoute(null);
-      setRouteError(err.message || "Failed to calculate route.");
+      if (isRoutablePointError(err)) {
+        setRoute(buildFallbackRoute(routeStops));
+        setHasRequestedRoute(true);
+        setRouteError("Exact road routing is unavailable for one stop, so the map is showing an approximate day route.");
+        setToast("Approximate route shown");
+      } else {
+        setRoute(null);
+        setRouteError(err.message || "Failed to calculate route.");
+      }
     } finally {
       setLoadingRoute(false);
     }
@@ -728,6 +804,35 @@ export default function MapExplorer() {
   const handleSelectNearbyPlace = (place) => {
     setSelectedNearbyPlaceId(place.placeId);
     setMapFocusTarget({ id: place.placeId, type: "nearby", lat: place.location?.lat, lng: place.location?.lng, zoom: 14 });
+  };
+
+  const handleSelectDestination = (item) => {
+    setSelectedDestination(item);
+    setSelectedNearbyPlaceId("");
+    setMapFocusTarget({
+      id: item.id,
+      type: "location",
+      lat: item.lat,
+      lng: item.lng,
+      zoom: 12,
+    });
+    setToast(`${item.name} focused`);
+  };
+
+  const handleRemoveStop = (stopId) => {
+    setItineraryStops((current) => current.filter((item) => item.id !== stopId));
+    setToast("Stop removed");
+  };
+
+  const handleReorderStop = (fromId, toId) => {
+    if (!fromId || !toId || fromId === toId) return;
+    setItineraryStops((current) => {
+      const fromIndex = current.findIndex((item) => item.id === fromId);
+      const toIndex = current.findIndex((item) => item.id === toId);
+      if (fromIndex < 0 || toIndex < 0) return current;
+      return reorderItems(current, fromIndex, toIndex);
+    });
+    setToast("Route order updated");
   };
 
   const handleUseCurrentLocation = () => {
@@ -791,10 +896,12 @@ export default function MapExplorer() {
   };
 
   useEffect(() => {
+    if (initialItineraryId) return;
     if (initialQuery) runDestinationSearch(initialQuery);
-  }, [initialQuery]);
+  }, [initialItineraryId, initialQuery]);
 
   useEffect(() => {
+    if (initialItineraryId) return undefined;
     const safeTerm = String(deferredSearchTerm || "").trim();
     if (safeTerm === initialQuery) return undefined;
     if (!safeTerm) {
@@ -804,7 +911,7 @@ export default function MapExplorer() {
     if (safeTerm.length < 2) return undefined;
     const timeoutId = window.setTimeout(() => runDestinationSearch(safeTerm), 320);
     return () => window.clearTimeout(timeoutId);
-  }, [deferredSearchTerm, initialQuery]);
+  }, [deferredSearchTerm, initialItineraryId, initialQuery]);
 
   useEffect(() => {
     if (selectedDestination) fetchNearbyPlaces(selectedDestination, nearbyType);
@@ -816,7 +923,76 @@ export default function MapExplorer() {
 
   useEffect(() => {
     if (hasRequestedRoute) fetchRoute();
-  }, [travelMode]);
+  }, [activeTripStops, currentLocation, travelMode]);
+
+  useEffect(() => {
+    if (!selectedDestination && activeTripStops.length) {
+      const lastStop = activeTripStops[activeTripStops.length - 1];
+      if (lastStop?.kind !== "origin") {
+        setSelectedDestination(lastStop);
+      }
+    }
+  }, [activeTripStops, selectedDestination]);
+
+  useEffect(() => {
+    if (!initialItineraryId || !Number.isFinite(initialItineraryDay) || initialItineraryDay <= 0) return undefined;
+    let active = true;
+
+    const loadItineraryDayRoute = async () => {
+      try {
+        setLoadingItineraryRoute(true);
+        setRouteError("");
+        const { data } = await api.get(`/api/itineraries/${initialItineraryId}`);
+        if (!active) return;
+
+        const itinerary = data?.itinerary;
+        const day = (Array.isArray(itinerary?.days) ? itinerary.days : []).find((item) => Number(item?.day) === initialItineraryDay);
+        const stops = (Array.isArray(day?.places) ? day.places : [])
+          .map((place, index) => normalizeItineraryPlaceToStop(place, index, initialItineraryDay))
+          .filter((stop) => Number.isFinite(stop.lat) && Number.isFinite(stop.lng));
+
+        if (!day || stops.length === 0) {
+          setRouteError("This itinerary day does not have mapped places yet.");
+          setItineraryStops([]);
+          setSelectedDestination(null);
+          setRoute(null);
+          setHasRequestedRoute(false);
+          return;
+        }
+
+        setSearchTerm(itinerary?.destination || "");
+        setDestinationResults([]);
+        setNearbyPlaces([]);
+        setSelectedNearbyPlaceId("");
+        setCurrentLocation(null);
+        setItineraryStops(stops);
+        setSelectedDestination(stops[0]);
+        setNearbySource("itinerary");
+        setTrayOpen(true);
+        setRouteOpen(true);
+        setMapFocusTarget({
+          id: stops[0].id,
+          type: "location",
+          lat: stops[0].lat,
+          lng: stops[0].lng,
+          zoom: 13,
+        });
+        setToast(`Showing Day ${initialItineraryDay} route`);
+        setHasRequestedRoute(stops.length > 1);
+        if (stops.length < 2) setRoute(null);
+      } catch (err) {
+        if (!active) return;
+        setRouteError(err?.response?.data?.message || "Failed to load itinerary day route.");
+      } finally {
+        if (active) setLoadingItineraryRoute(false);
+      }
+    };
+
+    loadItineraryDayRoute();
+    return () => {
+      active = false;
+    };
+  }, [initialItineraryDay, initialItineraryId]);
 
   const popupRenderer = (locationItem, index) => (
     <div className="explorer-popup-card">
@@ -833,12 +1009,79 @@ export default function MapExplorer() {
         </p>
         <h3 className="explorer-popup-card__title">{locationItem.name}</h3>
         <p className="explorer-popup-card__meta">
-          {locationItem.categoryLabel || formatCategory(locationItem.category)}
+          {[locationItem.categoryLabel || formatCategory(locationItem.category), locationItem.district, locationItem.province]
+            .filter(Boolean)
+            .join(" • ")}
         </p>
       </div>
       <div className="explorer-popup-card__tags">
         {locationItem.rating ? <span>Star {locationItem.rating}</span> : null}
         {locationItem.visitTime ? <span>{locationItem.visitTime}</span> : null}
+        {locationItem.averageCost ? <span>NPR {Number(locationItem.averageCost).toLocaleString()}</span> : null}
+      </div>
+      <div className="explorer-popup-card__actions">
+        {buildMapLink(locationItem) ? (
+          <a
+            href={buildMapLink(locationItem)}
+            target="_blank"
+            rel="noreferrer"
+            className="explorer-popup-card__link"
+          >
+            Open in Maps
+          </a>
+        ) : null}
+        {locationItem.kind !== "origin" ? (
+          <button
+            type="button"
+            className="explorer-popup-card__link explorer-popup-card__link--button"
+            onClick={() => addStopToItinerary(locationItem)}
+          >
+            Add to route
+          </button>
+        ) : null}
+      </div>
+    </div>
+  );
+
+  const nearbyPopupRenderer = (place) => (
+    <div className="explorer-popup-card">
+      {place.photo ? (
+        <img
+          src={place.photo}
+          alt={place.name}
+          className="explorer-popup-card__image"
+        />
+      ) : null}
+      <div>
+        <p className="explorer-popup-card__eyebrow">Nearby pick</p>
+        <h3 className="explorer-popup-card__title">{place.name}</h3>
+        <p className="explorer-popup-card__meta">{place.address || "Address unavailable"}</p>
+      </div>
+      <div className="explorer-popup-card__tags">
+        <span>Star {Number(place.rating || 0).toFixed(1)}</span>
+        {Number.isFinite(Number(place.distanceKm)) ? <span>{Number(place.distanceKm).toFixed(1)} km away</span> : null}
+        {place.userRatingCount ? <span>{place.userRatingCount} reviews</span> : null}
+        {formatPriceLevel(place.priceLevel) ? <span>{formatPriceLevel(place.priceLevel)}</span> : null}
+        {typeof place.isOpenNow === "boolean" ? <span>{place.isOpenNow ? "Open now" : "Closed now"}</span> : null}
+      </div>
+      <div className="explorer-popup-card__actions">
+        {buildMapLink({ name: place.name, lat: place.location?.lat, lng: place.location?.lng, mapUri: place.mapUri }) ? (
+          <a
+            href={buildMapLink({ name: place.name, lat: place.location?.lat, lng: place.location?.lng, mapUri: place.mapUri })}
+            target="_blank"
+            rel="noreferrer"
+            className="explorer-popup-card__link"
+          >
+            Open in Maps
+          </a>
+        ) : null}
+        <button
+          type="button"
+          className="explorer-popup-card__link explorer-popup-card__link--button"
+          onClick={() => addStopToItinerary(normalizeNearbyToStop(place, nearbyType))}
+        >
+          Add to route
+        </button>
       </div>
     </div>
   );
@@ -866,6 +1109,7 @@ export default function MapExplorer() {
           onAddNearbyPlace={(place) => addStopToItinerary(normalizeNearbyToStop(place, nearbyType))}
           autoOpenLocationId={undefined}
           renderLocationPopup={popupRenderer}
+          renderNearbyPopup={nearbyPopupRenderer}
         />
         <div className="explorer-page__overlay" />
       </div>
@@ -914,17 +1158,6 @@ export default function MapExplorer() {
               );
             })}
             <FilterMenu
-              label="Category"
-              valueLabel={categoryLabel}
-              isOpen={openFilterMenu === "category"}
-              onToggle={() => setOpenFilterMenu((current) => (current === "category" ? "" : "category"))}
-              onSelect={(value) => {
-                setCategoryFilter(value);
-                setOpenFilterMenu("");
-              }}
-              options={availableCategoryOptions}
-            />
-            <FilterMenu
               label="Rating"
               valueLabel={ratingLabel}
               isOpen={openFilterMenu === "rating"}
@@ -961,7 +1194,6 @@ export default function MapExplorer() {
                 type="button"
                 className="explorer-filter-reset"
                 onClick={() => {
-                  setCategoryFilter("all");
                   setRatingFilter("all");
                   setDistanceFilter("all");
                   setOpenFilterMenu("");
@@ -1003,6 +1235,26 @@ export default function MapExplorer() {
           <div><p>Source</p><h3>{nearbySource === "local_fallback" ? "Smart Travel" : nearbySource ? "Live nearby" : "Waiting"}</h3></div>
         </div>
 
+        {selectedDestination ? (
+          <div className="explorer-focus-panel">
+            <div>
+              <p className="explorer-eyebrow">Active destination</p>
+              <h3>{selectedDestination.name}</h3>
+              <small>
+                {[selectedDestination.categoryLabel || formatCategory(selectedDestination.category), selectedDestination.district, selectedDestination.province]
+                  .filter(Boolean)
+                  .join(" • ")}
+              </small>
+            </div>
+            {currentSelectionMapUri ? (
+              <a href={currentSelectionMapUri} target="_blank" rel="noreferrer" className="explorer-focus-panel__link">
+                <ExternalLink className="h-4 w-4" />
+                Open
+              </a>
+            ) : null}
+          </div>
+        ) : null}
+
         <div className="explorer-mode-row">
           <button
             type="button"
@@ -1031,13 +1283,32 @@ export default function MapExplorer() {
         <div className="explorer-list-block">
           <p className="explorer-eyebrow">Timeline</p>
           {activeTripStops.length ? activeTripStops.map((stop, index) => (
-            <div key={stop.id} className="explorer-list-item">
+            <div
+              key={stop.id}
+              className={`explorer-list-item ${draggedStopId === stop.id ? "is-dragging" : ""}`}
+              draggable
+              onDragStart={() => setDraggedStopId(stop.id)}
+              onDragOver={(event) => event.preventDefault()}
+              onDrop={() => {
+                handleReorderStop(draggedStopId, stop.id);
+                setDraggedStopId("");
+              }}
+              onDragEnd={() => setDraggedStopId("")}
+            >
               <div>
                 <span>Stop {index + 1}</span>
                 <strong>{stop.name}</strong>
                 <small>{stop.categoryLabel || stop.category}</small>
               </div>
-              <button type="button" onClick={() => { setItineraryStops((current) => current.filter((item) => item.id !== stop.id)); setToast(`${stop.name} removed`); }}>Remove</button>
+              <div className="explorer-list-item__actions">
+                <span className="explorer-list-item__drag"><GripVertical className="h-4 w-4" />Drag</span>
+                {buildMapLink(stop) ? (
+                  <a href={buildMapLink(stop)} target="_blank" rel="noreferrer" className="explorer-list-item__link">
+                    Open
+                  </a>
+                ) : null}
+                <button type="button" onClick={() => handleRemoveStop(stop.id)}>Remove</button>
+              </div>
             </div>
           )) : <div className="explorer-empty">Add stops from the tray below.</div>}
         </div>
@@ -1050,6 +1321,62 @@ export default function MapExplorer() {
         <button type="button" className="explorer-fab explorer-fab--primary" onClick={fetchRoute}><Route className="h-4 w-4" />{loadingRoute ? "Routing..." : "Generate route"}</button>
         <button type="button" className="explorer-fab" onClick={handleResetMap}><Compass className="h-4 w-4" />Reset</button>
       </div>
+
+      <section className={`explorer-tray ${trayOpen ? "is-open" : ""}`}>
+        <div className="explorer-tray__shell">
+          <button type="button" className="explorer-tray__toggle" onClick={() => setTrayOpen((current) => !current)}>
+            <div className="explorer-tray__toggle-copy">
+              <span className="explorer-tray__handle" />
+              <div>
+                <p className="explorer-eyebrow">Discover</p>
+                <h2>{selectedDestination ? `${selectedDestination.name} and nearby picks` : "Search results and nearby picks"}</h2>
+              </div>
+            </div>
+            <ChevronLeft className={`h-4 w-4 explorer-route-toggle__icon ${trayOpen ? "" : "is-closed"}`} />
+          </button>
+
+          <div className="explorer-tray__body">
+            <div className="explorer-pill-row explorer-pill-row--stats">
+              <span><MapPin className="h-3.5 w-3.5" /> {filteredDestinations.length} destinations</span>
+              <span><Sparkles className="h-3.5 w-3.5" /> {filteredNearbyPlaces.length} nearby</span>
+              <span><Timer className="h-3.5 w-3.5" /> {activeTripStops.length} route stops</span>
+            </div>
+
+            <section className="explorer-section">
+              <div className="explorer-section__head">
+                <h3>Destinations</h3>
+              </div>
+              <div className="explorer-scroll-row">
+                {filteredDestinations.length ? filteredDestinations.map((item) => (
+                  <DestinationCard
+                    key={item.id}
+                    item={item}
+                    isActive={selectedDestination?.id === item.id}
+                    onSelect={handleSelectDestination}
+                    onAdd={addStopToItinerary}
+                  />
+                )) : <div className="explorer-empty">Search a destination to show cards.</div>}
+              </div>
+            </section>
+
+            <section className="explorer-section">
+              <div className="explorer-section__head">
+                <h3>{nearbyTypeLabel}</h3>
+              </div>
+              <div className="explorer-scroll-row">
+                {filteredNearbyPlaces.length ? filteredNearbyPlaces.map((place) => (
+                  <NearbyCard
+                    key={place.placeId}
+                    place={place}
+                    onSelect={handleSelectNearbyPlace}
+                    onAdd={(item) => addStopToItinerary(normalizeNearbyToStop(item, nearbyType))}
+                  />
+                )) : <div className="explorer-empty">Select a destination to load nearby stops.</div>}
+              </div>
+            </section>
+          </div>
+        </div>
+      </section>
 
       {toast ? <div className="explorer-toast">{toast}</div> : null}
     </div>

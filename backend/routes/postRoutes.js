@@ -5,6 +5,7 @@ const {
   createPost,
   getPosts,
   getPostById,
+  updatePost,
   deletePost,
   togglePostLike,
   toggleSavedPost,
@@ -18,6 +19,7 @@ router.post("/create", upload.array("images", 6), createPost);
 router.get("/", getPosts);
 router.get("/saved", getSavedPosts);
 router.get("/:id", getPostById);
+router.put("/:id", upload.array("images", 6), updatePost);
 router.delete("/:id", deletePost);
 router.post("/like", togglePostLike);
 router.post("/save", toggleSavedPost);

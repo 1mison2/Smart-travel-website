@@ -1,19 +1,18 @@
-const fs = require("fs");
-const path = require("path");
 const multer = require("multer");
+const cloudinaryStorage = require("multer-storage-cloudinary");
+const cloudinary = require("../config/cloudinary");
 
-const uploadDir = path.join(__dirname, "..", "uploads");
-
-if (!fs.existsSync(uploadDir)) {
-  fs.mkdirSync(uploadDir, { recursive: true });
-}
-
-const storage = multer.diskStorage({
-  destination: (_req, _file, cb) => cb(null, uploadDir),
+const storage = cloudinaryStorage({
+  cloudinary,
+  folder: "smart-travel/uploads",
+  allowedFormats: ["jpg", "jpeg", "png", "webp"],
   filename: (_req, file, cb) => {
-    const ext = path.extname(file.originalname || "").toLowerCase();
-    const safeExt = ext || ".jpg";
-    cb(null, `location-${Date.now()}-${Math.round(Math.random() * 1e9)}${safeExt}`);
+    const baseName = String(file.originalname || "image")
+      .replace(/\.[^/.]+$/, "")
+      .replace(/[^a-z0-9]+/gi, "-")
+      .replace(/^-+|-+$/g, "")
+      .toLowerCase();
+    cb(undefined, `location-${Date.now()}-${baseName || "image"}`);
   },
 });
 

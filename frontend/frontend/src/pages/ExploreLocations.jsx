@@ -1,16 +1,117 @@
 import React, { useEffect, useMemo, useState } from "react";
-import { Link, useSearchParams } from "react-router-dom";
+import { Link } from "react-router-dom";
 import {
-  ArrowRight,
-  ChevronDown,
-  Compass,
-  MapPinned,
+  ChevronRight,
+  Filter,
+  Heart,
+  MapPin,
   Mountain,
+  PawPrint,
   Search,
-  SlidersHorizontal,
-  X,
+  Sprout,
+  TentTree,
 } from "lucide-react";
 import api, { resolveImageUrl } from "../utils/api";
+
+const hubCards = [
+  {
+    name: "Lumbini",
+    subtitle: "Rupandehi, Lumbini",
+    category: "Cultural",
+    tags: ["cultural", "heritage", "pilgrimage", "temple"],
+    image:
+      "https://images.unsplash.com/photo-1605640840605-14ac1855827b?auto=format&fit=crop&w=1200&q=82",
+    description:
+      "Lumbini is the birthplace of Siddhartha Gautama Buddha and one of Nepal's most important spiritual destinations.",
+  },
+  {
+    name: "Mustang",
+    subtitle: "Mustang, Gandaki",
+    category: "Mountains",
+    tags: ["mountains", "trekking", "culture", "desert", "viewpoint"],
+    image:
+      "https://images.unsplash.com/photo-1626621341517-bbf3d9990a23?auto=format&fit=crop&w=1200&q=82",
+    description:
+      "Mustang is Nepal's high-altitude desert region known for dramatic landscapes, Tibetan-influenced culture, and long scenic road journeys.",
+  },
+  {
+    name: "Chitwan",
+    subtitle: "Chitwan, Bagmati",
+    category: "Wildlife",
+    tags: ["wildlife", "jungle", "safari", "nature"],
+    image:
+      "https://images.unsplash.com/photo-1544735716-392fe2489ffa?auto=format&fit=crop&w=1200&q=82",
+    description:
+      "Chitwan is Nepal's leading lowland wildlife destination, known for jungle safaris, Tharu culture, river canoeing, and forest trails.",
+  },
+  {
+    name: "Kathmandu",
+    subtitle: "Kathmandu, Bagmati",
+    category: "Cultural",
+    tags: ["cultural", "heritage", "temple", "museum"],
+    image:
+      "https://images.unsplash.com/photo-1548013146-72479768bada?auto=format&fit=crop&w=1200&q=82",
+    description:
+      "Kathmandu is Nepal's historic capital, known for UNESCO heritage sites, temple squares, old markets, and layered city culture.",
+  },
+];
+
+const placeCards = [
+  {
+    name: "Tilaurakot",
+    subtitle: "Archaeological",
+    parent: "Inside Lumbini",
+    tags: ["cultural", "archaeological", "heritage"],
+    image:
+      "https://images.unsplash.com/photo-1589308078059-be1415eab4c3?auto=format&fit=crop&w=900&q=82",
+    description:
+      "Tilaurakot is an important archaeological site associated with ancient Kapilavastu and the early life context of Buddha before renunciation.",
+  },
+  {
+    name: "German Monastery",
+    subtitle: "Monastery",
+    parent: "Inside Lumbini",
+    tags: ["cultural", "monastery", "art"],
+    image:
+      "https://images.unsplash.com/photo-1578922746465-3a80a228f223?auto=format&fit=crop&w=900&q=82",
+    description:
+      "The German Monastery area is admired for colourful Buddhist art, detailed murals, garden spaces, and a calm western monastic atmosphere.",
+  },
+  {
+    name: "Myanmar Golden Temple",
+    subtitle: "Temple",
+    parent: "Inside Lumbini",
+    tags: ["cultural", "temple", "monastery"],
+    image:
+      "https://images.unsplash.com/photo-1563492065599-3520f775eeed?auto=format&fit=crop&w=900&q=82",
+    description:
+      "The Myanmar Golden Temple is one of Lumbini's visually striking monasteries, with golden features and Burmese Buddhist influence.",
+  },
+  {
+    name: "Royal Thai Monastery",
+    subtitle: "Monastery",
+    parent: "Inside Lumbini",
+    tags: ["cultural", "monastery", "architecture"],
+    image:
+      "https://images.unsplash.com/photo-1569396786344-80df73f758bb?auto=format&fit=crop&w=900&q=82",
+    description:
+      "The Royal Thai Monastery is known for its elegant white architecture, quiet courtyards, and Thai Buddhist design within Lumbini.",
+  },
+];
+
+const filters = [
+  { label: "All", icon: Filter },
+  { label: "Mountains", icon: Mountain },
+  { label: "Cultural", icon: Sprout },
+  { label: "Wildlife", icon: PawPrint },
+  { label: "Trekking", icon: TentTree },
+];
+
+const viewModes = ["All", "Hubs", "Places"];
+
+function normalize(value) {
+  return String(value || "").trim().toLowerCase();
+}
 
 function getParentId(location) {
   if (!location?.parentLocationId) return "";
@@ -24,1052 +125,763 @@ function formatCategory(category, fallback = "Destination") {
     .replace(/\b\w/g, (char) => char.toUpperCase());
 }
 
-function getSearchBlob(location) {
-  return [
-    location.name,
-    location.province,
-    location.district,
-    location.category,
-    location.description,
-    location.parentLocationId?.name,
-  ]
-    .filter(Boolean)
-    .join(" ")
-    .toLowerCase();
+function shortText(value, maxLength = 132) {
+  const text = String(value || "").trim();
+  if (!text) return "Open this destination to explore nearby highlights, stays, routes, and local travel ideas.";
+  return text.length > maxLength ? `${text.slice(0, maxLength).trim()}...` : text;
 }
 
-function getScenicGradient(index) {
-  const gradients = [
-    "linear-gradient(135deg, #1d4ed8 0%, #0f766e 52%, #f59e0b 100%)",
-    "linear-gradient(135deg, #7c3aed 0%, #2563eb 48%, #22c55e 100%)",
-    "linear-gradient(135deg, #0f766e 0%, #14b8a6 48%, #fb7185 100%)",
-    "linear-gradient(135deg, #4338ca 0%, #06b6d4 50%, #f97316 100%)",
-  ];
-  return gradients[index % gradients.length];
+function getLocationImage(location, fallback) {
+  const image = location?.image || location?.images?.[0];
+  return image ? resolveImageUrl(image) : fallback;
 }
 
-function getHeroArtwork(item, index) {
-  if (item?.image) return `url(${resolveImageUrl(item.image)})`;
-  return getScenicGradient(index);
+function getSearchText(card) {
+  return normalize(
+    [
+      card.name,
+      card.subtitle,
+      card.parent,
+      card.category,
+      card.description,
+      ...(card.tags || []),
+    ].join(" ")
+  );
 }
 
-function getScopeLabel(scope) {
-  if (scope === "hubs") return "Hubs";
-  if (scope === "places") return "Places";
-  return "All";
+function getAutoTags(location, parent) {
+  const text = normalize(
+    [location?.name, location?.category, location?.description, parent?.name, location?.district, location?.province].join(" ")
+  );
+  const tags = [];
+
+  if (/pokhara|mustang|mountain|viewpoint|lake|cave|nature|sarangkot|pumdikot/.test(text)) tags.push("mountains");
+  if (/pokhara|mustang|trek|hike|trail|viewpoint|sarangkot|dhampus|panchase|australian camp/.test(text)) tags.push("trekking");
+  if (/pokhara|lumbini|kathmandu|cultural|temple|monastery|museum|heritage|archaeological|pagoda|stupa/.test(text)) tags.push("cultural");
+  if (/chitwan|wildlife|jungle|safari|forest|bird|nature/.test(text)) tags.push("wildlife");
+
+  return tags;
 }
 
-function buildSearchParams({ query, scope, activeCategory }) {
-  const next = new URLSearchParams();
-  const trimmedQuery = String(query || "").trim();
-  if (trimmedQuery) next.set("q", trimmedQuery);
-  if (scope && scope !== "all") next.set("type", scope);
-  if (activeCategory && activeCategory !== "all") next.set("category", activeCategory);
-  return next;
+function matchesActiveFilter(card, activeFilter) {
+  if (activeFilter === "All") return true;
+  const text = getSearchText(card);
+
+  if (activeFilter === "Mountains") {
+    return /mountains|mountain|viewpoint|lake|cave|nature|pokhara|mustang|sarangkot/.test(text);
+  }
+
+  if (activeFilter === "Cultural") {
+    return /cultural|culture|temple|monastery|museum|heritage|archaeological|pagoda|stupa|lumbini|kathmandu|pokhara/.test(text);
+  }
+
+  if (activeFilter === "Wildlife") {
+    return /wildlife|jungle|safari|forest|bird|nature|chitwan/.test(text);
+  }
+
+  if (activeFilter === "Trekking") {
+    return /trekking|trek|hike|trail|mountain|viewpoint|pokhara|mustang|sarangkot|dhampus|panchase|australian camp/.test(text);
+  }
+
+  return true;
 }
 
-function createSkeletonItems(count) {
-  return Array.from({ length: count }, (_, index) => ({ id: `skeleton-${index}` }));
+function getLocationLink(card, locationLookup) {
+  if (card.href) return card.href;
+  const location = locationLookup.get(normalize(card.name));
+  return location?._id ? `/locations/${location._id}` : "/explore";
 }
 
 export default function ExploreLocations() {
-  const [searchParams, setSearchParams] = useSearchParams();
   const [locations, setLocations] = useState([]);
-  const [loading, setLoading] = useState(true);
+  const [query, setQuery] = useState("");
+  const [activeFilter, setActiveFilter] = useState("All");
+  const [viewMode, setViewMode] = useState("All");
+  const [visibleHubCount, setVisibleHubCount] = useState(10);
+  const [visiblePlaceCount, setVisiblePlaceCount] = useState(8);
   const [error, setError] = useState("");
-  const [query, setQuery] = useState(() => searchParams.get("q") || "");
-  const [scope, setScope] = useState(() => {
-    const value = searchParams.get("type");
-    return ["all", "hubs", "places"].includes(value || "") ? value : "all";
-  });
-  const [activeCategory, setActiveCategory] = useState(() => searchParams.get("category") || "all");
-  const [filtersOpen, setFiltersOpen] = useState(false);
-  const [visibleHubCount, setVisibleHubCount] = useState(4);
-  const [visiblePlaceCount, setVisiblePlaceCount] = useState(6);
 
   useEffect(() => {
     let active = true;
 
-    const load = async () => {
+    async function loadLocations() {
       try {
-        setLoading(true);
         const { data } = await api.get("/api/locations");
-        if (!active) return;
-        setLocations(Array.isArray(data) ? data : []);
-        setError("");
+        if (active) {
+          setLocations(Array.isArray(data) ? data : []);
+          setError("");
+        }
       } catch (err) {
-        if (!active) return;
-        setError(err?.response?.data?.message || "Failed to load locations");
-      } finally {
-        if (active) setLoading(false);
+        if (active) setError(err?.response?.data?.message || "Unable to refresh live destination links.");
       }
-    };
+    }
 
-    load();
+    loadLocations();
     return () => {
       active = false;
     };
   }, []);
 
-  useEffect(() => {
-    const nextQuery = searchParams.get("q") || "";
-    const nextScope = ["all", "hubs", "places"].includes(searchParams.get("type") || "")
-      ? searchParams.get("type") || "all"
-      : "all";
-    const nextCategory = searchParams.get("category") || "all";
+  const locationLookup = useMemo(() => {
+    return new Map(locations.map((location) => [normalize(location.name), location]));
+  }, [locations]);
 
-    if (nextQuery !== query) setQuery(nextQuery);
-    if (nextScope !== scope) setScope(nextScope);
-    if (nextCategory !== activeCategory) setActiveCategory(nextCategory);
-  }, [activeCategory, query, scope, searchParams]);
+  const parentLookup = useMemo(() => {
+    return new Map(locations.map((location) => [String(location._id), location]));
+  }, [locations]);
 
-  const normalizedLocations = useMemo(
-    () =>
-      locations.map((location, index) => {
-        const isHub = !getParentId(location);
-        const shortDescription = String(location.description || "").trim();
-        return {
-          ...location,
-          isHub,
-          searchBlob: getSearchBlob(location),
-          label: formatCategory(location.category, isHub ? "Destination hub" : "Place"),
-          regionLabel:
-            [location.district, location.province].filter(Boolean).join(", ") ||
-            (isHub ? "Nepal travel hub" : "Inside Nepal"),
-          shortDescription:
-            shortDescription.length > 88
-              ? `${shortDescription.slice(0, 88).trim()}...`
-              : shortDescription || (isHub ? "Open this destination to explore it." : "A strong next stop for your trip."),
-          scenicBackground: getScenicGradient(index),
-        };
-      }),
-    [locations]
-  );
+  const liveCards = useMemo(() => {
+    const curatedNames = new Set([...hubCards, ...placeCards].map((card) => normalize(card.name)));
+    const hubs = [];
+    const places = [];
 
-  const categoryOptions = useMemo(() => {
-    const values = Array.from(
-      new Set(
-        normalizedLocations
-          .map((location) =>
-            formatCategory(location.category, location.isHub ? "Destination hub" : "Place")
-          )
-          .filter(Boolean)
-      )
-    ).sort((a, b) => a.localeCompare(b));
-    return ["all", ...values];
-  }, [normalizedLocations]);
+    locations.forEach((location, index) => {
+      if (!location?._id || curatedNames.has(normalize(location.name))) return;
 
-  useEffect(() => {
-    if (activeCategory !== "all" && !categoryOptions.includes(activeCategory)) {
-      setActiveCategory("all");
-    }
-  }, [activeCategory, categoryOptions]);
+      const parentId = getParentId(location);
+      const parent = parentId ? parentLookup.get(String(parentId)) : null;
+      const isHub = !parentId;
+      const card = {
+        name: location.name || "Destination",
+        subtitle: isHub
+          ? [location.district, location.province].filter(Boolean).join(", ") || "Nepal"
+          : formatCategory(location.category, "Place"),
+        parent: parent?.name ? `Inside ${parent.name}` : "Inside Nepal",
+        category: formatCategory(location.category, isHub ? "Destination" : "Place"),
+        tags: getAutoTags(location, parent),
+        image: getLocationImage(location, isHub ? hubCards[index % hubCards.length].image : placeCards[index % placeCards.length].image),
+        description: shortText(location.description),
+        href: `/locations/${location._id}`,
+      };
 
-  const filtered = useMemo(() => {
-    const keyword = query.trim().toLowerCase();
-    return normalizedLocations.filter((location) => {
-      if (scope === "hubs" && !location.isHub) return false;
-      if (scope === "places" && location.isHub) return false;
-      if (activeCategory !== "all" && location.label !== activeCategory) return false;
-      if (!keyword) return true;
-      return location.searchBlob.includes(keyword);
+      if (isHub) hubs.push(card);
+      else places.push(card);
     });
-  }, [activeCategory, normalizedLocations, query, scope]);
 
-  const hubLocations = useMemo(
-    () => filtered.filter((location) => location.isHub),
-    [filtered]
-  );
+    return { hubs, places };
+  }, [locations, parentLookup]);
 
-  const placeLocations = useMemo(
-    () => filtered.filter((location) => !location.isHub),
-    [filtered]
-  );
-
-  const topCategories = categoryOptions.filter((item) => item !== "all").slice(0, 6);
-  const visibleHubs = hubLocations.slice(0, visibleHubCount);
-  const visiblePlaces = placeLocations.slice(0, visiblePlaceCount);
-  const hasMoreHubs = visibleHubCount < hubLocations.length;
-  const hasMorePlaces = visiblePlaceCount < placeLocations.length;
-  const activeFilterCount = (scope !== "all" ? 1 : 0) + (activeCategory !== "all" ? 1 : 0);
-  const hasActiveFilters = activeFilterCount > 0;
-
-  const activeFilterChips = [
-    ...(scope !== "all" ? [{ key: "scope", label: `Type: ${getScopeLabel(scope)}` }] : []),
-    ...(activeCategory !== "all"
-      ? [{ key: "category", label: `Category: ${activeCategory}` }]
-      : []),
-  ];
+  const keyword = normalize(query);
+  const allHubCards = [...hubCards, ...liveCards.hubs];
+  const allPlaceCards = [...placeCards, ...liveCards.places];
+  const shownHubs = allHubCards.filter((card) => {
+    const matchesText = !keyword || getSearchText(card).includes(keyword);
+    return matchesText && matchesActiveFilter(card, activeFilter);
+  });
+  const shownPlaces = allPlaceCards.filter((card) => {
+    const matchesText = !keyword || getSearchText(card).includes(keyword);
+    return matchesText && matchesActiveFilter(card, activeFilter);
+  });
+  const visibleHubs = shownHubs.slice(0, visibleHubCount);
+  const visiblePlaces = shownPlaces.slice(0, visiblePlaceCount);
+  const hasMoreHubs = shownHubs.length > visibleHubCount;
+  const hasMorePlaces = shownPlaces.length > visiblePlaceCount;
+  const showHubs = viewMode === "All" || viewMode === "Hubs";
+  const showPlaces = viewMode === "All" || viewMode === "Places";
+  const totalShown = (showHubs ? shownHubs.length : 0) + (showPlaces ? shownPlaces.length : 0);
 
   useEffect(() => {
-    setVisibleHubCount(4);
-    setVisiblePlaceCount(6);
-  }, [query, scope, activeCategory]);
-
-  useEffect(() => {
-    const next = buildSearchParams({ query, scope, activeCategory });
-    if (next.toString() !== searchParams.toString()) {
-      setSearchParams(next, { replace: true });
-    }
-  }, [activeCategory, query, scope, searchParams, setSearchParams]);
-
-  const clearFilters = () => {
-    setScope("all");
-    setActiveCategory("all");
-  };
-
-  const hubSkeletons = createSkeletonItems(4);
-  const placeSkeletons = createSkeletonItems(6);
+    setVisibleHubCount(10);
+    setVisiblePlaceCount(8);
+  }, [query, activeFilter, viewMode]);
 
   return (
-    <div className="explore-page">
-      <section className="explore-page__hero">
-        <div className="explore-page__hero-copy">
-          <p className="explore-page__eyebrow">Destinations</p>
-          <h1>Browse destinations</h1>
-
-          <div className="explore-page__search-wrap">
+    <main className="destinations-explore">
+      <section className="destinations-shell">
+        <div className="destinations-hero">
+          <div>
+            <p className="destinations-eyebrow">Explore Nepal</p>
+            <h1>Browse destinations</h1>
+            <p className="destinations-summary">
+              {totalShown} results in {activeFilter.toLowerCase()} view
+            </p>
+          </div>
+          <label className="destinations-search">
             <Search size={18} />
             <input
-              className="explore-page__search"
               value={query}
-              onChange={(e) => setQuery(e.target.value)}
+              onChange={(event) => setQuery(event.target.value)}
               placeholder="Search destination, district, province, or category"
             />
-          </div>
+          </label>
+        </div>
 
-          {activeFilterChips.length ? (
-            <div className="explore-active-filters">
-              {activeFilterChips.map((item) => (
-                <button
-                  key={item.key}
-                  type="button"
-                  className="explore-active-chip"
-                  onClick={() => {
-                    if (item.key === "scope") setScope("all");
-                    if (item.key === "category") setActiveCategory("all");
-                  }}
-                >
-                  {item.label}
-                  <X size={13} />
-                </button>
-              ))}
-              <button type="button" className="explore-active-clear" onClick={clearFilters}>
-                Clear filters
-              </button>
-            </div>
-          ) : null}
-
-          <div className="explore-toolbar">
-            <div className="explore-toolbar__intro">
+        <div className="destinations-filterbar" aria-label="Destination filters">
+          {filters.map(({ label, icon: Icon }) => (
+            <button
+              key={label}
+              type="button"
+              className={activeFilter === label ? "is-active" : ""}
+              onClick={() => setActiveFilter(label)}
+            >
+              <Icon size={16} />
+              {label}
+            </button>
+          ))}
+          <div className="destinations-view-toggle" aria-label="Result type">
+            {viewModes.map((mode) => (
               <button
+                key={mode}
                 type="button"
-                className={`explore-toolbar__label ${filtersOpen ? "is-open" : ""}`}
-                onClick={() => setFiltersOpen((current) => !current)}
-                aria-expanded={filtersOpen}
+                className={viewMode === mode ? "is-active" : ""}
+                onClick={() => setViewMode(mode)}
               >
-                <SlidersHorizontal size={15} />
-                {activeFilterCount ? `Filters (${activeFilterCount})` : "Filters"}
-                <ChevronDown size={15} />
+                {mode}
               </button>
-            </div>
-
-            {filtersOpen ? (
-              <div className="explore-filter-groups">
-                <div className="explore-filter-group">
-                  <div className="explore-filter-group__header">
-                    <span className="explore-filter-group__title">Type</span>
-                    {scope !== "all" ? (
-                      <button type="button" className="explore-filter-reset" onClick={() => setScope("all")}>
-                        Reset
-                      </button>
-                    ) : null}
-                  </div>
-                  <div className="explore-segmented">
-                    {[
-                      { id: "all", label: "All" },
-                      { id: "hubs", label: "Hubs" },
-                      { id: "places", label: "Places" },
-                    ].map((item) => (
-                      <button
-                        key={item.id}
-                        type="button"
-                        className={`explore-segmented__option ${scope === item.id ? "is-active" : ""}`}
-                        onClick={() => setScope(item.id)}
-                      >
-                        {item.label}
-                      </button>
-                    ))}
-                  </div>
-                </div>
-
-                <div className="explore-filter-group">
-                  <div className="explore-filter-group__header">
-                    <span className="explore-filter-group__title">Category</span>
-                    {activeCategory !== "all" ? (
-                      <button type="button" className="explore-filter-reset" onClick={() => setActiveCategory("all")}>
-                        Reset
-                      </button>
-                    ) : null}
-                  </div>
-                  <div className="explore-toolbar__chips">
-                    <button
-                      type="button"
-                      className={`explore-chip ${activeCategory === "all" ? "is-active" : ""}`}
-                      onClick={() => setActiveCategory("all")}
-                    >
-                      All categories
-                    </button>
-                    {topCategories.map((item) => (
-                      <button
-                        key={item}
-                        type="button"
-                        className={`explore-chip ${activeCategory === item ? "is-active" : ""}`}
-                        onClick={() => setActiveCategory(item)}
-                      >
-                        {item}
-                      </button>
-                    ))}
-                  </div>
-                </div>
-
-                {hasActiveFilters ? (
-                  <div className="explore-filter-actions">
-                    <button type="button" className="explore-btn explore-btn--secondary" onClick={clearFilters}>
-                      Clear all filters
-                    </button>
-                  </div>
-                ) : null}
-              </div>
-            ) : null}
-          </div>
-
-          <div className="explore-page__summary">
-            <span>{filtered.length} shown</span>
-            <span>{normalizedLocations.length} total</span>
+            ))}
           </div>
         </div>
+
+        {error ? <p className="destinations-error">{error}</p> : null}
+
+        {showHubs ? (
+        <section className="destinations-section" aria-labelledby="destination-hubs-title">
+          <div className="destinations-section__head">
+            <h2 id="destination-hubs-title">Destination hubs</h2>
+            <span>
+              Showing {visibleHubs.length} of {shownHubs.length} hubs
+            </span>
+          </div>
+
+          <div className="hub-grid">
+            {visibleHubs.map((card) => (
+              <article className="hub-card" key={card.name}>
+                <Link to={getLocationLink(card, locationLookup)} className="hub-card__media">
+                  <img src={card.image} alt={`${card.name} destination`} />
+                  <span>{card.category}</span>
+                </Link>
+                <div className="hub-card__body">
+                  <div>
+                    <h3>{card.name}</h3>
+                    <p className="destination-meta">
+                      <MapPin size={14} />
+                      {card.subtitle}
+                    </p>
+                  </div>
+                  <p>{card.description}</p>
+                </div>
+              </article>
+            ))}
+          </div>
+          {shownHubs.length > 10 ? (
+            <div className="destinations-section__actions">
+              {hasMoreHubs ? (
+                <button type="button" onClick={() => setVisibleHubCount((count) => count + 5)}>
+                  Show more hubs
+                </button>
+              ) : (
+                <button type="button" onClick={() => setVisibleHubCount(10)}>
+                  Show fewer hubs
+                </button>
+              )}
+            </div>
+          ) : null}
+        </section>
+        ) : null}
+
+        {showPlaces ? (
+        <section className="destinations-section" aria-labelledby="places-title">
+          <div className="destinations-section__head">
+            <h2 id="places-title">Places</h2>
+            <span>
+              Showing {visiblePlaces.length} of {shownPlaces.length} places
+            </span>
+          </div>
+
+          <div className="place-grid">
+            {visiblePlaces.map((card) => (
+              <article className="place-card" key={card.name}>
+                <Link to={getLocationLink(card, locationLookup)} className="place-card__media">
+                  <img src={card.image} alt={`${card.name} in Lumbini`} />
+                  <span>{card.subtitle}</span>
+                </Link>
+                <div className="place-card__body">
+                  <div className="place-card__head">
+                    <span>{card.parent}</span>
+                    <button type="button" aria-label={`Save ${card.name}`}>
+                      <Heart size={16} />
+                      Save
+                    </button>
+                  </div>
+                  <h3>{card.name}</h3>
+                  <p>{card.description}</p>
+                  <Link to={getLocationLink(card, locationLookup)} className="place-card__cta">
+                    View place
+                    <ChevronRight size={16} />
+                  </Link>
+                </div>
+              </article>
+            ))}
+          </div>
+          {shownPlaces.length > 8 ? (
+            <div className="destinations-section__actions">
+              {hasMorePlaces ? (
+                <button type="button" onClick={() => setVisiblePlaceCount((count) => count + 8)}>
+                  Show more places
+                </button>
+              ) : (
+                <button type="button" onClick={() => setVisiblePlaceCount(8)}>
+                  Show fewer places
+                </button>
+              )}
+            </div>
+          ) : null}
+        </section>
+        ) : null}
+
+        {!totalShown ? (
+          <div className="destinations-empty">
+            <strong>No matching destinations</strong>
+            <span>Try All, switch between Hubs and Places, or search a broader word like Pokhara.</span>
+          </div>
+        ) : null}
       </section>
 
-      {error ? <p className="explore-page__error">{error}</p> : null}
-
-      {loading ? (
-        <>
-          <section className="explore-section">
-            <div className="explore-section__head">
-              <div><h2>Destination hubs</h2></div>
-            </div>
-            <div className="explore-grid explore-grid--hero">
-              {hubSkeletons.map((item) => (
-                <article key={item.id} className="explore-card explore-card--skeleton">
-                  <div className="explore-skeleton explore-skeleton__media" />
-                  <div className="explore-card__body">
-                    <div className="explore-skeleton explore-skeleton__line explore-skeleton__line--lg" />
-                    <div className="explore-skeleton explore-skeleton__line" />
-                    <div className="explore-skeleton explore-skeleton__line explore-skeleton__line--sm" />
-                  </div>
-                </article>
-              ))}
-            </div>
-          </section>
-
-          <section className="explore-section">
-            <div className="explore-section__head">
-              <div><h2>Places</h2></div>
-            </div>
-            <div className="explore-grid">
-              {placeSkeletons.map((item) => (
-                <article key={item.id} className="explore-card explore-card--skeleton">
-                  <div className="explore-skeleton explore-skeleton__media" />
-                  <div className="explore-card__body">
-                    <div className="explore-skeleton explore-skeleton__line explore-skeleton__line--lg" />
-                    <div className="explore-skeleton explore-skeleton__line" />
-                    <div className="explore-skeleton explore-skeleton__line explore-skeleton__line--sm" />
-                  </div>
-                </article>
-              ))}
-            </div>
-          </section>
-        </>
-      ) : null}
-
-      {!loading && !filtered.length ? (
-        <div className="explore-empty">
-          <div className="explore-empty__icon">
-            <Search size={22} />
-          </div>
-          <h2>No matching locations</h2>
-          <p>Try a broader keyword or clear the active filters.</p>
-          {hasActiveFilters ? (
-            <button type="button" className="explore-btn explore-btn--secondary" onClick={clearFilters}>
-              Clear filters
-            </button>
-          ) : null}
-        </div>
-      ) : null}
-
-      {!loading && !!hubLocations.length && (
-        <section className="explore-section">
-          <div className="explore-section__head">
-            <div>
-              <h2>Destination hubs</h2>
-            </div>
-            <span className="explore-section__count">{hubLocations.length} results</span>
-          </div>
-
-          <div className="explore-grid explore-grid--hero">
-            {visibleHubs.map((location, index) => (
-              <article key={location._id} className="explore-card explore-card--hub">
-                <div
-                  className="explore-card__media"
-                  style={{ backgroundImage: getHeroArtwork(location, index) }}
-                >
-                  <div className="explore-card__shade" />
-                  <span className="explore-card__pill">
-                    <Mountain size={14} />
-                    {location.label}
-                  </span>
-                  <div className="explore-card__media-copy">
-                    <h3>{location.name}</h3>
-                  </div>
-                </div>
-                <div className="explore-card__body">
-                  <div className="explore-card__meta-row">
-                    <span><MapPinned size={15} />{location.regionLabel}</span>
-                  </div>
-                  <p className="explore-card__description">{location.shortDescription}</p>
-                  <Link to={`/locations/${location._id}`} className="explore-btn explore-btn--secondary">
-                    Open destination
-                    <ArrowRight size={16} />
-                  </Link>
-                </div>
-              </article>
-            ))}
-          </div>
-          {hasMoreHubs ? (
-            <div className="explore-section__footer">
-              <button
-                type="button"
-                className="explore-btn explore-btn--secondary"
-                onClick={() => setVisibleHubCount((count) => count + 4)}
-              >
-                See more destinations
-              </button>
-            </div>
-          ) : null}
-        </section>
-      )}
-
-      {!loading && !!placeLocations.length && (
-        <section className="explore-section">
-          <div className="explore-section__head">
-            <div>
-              <h2>Places</h2>
-            </div>
-            <span className="explore-section__count">{placeLocations.length} results</span>
-          </div>
-
-          <div className="explore-grid">
-            {visiblePlaces.map((location, index) => (
-              <article key={location._id} className="explore-card">
-                <div
-                  className="explore-card__media explore-card__media--compact"
-                  style={{ backgroundImage: getHeroArtwork(location, index + 2) }}
-                >
-                  <div className="explore-card__shade" />
-                  <span className="explore-card__pill">
-                    <Compass size={14} />
-                    {location.label}
-                  </span>
-                </div>
-                <div className="explore-card__body">
-                  <div className="explore-card__title-row">
-                    <h3>{location.name}</h3>
-                    {location.parentLocationId?.name ? (
-                      <span className="explore-mini-tag">Inside {location.parentLocationId.name}</span>
-                    ) : null}
-                  </div>
-                  <div className="explore-card__meta-row">
-                    <span><MapPinned size={15} />{location.regionLabel}</span>
-                  </div>
-                  <p className="explore-card__description">{location.shortDescription}</p>
-                  <Link to={`/locations/${location._id}`} className="explore-btn explore-btn--secondary">
-                    View place
-                    <ArrowRight size={16} />
-                  </Link>
-                </div>
-              </article>
-            ))}
-          </div>
-          {hasMorePlaces ? (
-            <div className="explore-section__footer">
-              <button
-                type="button"
-                className="explore-btn explore-btn--secondary"
-                onClick={() => setVisiblePlaceCount((count) => count + 6)}
-              >
-                See more places
-              </button>
-            </div>
-          ) : null}
-        </section>
-      )}
-
       <style>{`
-        .explore-page {
-          --explore-ink: #0f172a;
-          --explore-muted: #52607a;
-          --explore-line: rgba(148, 163, 184, 0.22);
-          --explore-card: rgba(255, 255, 255, 0.82);
-          max-width: 1240px;
+        .destinations-explore {
+          min-height: 100vh;
+          background: #f3f6fa;
+          color: #172033;
+          font-family: Inter, "Plus Jakarta Sans", system-ui, sans-serif;
+          padding: 18px;
+        }
+
+        .destinations-shell {
+          max-width: 1480px;
           margin: 0 auto;
-          padding: 24px 20px 72px;
-          color: var(--explore-ink);
-          font-family: "Manrope", "Plus Jakarta Sans", system-ui, sans-serif;
+          border: 1px solid #e5ebf2;
+          border-radius: 24px;
+          background: #ffffff;
+          box-shadow: 0 18px 54px rgba(47, 64, 84, 0.08);
+          padding: 22px;
         }
 
-        .explore-page__hero {
-          display: block;
-          padding: 24px;
-          border-radius: 28px;
-          background:
-            radial-gradient(circle at top left, rgba(56, 189, 248, 0.18), transparent 30%),
-            radial-gradient(circle at right bottom, rgba(249, 115, 22, 0.18), transparent 26%),
-            linear-gradient(145deg, #f8fbff 0%, #fff7ed 48%, #f8fafc 100%);
-          border: 1px solid rgba(255, 255, 255, 0.9);
-          box-shadow: 0 30px 70px rgba(15, 23, 42, 0.1);
-          overflow: hidden;
-          position: relative;
+        .destinations-hero,
+        .destinations-filterbar,
+        .destinations-section__head,
+        .place-card__head,
+        .place-card__cta,
+        .destination-meta {
+          display: flex;
+          align-items: center;
         }
 
-        .explore-page__hero-copy {
-          position: relative;
-          z-index: 1;
+        .hub-card__media,
+        .place-card__media,
+        .place-card__cta {
+          color: inherit;
+          text-decoration: none;
         }
 
-        .explore-page__eyebrow {
-          margin: 0 0 10px;
-          text-transform: uppercase;
-          letter-spacing: 0.18em;
-          font-size: 0.72rem;
+        .destinations-filterbar button,
+        .destinations-view-toggle button {
+          border: 1px solid #dde6ef;
+          background: #ffffff;
+          color: #4b5b70;
+          border-radius: 999px;
+          font-size: 0.88rem;
+          font-weight: 700;
+        }
+
+        .destinations-hero {
+          justify-content: space-between;
+          gap: 22px;
+          padding: 4px 2px 18px;
+          border-bottom: 1px solid #edf2f7;
+        }
+
+        .destinations-eyebrow {
+          margin: 0 0 8px;
+          color: #6387a8;
+          font-size: 0.74rem;
           font-weight: 800;
-          color: #0f766e;
+          letter-spacing: 0.14em;
+          text-transform: uppercase;
         }
 
-        .explore-page__hero h1 {
+        .destinations-hero h1 {
           margin: 0;
-          font-family: "Playfair Display", Georgia, serif;
-          font-size: clamp(2.2rem, 3vw, 3.6rem);
+          font-size: clamp(2.1rem, 3.7vw, 4.2rem);
           line-height: 1;
-          letter-spacing: -0.05em;
+          letter-spacing: 0;
         }
 
-        .explore-page__search-wrap {
-          display: flex;
-          align-items: center;
-          gap: 10px;
-          margin-top: 18px;
-          padding: 14px 18px;
-          border-radius: 999px;
-          background: rgba(255, 255, 255, 0.92);
-          border: 1px solid rgba(255, 255, 255, 0.9);
-          box-shadow: 0 16px 32px rgba(15, 23, 42, 0.08);
-        }
-
-        .explore-page__search-wrap svg {
-          flex: 0 0 auto;
-          color: #64748b;
-        }
-
-        .explore-page__search {
-          width: 100%;
-          border: 0;
-          background: transparent;
-          padding: 0;
-          font-size: 0.96rem;
-          color: var(--explore-ink);
-          outline: none;
-        }
-
-        .explore-active-filters {
-          display: flex;
-          flex-wrap: wrap;
-          gap: 8px;
-          margin-top: 14px;
-        }
-
-        .explore-active-chip,
-        .explore-active-clear,
-        .explore-filter-reset {
-          border: 0;
-          background: transparent;
-          cursor: pointer;
-        }
-
-        .explore-active-chip {
-          display: inline-flex;
-          align-items: center;
-          gap: 8px;
-          padding: 8px 12px;
-          border-radius: 999px;
-          background: rgba(255, 255, 255, 0.82);
-          border: 1px solid var(--explore-line);
-          color: #334155;
-          font-size: 0.82rem;
-          font-weight: 700;
-        }
-
-        .explore-active-clear,
-        .explore-filter-reset {
-          color: #2563eb;
-          font-size: 0.82rem;
-          font-weight: 800;
-        }
-
-        .explore-toolbar {
-          display: grid;
-          gap: 14px;
-          margin-top: 20px;
-        }
-
-        .explore-toolbar__chips {
-          display: flex;
-          flex-wrap: wrap;
-          gap: 10px;
-        }
-
-        .explore-chip {
-          border: 1px solid rgba(15, 23, 42, 0.08);
-          background: rgba(255, 255, 255, 0.78);
-          color: #334155;
-          border-radius: 999px;
-          padding: 10px 14px;
-          font-size: 0.88rem;
-          font-weight: 700;
-          cursor: pointer;
-          transition: transform 180ms ease, border-color 180ms ease, background 180ms ease, color 180ms ease;
-        }
-
-        .explore-chip:hover,
-        .explore-chip.is-active {
-          transform: translateY(-1px);
-        }
-
-        .explore-chip.is-active {
-          color: #ffffff;
-          background: linear-gradient(135deg, #0f766e, #2563eb);
-          border-color: transparent;
-        }
-
-        .explore-page__summary {
-          display: flex;
-          flex-wrap: wrap;
-          gap: 12px;
-          margin-top: 18px;
-          color: var(--explore-muted);
-          font-size: 0.88rem;
-          font-weight: 700;
-        }
-
-        .explore-card__shade {
-          position: absolute;
-          inset: 0;
-          background: linear-gradient(180deg, rgba(15, 23, 42, 0.12), rgba(15, 23, 42, 0.72));
-        }
-
-        .explore-card__pill,
-        .explore-mini-tag,
-        .explore-section__count,
-        .explore-toolbar__label {
-          display: inline-flex;
-          align-items: center;
-          gap: 8px;
-          border-radius: 999px;
-          font-size: 0.76rem;
-          font-weight: 800;
-          letter-spacing: 0.02em;
-        }
-
-        .explore-card__pill {
-          width: fit-content;
-          color: #ffffff;
-          background: rgba(255, 255, 255, 0.18);
-          border: 1px solid rgba(255, 255, 255, 0.24);
-          backdrop-filter: blur(10px);
-          padding: 8px 12px;
-        }
-
-        .explore-filter-groups {
-          display: grid;
-          gap: 14px;
-          padding: 16px;
-          border-radius: 20px;
-          background: rgba(255, 255, 255, 0.6);
-          border: 1px solid rgba(255, 255, 255, 0.74);
-        }
-
-        .explore-filter-group {
-          display: grid;
-          gap: 8px;
-        }
-
-        .explore-filter-group__header {
-          display: flex;
-          align-items: center;
-          justify-content: space-between;
-          gap: 12px;
-        }
-
-        .explore-filter-group__title {
-          font-size: 0.8rem;
-          font-weight: 800;
-          letter-spacing: 0.08em;
-          text-transform: uppercase;
-          color: #52607a;
-        }
-
-        .explore-filter-actions {
-          display: flex;
-          justify-content: flex-start;
-        }
-
-        .explore-section__head h2 {
-          margin: 0;
-          font-size: clamp(1.6rem, 2vw, 2.2rem);
-          letter-spacing: -0.04em;
-        }
-
-        .explore-toolbar__label {
-          appearance: none;
-          display: inline-flex;
-          align-items: center;
-          gap: 8px;
-          padding: 8px 12px;
-          background: rgba(255, 255, 255, 0.78);
-          border: 1px solid var(--explore-line);
-          color: #334155;
-          cursor: pointer;
-          transition: background 180ms ease, transform 180ms ease;
-        }
-
-        .explore-toolbar__label svg:last-child {
-          transition: transform 180ms ease;
-        }
-
-        .explore-toolbar__label:hover {
-          transform: translateY(-1px);
-        }
-
-        .explore-toolbar__label.is-open svg:last-child {
-          transform: rotate(180deg);
-        }
-
-        .explore-segmented {
-          display: inline-flex;
-          flex-wrap: wrap;
-          gap: 6px;
-          width: fit-content;
-          padding: 6px;
-          border-radius: 999px;
-          background: rgba(255, 255, 255, 0.76);
-          border: 1px solid var(--explore-line);
-          box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.5);
-        }
-
-        .explore-segmented__option {
-          border: 0;
-          background: transparent;
-          color: #334155;
-          border-radius: 999px;
-          padding: 10px 16px;
-          font-size: 0.88rem;
-          font-weight: 800;
-          cursor: pointer;
-          transition: background 180ms ease, color 180ms ease, transform 180ms ease, box-shadow 180ms ease;
-        }
-
-        .explore-segmented__option:hover {
-          transform: translateY(-1px);
-        }
-
-        .explore-segmented__option.is-active {
-          color: #ffffff;
-          background: linear-gradient(135deg, #0f766e, #2563eb);
-          box-shadow: 0 12px 24px rgba(37, 99, 235, 0.2);
-        }
-
-        .explore-page__error {
-          margin: 18px 4px 0;
+        .destinations-summary {
+          margin: 12px 0 0;
+          color: #6b7b8d;
           font-size: 0.94rem;
-          color: #b91c1c;
+          font-weight: 700;
         }
 
-        .explore-empty {
-          display: grid;
-          justify-items: center;
-          gap: 10px;
-          margin-top: 24px;
-          padding: 34px 28px;
-          border-radius: 28px;
-          border: 1px dashed rgba(148, 163, 184, 0.42);
-          background: rgba(255, 255, 255, 0.74);
-          text-align: center;
-        }
-
-        .explore-empty__icon {
-          width: 52px;
-          height: 52px;
-          border-radius: 50%;
-          display: grid;
-          place-items: center;
-          background: #e0f2fe;
-          color: #0369a1;
-        }
-
-        .explore-empty h2,
-        .explore-empty p {
-          margin: 0;
-        }
-
-        .explore-empty p {
-          color: var(--explore-muted);
-        }
-
-        .explore-section {
-          margin-top: 34px;
-        }
-
-        .explore-section__head {
+        .destinations-search {
+          width: min(100%, 560px);
+          min-height: 56px;
           display: flex;
+          align-items: center;
+          gap: 12px;
+          padding: 0 18px;
+          border-radius: 999px;
+          background: #ffffff;
+          border: 1px solid #dfe8f1;
+          color: #6b7b8d;
+          box-shadow: 0 10px 26px rgba(51, 70, 91, 0.06);
+        }
+
+        .destinations-search input {
+          width: 100%;
+          min-width: 0;
+          border: 0;
+          outline: 0;
+          background: transparent;
+          color: #172033;
+          font-size: 0.95rem;
+        }
+
+        .destinations-filterbar {
+          gap: 10px;
+          flex-wrap: wrap;
+          margin-top: 14px;
+          padding: 12px;
+          border: 1px solid #e3ebf3;
+          border-radius: 18px;
+          background: #f8fbfe;
+        }
+
+        .destinations-filterbar button {
+          min-height: 38px;
+          display: inline-flex;
+          align-items: center;
+          gap: 8px;
+          padding: 0 13px;
+          cursor: pointer;
+        }
+
+        .destinations-filterbar button.is-active {
+          color: #154c79;
+          background: #e8f4ff;
+          border-color: #bfdcf4;
+        }
+
+        .destinations-view-toggle {
+          display: inline-flex;
+          gap: 6px;
+          margin-left: auto;
+          padding: 5px;
+          border: 1px solid #dde6ef;
+          border-radius: 999px;
+          background: #f7fafd;
+        }
+
+        .destinations-view-toggle button {
+          min-height: 32px;
+          padding: 0 12px;
+          border-color: transparent;
+          background: transparent;
+        }
+
+        .destinations-view-toggle button.is-active {
+          color: #154c79;
+          background: #ffffff;
+          border-color: #d8e5f1;
+          box-shadow: 0 8px 16px rgba(47, 64, 84, 0.08);
+        }
+
+        .destinations-error {
+          margin: 12px 8px 0;
+          color: #b45309;
+          font-size: 0.9rem;
+          font-weight: 700;
+        }
+
+        .destinations-section {
+          padding: 24px 0 0;
+        }
+
+        .destinations-section__head {
           justify-content: space-between;
-          gap: 16px;
-          align-items: end;
-          margin-bottom: 16px;
+          gap: 14px;
+          margin-bottom: 14px;
         }
 
-        .explore-section__count {
-          padding: 10px 14px;
-          background: rgba(255, 255, 255, 0.75);
-          border: 1px solid var(--explore-line);
-          color: #334155;
+        .destinations-section__head h2 {
+          margin: 0;
+          font-size: 1.34rem;
+          letter-spacing: 0;
         }
 
-        .explore-section__footer {
+        .destinations-section__head span {
+          color: #718196;
+          font-size: 0.86rem;
+          font-weight: 800;
+        }
+
+        .destinations-section__actions {
           display: flex;
           justify-content: center;
-          margin-top: 18px;
+          margin-top: 16px;
         }
 
-        .explore-grid {
+        .destinations-section__actions button {
+          min-height: 40px;
+          padding: 0 16px;
+          border: 1px solid #dbe6f0;
+          border-radius: 999px;
+          background: #ffffff;
+          color: #24435f;
+          cursor: pointer;
+          font: inherit;
+          font-size: 0.88rem;
+          font-weight: 800;
+          box-shadow: 0 10px 24px rgba(47, 64, 84, 0.07);
+        }
+
+        .hub-grid,
+        .place-grid {
           display: grid;
-          grid-template-columns: repeat(3, minmax(0, 1fr));
-          gap: 18px;
+          gap: 16px;
         }
 
-        .explore-grid--hero {
-          grid-template-columns: repeat(2, minmax(0, 1fr));
+        .hub-grid {
+          grid-template-columns: repeat(5, minmax(0, 1fr));
         }
 
-        .explore-card {
-          display: grid;
-          grid-template-rows: 220px 1fr;
-          min-height: 100%;
-          border-radius: 28px;
+        .place-grid {
+          grid-template-columns: repeat(4, minmax(0, 1fr));
+        }
+
+        .hub-card,
+        .place-card {
           overflow: hidden;
-          background: var(--explore-card);
-          border: 1px solid rgba(255, 255, 255, 0.9);
-          box-shadow: 0 22px 46px rgba(15, 23, 42, 0.08);
-          backdrop-filter: blur(14px);
-          transition: transform 180ms ease, box-shadow 180ms ease;
+          border-radius: 18px;
+          background: #ffffff;
+          border: 1px solid #e5ebf2;
+          box-shadow: 0 12px 30px rgba(47, 64, 84, 0.07);
         }
 
-        .explore-card:hover {
-          transform: translateY(-4px);
-          box-shadow: 0 28px 56px rgba(15, 23, 42, 0.12);
-        }
-
-        .explore-card--skeleton {
-          pointer-events: none;
-        }
-
-        .explore-card__media {
+        .hub-card {
           position: relative;
-          background-size: cover;
-          background-position: center;
-          padding: 18px;
-          display: flex;
-          flex-direction: column;
-          justify-content: space-between;
+          min-height: 330px;
+          background: #111827;
         }
 
-        .explore-card__media--compact {
-          min-height: 220px;
-        }
-
-        .explore-card__media-copy {
+        .hub-card__media,
+        .place-card__media {
           position: relative;
+          display: block;
+          overflow: hidden;
+          background: #e8edf3;
+        }
+
+        .hub-card__media {
+          height: 100%;
+          min-height: 330px;
+        }
+
+        .place-card__media {
+          height: 174px;
+        }
+
+        .hub-card img,
+        .place-card img {
+          width: 100%;
+          height: 100%;
+          display: block;
+          object-fit: cover;
+          transition: transform 220ms ease;
+        }
+
+        .hub-card:hover img,
+        .place-card:hover img {
+          transform: scale(1.04);
+        }
+
+        .hub-card__media span,
+        .place-card__media span {
+          position: absolute;
+          left: 14px;
+          bottom: 14px;
+          padding: 8px 11px;
+          border-radius: 999px;
+          background: rgba(255, 255, 255, 0.92);
+          color: #27384c;
+          font-size: 0.75rem;
+          font-weight: 800;
+        }
+
+        .hub-card__media::after {
+          content: "";
+          position: absolute;
+          inset: 0;
+          background: linear-gradient(180deg, rgba(15, 23, 42, 0.02) 20%, rgba(15, 23, 42, 0.82) 100%);
           z-index: 1;
         }
 
-        .explore-card__media-copy h3 {
-          margin: 0;
-          color: #ffffff;
-          font-size: 1.8rem;
-          line-height: 1;
-          letter-spacing: -0.04em;
-          font-family: "Playfair Display", Georgia, serif;
+        .hub-card__media span {
+          top: 14px;
+          bottom: auto;
+          z-index: 2;
+          background: rgba(255, 255, 255, 0.9);
         }
 
-        .explore-card__body {
+        .hub-card__body,
+        .place-card__body {
           display: grid;
-          align-content: start;
-          gap: 12px;
-          padding: 18px;
-        }
-
-        .explore-card__title-row {
-          display: flex;
-          flex-wrap: wrap;
           gap: 10px;
-          align-items: center;
+          padding: 16px;
         }
 
-        .explore-card__title-row h3 {
+        .hub-card__body {
+          position: absolute;
+          left: 0;
+          right: 0;
+          bottom: 0;
+          z-index: 2;
+          padding: 18px;
+          color: #ffffff;
+        }
+
+        .hub-card__body h3,
+        .place-card__body h3 {
           margin: 0;
-          font-size: 1.18rem;
-          letter-spacing: -0.03em;
+          color: #162033;
+          font-size: 1.12rem;
         }
 
-        .explore-mini-tag {
-          padding: 7px 10px;
-          background: #e0f2fe;
-          color: #075985;
+        .hub-card__body h3 {
+          color: #ffffff;
+          font-size: 1.34rem;
         }
 
-        .explore-card__description {
+        .hub-card__body p,
+        .place-card__body p {
           margin: 0;
-          color: #334155;
-          font-size: 0.92rem;
-          line-height: 1.65;
-          display: -webkit-box;
-          -webkit-line-clamp: 2;
-          -webkit-box-orient: vertical;
-          overflow: hidden;
+          color: #5e6c7d;
+          font-size: 0.9rem;
+          line-height: 1.55;
         }
 
-        .explore-card__meta-row {
-          display: flex;
-          flex-wrap: wrap;
-          gap: 10px 14px;
-          color: var(--explore-muted);
-          font-size: 0.85rem;
+        .hub-card__body p {
+          color: rgba(255, 255, 255, 0.84);
         }
 
-        .explore-card__meta-row span {
-          display: inline-flex;
-          align-items: center;
-          gap: 7px;
+        .destination-meta {
+          gap: 6px;
+          margin-top: 6px;
+          color: #75869a;
+          font-size: 0.82rem;
+          font-weight: 700;
         }
 
-        .explore-skeleton {
-          position: relative;
-          overflow: hidden;
-          background: linear-gradient(90deg, rgba(226, 232, 240, 0.75), rgba(248, 250, 252, 0.95), rgba(226, 232, 240, 0.75));
-          background-size: 200% 100%;
-          animation: exploreSkeleton 1.5s ease-in-out infinite;
-          border-radius: 16px;
+        .hub-card .destination-meta {
+          color: rgba(255, 255, 255, 0.88);
         }
 
-        .explore-skeleton__media {
-          min-height: 220px;
-          border-radius: 0;
+        .place-card__head {
+          justify-content: space-between;
+          gap: 10px;
         }
 
-        .explore-skeleton__line {
-          height: 14px;
-        }
-
-        .explore-skeleton__line--lg {
-          width: 72%;
-        }
-
-        .explore-skeleton__line--sm {
-          width: 46%;
-        }
-
-        @keyframes exploreSkeleton {
-          0% {
-            background-position: 200% 0;
-          }
-          100% {
-            background-position: -200% 0;
-          }
-        }
-
-        .explore-btn {
-          width: fit-content;
-          display: inline-flex;
-          align-items: center;
-          gap: 9px;
-          text-decoration: none;
-          border-radius: 999px;
-          padding: 11px 16px;
-          font-size: 0.88rem;
+        .place-card__head span {
+          color: #6c8096;
+          font-size: 0.78rem;
           font-weight: 800;
-          transition: transform 180ms ease, box-shadow 180ms ease, background 180ms ease;
         }
 
-        .explore-btn:hover {
-          transform: translateY(-1px);
+        .place-card__head button {
+          display: inline-flex;
+          align-items: center;
+          gap: 6px;
+          border: 0;
+          background: transparent;
+          color: #5c6f86;
+          cursor: pointer;
+          font: inherit;
+          font-size: 0.78rem;
+          font-weight: 800;
         }
 
-        .explore-btn--secondary {
-          color: #0f172a;
-          background: rgba(255, 255, 255, 0.88);
-          border: 1px solid var(--explore-line);
+        .place-card__cta {
+          width: fit-content;
+          gap: 7px;
+          min-height: 38px;
+          padding: 0 13px;
+          border-radius: 999px;
+          background: #f3f7fb;
+          border: 1px solid #dfe8f1;
+          color: #1f5f93;
+          font-size: 0.84rem;
+          font-weight: 800;
         }
 
-        @media (max-width: 1100px) {
-          .explore-grid,
-          .explore-grid--hero {
+        .destinations-empty {
+          display: grid;
+          gap: 6px;
+          margin: 22px 8px 4px;
+          padding: 22px;
+          border: 1px dashed #cbd8e5;
+          border-radius: 20px;
+          background: #f8fbff;
+          color: #5d6d80;
+        }
+
+        .destinations-empty strong {
+          color: #172033;
+        }
+
+        @media (max-width: 1180px) {
+          .hub-grid {
+            grid-template-columns: repeat(3, minmax(0, 1fr));
+          }
+
+          .place-grid {
+            grid-template-columns: repeat(2, minmax(0, 1fr));
+          }
+        }
+
+        @media (max-width: 980px) {
+          .hub-grid {
             grid-template-columns: repeat(2, minmax(0, 1fr));
           }
         }
 
         @media (max-width: 760px) {
-          .explore-page {
-            padding: 20px 14px 56px;
+          .destinations-explore {
+            padding: 12px;
           }
 
-          .explore-page__hero {
-            padding: 20px;
-            border-radius: 28px;
+          .destinations-shell {
+            border-radius: 24px;
+            padding: 12px;
           }
 
-          .explore-page__hero h1 {
-            font-size: clamp(2.2rem, 11vw, 3.4rem);
-          }
-
-          .explore-section__head {
+          .destinations-hero {
+            align-items: flex-start;
             flex-direction: column;
-            align-items: start;
           }
 
-          .explore-segmented {
+          .destinations-view-toggle {
+            margin-left: 0;
             width: 100%;
           }
 
-          .explore-segmented__option {
-            flex: 1 1 0;
-            justify-content: center;
+          .destinations-view-toggle button {
+            flex: 1;
           }
 
-          .explore-grid,
-          .explore-grid--hero {
+          .hub-grid,
+          .place-grid {
             grid-template-columns: 1fr;
+          }
+
+          .hub-card__media {
+            min-height: 260px;
+          }
+
+          .hub-card {
+            min-height: 260px;
           }
         }
       `}</style>
-    </div>
+    </main>
   );
 }

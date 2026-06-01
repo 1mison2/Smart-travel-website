@@ -1,4 +1,7 @@
 import React, { useEffect, useMemo, useState } from "react";
+import AdminEmptyState from "../../components/admin/AdminEmptyState";
+import { useAdminUi } from "../../components/admin/adminUiContextValue";
+import useUnsavedChangesPrompt from "../../hooks/useUnsavedChangesPrompt";
 import api, { resolveImageUrl } from "../../utils/api";
 
 const emptyForm = {
@@ -40,6 +43,7 @@ export default function AdminListings() {
     endDate: "",
   });
   const [hasAppliedFilters, setHasAppliedFilters] = useState(false);
+  const { showToast } = useAdminUi();
 
   const locationLookup = useMemo(() => {
     const byId = new Map();
@@ -127,6 +131,13 @@ export default function AdminListings() {
     loadListings();
   }, []);
 
+  const isDirty =
+    Boolean(editingId) ||
+    Boolean(form.title || form.description || form.city || form.district || form.province || form.address || form.photos || form.amenities || form.reviews) ||
+    Boolean(form.pricePerUnit || form.capacity || form.rating || photoFiles.length);
+
+  useUnsavedChangesPrompt(isDirty);
+
   const onChange = (e) => {
     const { name, value } = e.target;
     setForm((prev) => ({ ...prev, [name]: value }));
@@ -206,13 +217,27 @@ export default function AdminListings() {
         setError("Type, title, city and price are required.");
         return;
       }
+      if (payload.pricePerUnit < 0) {
+        setError("Price cannot be negative.");
+        return;
+      }
+      if (payload.capacity < 1) {
+        setError("Capacity must be at least 1.");
+        return;
+      }
+      if (payload.rating < 0 || payload.rating > 5) {
+        setError("Rating must be between 0 and 5.");
+        return;
+      }
       const formData = toFormData(payload);
       if (editingId) {
         const { data } = await api.put(`/api/admin/listings/${editingId}`, formData);
         setListings((prev) => prev.map((item) => (item._id === editingId ? data.listing : item)));
+        showToast({ title: "Listing updated", message: `${payload.title} was updated successfully.` });
       } else {
         const { data } = await api.post("/api/admin/listings", formData);
         setListings((prev) => [data.listing, ...prev]);
+        showToast({ title: "Listing created", message: `${payload.title} is ready for bookings.` });
       }
 
       setForm(emptyForm);
@@ -245,6 +270,7 @@ export default function AdminListings() {
         ? listing.reviews.map((r) => `${r.author} | ${r.rating} | ${r.comment}`).join("\n")
         : "",
     });
+    window.scrollTo({ top: 0, behavior: "smooth" });
   };
 
   const onDelete = async (id, title) => {
@@ -260,9 +286,34 @@ export default function AdminListings() {
         setEditingId("");
         setForm(emptyForm);
       }
+      showToast({ title: "Listing deleted", message: `${title || "The listing"} was removed.` });
     } catch (err) {
       setError(err?.response?.data?.message || "Failed to delete listing");
     }
+  };
+
+  const onDuplicate = (listing) => {
+    setEditingId("");
+    setPhotoFiles([]);
+    setForm({
+      type: listing.type || "hotel",
+      title: listing.title ? `${listing.title} Copy` : "",
+      description: listing.description || "",
+      city: listing.location?.name || "",
+      district: listing.location?.district || "",
+      province: listing.location?.province || "",
+      address: listing.location?.address || "",
+      pricePerUnit: listing.pricePerUnit ?? "",
+      capacity: listing.capacity ?? 1,
+      amenities: Array.isArray(listing.amenities) ? listing.amenities.join(", ") : "",
+      photos: Array.isArray(listing.photos) ? listing.photos.join(", ") : "",
+      rating: listing.rating ?? 0,
+      reviews: Array.isArray(listing.reviews)
+        ? listing.reviews.map((r) => `${r.author} | ${r.rating} | ${r.comment}`).join("\n")
+        : "",
+    });
+    window.scrollTo({ top: 0, behavior: "smooth" });
+    showToast({ title: "Draft duplicated", message: "A new listing draft was created from the selected record.", tone: "info" });
   };
 
   const resetBrowseFilters = () => {
@@ -369,7 +420,7 @@ export default function AdminListings() {
           placeholder="Reviews (one per line: Name | Rating(1-5) | Comment)"
           rows={4}
         />
-        <div className="admin-actions">
+        <div className="admin-form-actions">
           <button type="submit" disabled={saving} className="admin-btn admin-btn--primary">
             {saving ? "Saving..." : editingId ? "Update Listing" : "Add Listing"}
           </button>
@@ -470,7 +521,10 @@ export default function AdminListings() {
           </div>
 
           {!hasAppliedFilters ? (
-            <p className="admin-empty">Apply filters to view listing details.</p>
+            <AdminEmptyState
+              title="Listing inventory is ready to browse"
+              copy="Apply filters to narrow the hotel, cafe, activity, or restaurant list before editing records."
+            />
           ) : (
             <table className="admin-table">
               <thead>
@@ -498,6 +552,9 @@ export default function AdminListings() {
                         <button type="button" onClick={() => onEdit(listing)} className="admin-btn admin-btn--primary">
                           Edit
                         </button>
+                        <button type="button" onClick={() => onDuplicate(listing)} className="admin-btn admin-btn--muted">
+                          Duplicate
+                        </button>
                         <button type="button" onClick={() => onDelete(listing._id, listing.title)} className="admin-btn admin-btn--danger">
                           Delete
                         </button>
@@ -507,7 +564,12 @@ export default function AdminListings() {
                 ))}
                 {filteredListings.length === 0 && (
                   <tr>
-                    <td colSpan="7">No listings match the applied filters.</td>
+                    <td colSpan="7">
+                      <AdminEmptyState
+                        title="No listings matched"
+                        copy="Try widening the destination hub or type filters, or create a new listing above."
+                      />
+                    </td>
                   </tr>
                 )}
               </tbody>

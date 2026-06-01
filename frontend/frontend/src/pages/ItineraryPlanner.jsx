@@ -410,10 +410,6 @@ export default function ItineraryPlanner() {
                 </div>
               </label>
 
-              <div className="ai-inline-help ai-inline-help--wide">
-                <strong>What makes this step good UX</strong>
-                <p>Users only answer the minimum questions first: where, how long, and roughly how much they want to spend.</p>
-              </div>
               <datalist id="ai-destination-options">
                 {DESTINATION_SUGGESTIONS.map((item) => <option key={item} value={item} />)}
               </datalist>

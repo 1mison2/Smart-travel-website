@@ -683,7 +683,7 @@ export default function Dashboard() {
         <header className="travel-topbar">
           <button type="button" className="travel-brand" onClick={() => navigate("/dashboard")}>
             <span className="travel-brand__mark"><Mountain size={18} /></span>
-            <span>
+            <span className="travel-brand__copy">
               <strong>Smart Travel Nepal</strong>
             </span>
           </button>
@@ -769,7 +769,7 @@ export default function Dashboard() {
                 <div className="travel-profile__menu">
                   <div className="travel-profile__menu-head">
                     <div className="travel-profile__menu-avatar"><UserCircle size={28} /></div>
-                    <div>
+                    <div className="travel-profile__menu-copy">
                       <strong>{displayName}</strong>
                       <small>{user?.email || "traveler@smarttravel.com"}</small>
                     </div>

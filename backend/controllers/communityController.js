@@ -8,6 +8,7 @@ const TravelPlan = require("../models/TravelPlan");
 const ChatRoom = require("../models/ChatRoom");
 
 const isValidObjectId = (id) => mongoose.Types.ObjectId.isValid(id);
+const getUploadedUrl = (file) => file?.secure_url || file?.url || file?.path || "";
 
 const sanitizeText = (value, max = 4000) =>
   String(value || "")
@@ -71,7 +72,7 @@ exports.createPost = async (req, res) => {
   try {
     const { title, content, destination, tags, type } = req.body || {};
     const images = Array.isArray(req.files)
-      ? req.files.map((file) => `${req.protocol}://${req.get("host")}/uploads/${file.filename}`)
+      ? req.files.map(getUploadedUrl).filter(Boolean)
       : [];
 
     if (!content) return res.status(400).json({ message: "content is required" });
@@ -161,6 +162,38 @@ exports.deletePost = async (req, res) => {
   } catch (err) {
     console.error(err);
     return res.status(500).json({ message: "Failed to delete post" });
+  }
+};
+
+exports.updatePost = async (req, res) => {
+  try {
+    if (!isValidObjectId(req.params.id)) return res.status(400).json({ message: "Invalid post id" });
+    const post = await Post.findById(req.params.id);
+    if (!post) return res.status(404).json({ message: "Post not found" });
+    if (post.userId.toString() !== req.user._id.toString() && req.user.role !== "admin") {
+      return res.status(403).json({ message: "You can only edit your own posts" });
+    }
+
+    const { title = "", content = "", destination = "", tags = "", type } = req.body || {};
+    const nextContent = sanitizeText(content, 8000);
+    if (!nextContent) return res.status(400).json({ message: "content is required" });
+
+    post.title = sanitizeText(title, 180);
+    post.content = nextContent;
+    post.destination = sanitizeText(destination, 120);
+    post.tags = normalizeList(tags);
+    if (["blog", "trip_post"].includes(String(type || ""))) post.type = String(type);
+    if (req.user.role !== "admin") post.status = "pending";
+
+    await post.save();
+    const populated = await Post.findById(post._id).populate("userId", "name email profilePicture");
+    return res.json({
+      message: req.user.role === "admin" ? "Post updated" : "Post updated and sent for moderation",
+      post: populated,
+    });
+  } catch (err) {
+    console.error(err);
+    return res.status(500).json({ message: "Failed to update post" });
   }
 };
 
@@ -277,13 +310,61 @@ exports.createReview = async (req, res) => {
   }
 };
 
+exports.updateReview = async (req, res) => {
+  try {
+    if (!isValidObjectId(req.params.id)) return res.status(400).json({ message: "Invalid review id" });
+    const review = await Review.findById(req.params.id);
+    if (!review) return res.status(404).json({ message: "Review not found" });
+    if (review.userId.toString() !== req.user._id.toString() && req.user.role !== "admin") {
+      return res.status(403).json({ message: "You can only edit your own reviews" });
+    }
+
+    const { destination, rating, reviewText } = req.body || {};
+    const numericRating = Number(rating);
+    if (!destination || Number.isNaN(numericRating) || numericRating < 1 || numericRating > 5 || !reviewText) {
+      return res.status(400).json({ message: "destination, rating (1-5), and reviewText are required" });
+    }
+
+    review.destination = sanitizeText(destination, 120);
+    review.rating = numericRating;
+    review.reviewText = sanitizeText(reviewText, 1500);
+    if (req.user.role !== "admin") review.status = "pending";
+
+    await review.save();
+    const populated = await Review.findById(review._id).populate("userId", "name email profilePicture");
+    return res.json({
+      message: req.user.role === "admin" ? "Review updated" : "Review updated and sent for moderation",
+      review: populated,
+    });
+  } catch (err) {
+    console.error(err);
+    return res.status(500).json({ message: "Failed to update review" });
+  }
+};
+
+exports.deleteReview = async (req, res) => {
+  try {
+    if (!isValidObjectId(req.params.id)) return res.status(400).json({ message: "Invalid review id" });
+    const review = await Review.findById(req.params.id);
+    if (!review) return res.status(404).json({ message: "Review not found" });
+    if (review.userId.toString() !== req.user._id.toString() && req.user.role !== "admin") {
+      return res.status(403).json({ message: "You can only delete your own reviews" });
+    }
+    await review.deleteOne();
+    return res.json({ message: "Review deleted" });
+  } catch (err) {
+    console.error(err);
+    return res.status(500).json({ message: "Failed to delete review" });
+  }
+};
+
 exports.getReviewsByDestination = async (req, res) => {
   try {
     const destination = sanitizeText(req.params.destination, 120);
-    const query = {
-      destination: { $regex: `^${destination}$`, $options: "i" },
-      status: "approved",
-    };
+    const destinationQuery = { destination: { $regex: `^${destination}$`, $options: "i" } };
+    const query = req.query.mine === "true"
+      ? { ...destinationQuery, $or: [{ status: "approved" }, { userId: req.user._id }] }
+      : { ...destinationQuery, status: "approved" };
     const reviews = await Review.find(query)
       .populate("userId", "name email profilePicture")
       .sort({ createdAt: -1 });

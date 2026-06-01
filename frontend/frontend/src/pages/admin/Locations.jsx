@@ -1,4 +1,7 @@
 import React, { useEffect, useMemo, useState } from "react";
+import { useAdminUi } from "../../components/admin/adminUiContextValue";
+import AdminEmptyState from "../../components/admin/AdminEmptyState";
+import useUnsavedChangesPrompt from "../../hooks/useUnsavedChangesPrompt";
 import api, { resolveImageUrl } from "../../utils/api";
 
 const emptyForm = {
@@ -56,6 +59,7 @@ export default function AdminLocations() {
     endDate: "",
   });
   const [hasAppliedFilters, setHasAppliedFilters] = useState(false);
+  const { showToast } = useAdminUi();
   const locationLookup = useMemo(() => {
     const byId = new Map();
 
@@ -109,6 +113,13 @@ export default function AdminLocations() {
     loadLocations();
   }, []);
 
+  const isDirty =
+    Boolean(editingId) ||
+    Boolean(form.name || form.province || form.district || form.parentLocationId || form.description || form.category) ||
+    Boolean(form.averageCost || form.latitude || form.longitude || form.image || form.images.length);
+
+  useUnsavedChangesPrompt(isDirty);
+
   const onChange = (e) => {
     const { name, value } = e.target;
     setForm((prev) => ({ ...prev, [name]: value }));
@@ -133,6 +144,18 @@ export default function AdminLocations() {
     try {
       setSaving(true);
       setError("");
+      if (Number(form.latitude) < -90 || Number(form.latitude) > 90) {
+        setError("Latitude must be between -90 and 90.");
+        return;
+      }
+      if (Number(form.longitude) < -180 || Number(form.longitude) > 180) {
+        setError("Longitude must be between -180 and 180.");
+        return;
+      }
+      if (Number(form.averageCost) < 0) {
+        setError("Average cost cannot be negative.");
+        return;
+      }
       const payload = new FormData();
       payload.append("name", form.name);
       payload.append("province", form.province);
@@ -149,9 +172,11 @@ export default function AdminLocations() {
       if (editingId) {
         const { data } = await api.put(`/api/admin/locations/${editingId}`, payload);
         setLocations((prev) => prev.map((item) => (item._id === editingId ? data : item)));
+        showToast({ title: "Location updated", message: `${form.name || "Location"} was updated successfully.` });
       } else {
         const { data } = await api.post("/api/admin/locations", payload);
         setLocations((prev) => [data, ...prev]);
+        showToast({ title: "Location created", message: `${form.name || "Location"} is now available in the admin panel.` });
       }
 
       setForm(emptyForm);
@@ -185,6 +210,7 @@ export default function AdminLocations() {
     });
     setCurrentImage(location.image || "");
     setCurrentImages(Array.isArray(location.images) ? location.images : []);
+    window.scrollTo({ top: 0, behavior: "smooth" });
   };
 
   const onDelete = async (id, name) => {
@@ -202,9 +228,34 @@ export default function AdminLocations() {
         setCurrentImage("");
         setCurrentImages([]);
       }
+      showToast({ title: "Location deleted", message: `${name || "The location"} was removed.` });
     } catch (err) {
       setError(getApiErrorMessage(err, "Failed to delete location"));
     }
+  };
+
+  const onDuplicate = (location) => {
+    setEditingId("");
+    setForm({
+      name: location.name ? `${location.name} Copy` : "",
+      province: location.province || "",
+      district: location.district || "",
+      parentLocationId:
+        typeof location.parentLocationId === "string"
+          ? location.parentLocationId
+          : location.parentLocationId?._id || "",
+      description: location.description || "",
+      category: location.category || "",
+      averageCost: location.averageCost || 0,
+      image: null,
+      images: [],
+      latitude: location.latitude || 0,
+      longitude: location.longitude || 0,
+    });
+    setCurrentImage("");
+    setCurrentImages(Array.isArray(location.images) ? location.images : []);
+    window.scrollTo({ top: 0, behavior: "smooth" });
+    showToast({ title: "Draft duplicated", message: "A new location draft was prefilled from the existing record.", tone: "info" });
   };
 
   const applyFilters = () => {
@@ -276,7 +327,7 @@ export default function AdminLocations() {
             <p className="admin-page__subtitle">Existing gallery images: {currentImages.length}</p>
           )}
         </div>
-        <div className="admin-actions">
+        <div className="admin-form-actions">
           <button type="submit" disabled={saving} className="admin-btn admin-btn--primary">
             {saving ? "Saving..." : editingId ? "Update Location" : "Add Location"}
           </button>
@@ -374,9 +425,10 @@ export default function AdminLocations() {
           </div>
 
           {!hasAppliedFilters ? (
-            <div className="admin-table__muted" style={{ padding: "18px 6px" }}>
-              Apply filters to view posted location details.
-            </div>
+            <AdminEmptyState
+              title="Ready to review location records"
+              copy="Apply one or more filters to browse destination entries, then edit or duplicate them from the table."
+            />
           ) : (
             <table className="admin-table">
               <thead>
@@ -416,6 +468,9 @@ export default function AdminLocations() {
                       <button type="button" onClick={() => onEdit(location)} className="admin-btn admin-btn--primary">
                         Edit
                       </button>
+                      <button type="button" onClick={() => onDuplicate(location)} className="admin-btn admin-btn--muted">
+                        Duplicate
+                      </button>
                       <button type="button" onClick={() => onDelete(location._id, location.name)} className="admin-btn admin-btn--danger">
                         Delete
                       </button>
@@ -425,7 +480,12 @@ export default function AdminLocations() {
                 ))}
                 {filteredLocations.length === 0 && (
                   <tr>
-                    <td colSpan="9">No locations match the applied filters.</td>
+                    <td colSpan="9">
+                      <AdminEmptyState
+                        title="No locations match these filters"
+                        copy="Try resetting the date, hub, or category filters, or add a new destination above."
+                      />
+                    </td>
                   </tr>
                 )}
               </tbody>

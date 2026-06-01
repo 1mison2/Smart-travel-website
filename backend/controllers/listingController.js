@@ -2,8 +2,7 @@ const mongoose = require("mongoose");
 const Listing = require("../models/Listing");
 
 const isValidObjectId = (id) => mongoose.Types.ObjectId.isValid(id);
-const buildImageUrl = (req, filename) =>
-  `${req.protocol}://${req.get("host")}/uploads/${filename}`;
+const getUploadedUrl = (file) => file?.secure_url || file?.url || file?.path || "";
 const escapeRegex = (value) => String(value || "").replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 
 const parseJsonIfNeeded = (value) => {
@@ -70,7 +69,7 @@ exports.createListing = async (req, res) => {
         : Number(payload.location?.lng);
 
     const uploadedPhotos = Array.isArray(req.files)
-      ? req.files.map((file) => buildImageUrl(req, file.filename))
+      ? req.files.map(getUploadedUrl).filter(Boolean)
       : [];
     const manualPhotos = normalizeStringArray(payload.photos);
     const mergedPhotos = dedupePreserveOrder([...manualPhotos, ...uploadedPhotos]);
@@ -171,7 +170,7 @@ exports.updateListing = async (req, res) => {
     if (payload.amenities !== undefined) payload.amenities = normalizeStringArray(payload.amenities);
     if (payload.photos !== undefined) payload.photos = normalizeStringArray(payload.photos);
     if (Array.isArray(req.files) && req.files.length) {
-      const uploadedPhotos = req.files.map((file) => buildImageUrl(req, file.filename));
+      const uploadedPhotos = req.files.map(getUploadedUrl).filter(Boolean);
       payload.photos = dedupePreserveOrder([...(payload.photos || []), ...uploadedPhotos]);
     }
     if (payload.location?.lat !== undefined) {

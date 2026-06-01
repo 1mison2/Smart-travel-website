@@ -47,7 +47,6 @@ import AdminNotifications from "./pages/admin/Notifications";
 import NotificationPopups from "./components/NotificationPopups";
 import GlobalHeader from "./components/GlobalHeader";
 import GlobalFooter from "./components/GlobalFooter";
-import { FloatingGlobalSearch } from "./components/GlobalSearch";
 import { useAuth } from "./context/AuthContext";
 import { getAuthRedirect, setAuthRedirect } from "./utils/authRedirect";
 
@@ -151,7 +150,6 @@ export default function App() {
     <>
       <ScrollToTop />
       <GlobalHeader />
-      <FloatingGlobalSearch />
       <NotificationPopups key={user?._id || "guest"} />
       <Routes>
         <Route path="/" element={<LandingRoute />} />

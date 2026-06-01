@@ -52,6 +52,14 @@ export default function ItineraryDetails() {
     };
   }, [itinerary]);
 
+  const getDayRoutePath = (day) => {
+    const params = new URLSearchParams({
+      itineraryId: id,
+      day: String(day?.day || ""),
+    });
+    return `/map-explorer?${params.toString()}`;
+  };
+
   return (
     <div className="itinerary-page">
       <header className="itinerary-page__hero">
@@ -93,7 +101,14 @@ export default function ItineraryDetails() {
                   <p className="itinerary-day__badge">Day {day.day}</p>
                   <h2>{day.title}</h2>
                 </div>
-                <div className="itinerary-day__cost">Estimated NPR {Number(day.estimatedCost || 0).toLocaleString()}</div>
+                <div className="itinerary-day__actions">
+                  <div className="itinerary-day__cost">Estimated NPR {Number(day.estimatedCost || 0).toLocaleString()}</div>
+                  {(day.places || []).length > 0 ? (
+                    <Link to={getDayRoutePath(day)} className="itinerary-btn itinerary-btn--primary">
+                      View Day Route
+                    </Link>
+                  ) : null}
+                </div>
               </div>
               {day.notes && <p className="itinerary-day__notes">{day.notes}</p>}
               <div className="itinerary-places">
@@ -122,9 +137,9 @@ export default function ItineraryDetails() {
 
       <style>{`
         .itinerary-page {
-          max-width: 1000px;
+          width: min(100% - 48px, 1400px);
           margin: 0 auto;
-          padding: 24px 20px 60px;
+          padding: 24px 0 60px;
           font-family: "Plus Jakarta Sans", "Sora", "DM Sans", system-ui, sans-serif;
           color: #0f172a;
         }
@@ -137,8 +152,8 @@ export default function ItineraryDetails() {
           background: linear-gradient(135deg, rgba(56, 189, 248, 0.15), rgba(34, 197, 94, 0.12));
           border: 1px solid rgba(148, 163, 184, 0.25);
           border-radius: 24px;
-          padding: 18px 20px;
-          margin-bottom: 18px;
+          padding: 24px 26px;
+          margin-bottom: 22px;
           flex-wrap: wrap;
         }
 
@@ -210,17 +225,17 @@ export default function ItineraryDetails() {
 
         .itinerary-days {
           display: grid;
-          gap: 14px;
+          gap: 18px;
         }
 
         .itinerary-day {
           background: #fff;
           border: 1px solid rgba(148, 163, 184, 0.22);
-          border-radius: 18px;
-          padding: 16px;
+          border-radius: 22px;
+          padding: 20px;
           box-shadow: 0 10px 24px rgba(15, 23, 42, 0.06);
           display: grid;
-          gap: 12px;
+          gap: 16px;
         }
 
         .itinerary-day__head {
@@ -250,6 +265,14 @@ export default function ItineraryDetails() {
           color: #0f766e;
         }
 
+        .itinerary-day__actions {
+          display: flex;
+          align-items: center;
+          justify-content: flex-end;
+          gap: 10px;
+          flex-wrap: wrap;
+        }
+
         .itinerary-day__notes {
           margin: 0;
           color: #475569;
@@ -257,8 +280,8 @@ export default function ItineraryDetails() {
 
         .itinerary-places {
           display: grid;
-          grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
-          gap: 12px;
+          grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+          gap: 16px;
         }
 
         .itinerary-place {
@@ -318,8 +341,14 @@ export default function ItineraryDetails() {
         }
 
         @media (max-width: 720px) {
+          .itinerary-page {
+            width: min(100% - 28px, 1400px);
+            padding-top: 16px;
+          }
+
           .itinerary-page__hero {
             align-items: flex-start;
+            padding: 18px;
           }
         }
       `}</style>
