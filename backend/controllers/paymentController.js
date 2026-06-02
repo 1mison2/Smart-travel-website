@@ -2,6 +2,7 @@ const mongoose = require("mongoose");
 const axios = require("axios");
 const Booking = require("../models/Booking");
 const Payment = require("../models/Payment");
+const User = require("../models/User");
 const { createNotification, notifyAdmins } = require("../utils/notificationService");
 const { canSendEmail, sendPaymentSuccessEmail } = require("../utils/emailService");
 
@@ -24,6 +25,46 @@ const resolveKhaltiBaseUrl = () => {
 const resolveKhaltiInitiateUrl = () => `${resolveKhaltiBaseUrl()}epayment/initiate/`;
 
 const resolveKhaltiLookupUrl = () => `${resolveKhaltiBaseUrl()}epayment/lookup/`;
+
+const sendPaymentReceiptAsync = ({ paymentId, bookingId, bookingName }) => {
+  setImmediate(async () => {
+    try {
+      const [payment, booking] = await Promise.all([
+        Payment.findById(paymentId),
+        Booking.findById(bookingId),
+      ]);
+      if (!payment || !booking || payment.receiptEmailSentAt || booking.paymentStatus !== "paid") return;
+
+      const user = await User.findById(booking.userId).select("name email notifications");
+      if (!canSendEmail(user)) return;
+
+      const emailResult = await sendPaymentSuccessEmail({
+        email: user.email,
+        customerName: user.name,
+        bookingName,
+        bookingId: String(booking._id),
+        paymentId: String(payment._id),
+        transactionId: booking.transactionId,
+        amount: booking.amount,
+        currency: booking.currency || "NPR",
+        paymentProvider: "Khalti",
+        bookingDate: booking.date,
+        paidAt: booking.paidAt,
+        packageSnapshot: booking.packageSnapshot,
+      });
+
+      await Payment.updateOne(
+        { _id: payment._id, receiptEmailSentAt: null },
+        { $set: { receiptEmailSentAt: new Date() } }
+      );
+      if (emailResult?.previewURL) {
+        console.log("Payment success email preview URL:", emailResult.previewURL);
+      }
+    } catch (emailError) {
+      console.error("Payment succeeded, but receipt email sending failed:", emailError);
+    }
+  });
+};
 
 exports.getMyPayments = async (req, res) => {
   try {
@@ -235,6 +276,7 @@ exports.verifyKhaltiPayment = async (req, res) => {
     payment.verifiedAt = new Date();
     const wasAlreadyPaid = booking.paymentStatus === "paid" && booking.bookingStatus === "confirmed";
 
+    let receiptEmailJob = null;
     const normalized = status.toLowerCase();
     if (normalized === "completed") {
       payment.status = "success";
@@ -270,30 +312,12 @@ exports.verifyKhaltiPayment = async (req, res) => {
         });
       }
 
-      if (!payment.receiptEmailSentAt && canSendEmail(req.user)) {
-        try {
-          const emailResult = await sendPaymentSuccessEmail({
-            email: req.user.email,
-            customerName: req.user?.name,
-            bookingName,
-            bookingId: String(booking._id),
-            paymentId: String(payment._id),
-            transactionId: booking.transactionId,
-            amount: booking.amount,
-            currency: booking.currency || "NPR",
-            paymentProvider: "Khalti",
-            bookingDate: booking.date,
-            paidAt: booking.paidAt,
-            packageSnapshot: booking.packageSnapshot,
-          });
-
-          payment.receiptEmailSentAt = new Date();
-          if (emailResult?.previewURL) {
-            console.log("Payment success email preview URL:", emailResult.previewURL);
-          }
-        } catch (emailError) {
-          console.error("Payment succeeded, but email sending failed:", emailError);
-        }
+      if (!payment.receiptEmailSentAt) {
+        receiptEmailJob = {
+          paymentId: payment._id,
+          bookingId: booking._id,
+          bookingName,
+        };
       }
     } else if (normalized === "pending" || normalized === "initiated") {
       payment.status = "initiated";
@@ -320,6 +344,10 @@ exports.verifyKhaltiPayment = async (req, res) => {
 
     await payment.save();
     await booking.save();
+
+    if (receiptEmailJob) {
+      sendPaymentReceiptAsync(receiptEmailJob);
+    }
 
     return res.json({
       message: `Payment status: ${status || "Unknown"}`,

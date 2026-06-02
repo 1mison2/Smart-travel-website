@@ -170,7 +170,7 @@ export default function DestinationSearch() {
                     </Link>
                     <Link
                       to={`/book/${listing._id}`}
-                      className="rounded-full bg-teal-700 px-3 py-1.5 text-xs font-semibold text-white"
+                      className="rounded-full bg-sky-500 px-3 py-1.5 text-xs font-semibold text-white hover:bg-sky-600"
                     >
                       Book now
                     </Link>

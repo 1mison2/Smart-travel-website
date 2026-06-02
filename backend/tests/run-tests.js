@@ -115,10 +115,28 @@ const tests = [
       unitPrice: 2000,
       nights: 2,
       guests: 2,
+      chargedGuestCount: 2,
       subtotal: 8000,
       serviceFee: 640,
       tax: 1040,
       total: 9680,
+    });
+
+    const hotelPricing = buildPriceBreakdown({
+      unitPrice: 2000,
+      nights: 2,
+      guests: 2,
+      chargeGuests: false,
+    });
+    assert.deepEqual(hotelPricing, {
+      unitPrice: 2000,
+      nights: 2,
+      guests: 2,
+      chargedGuestCount: 1,
+      subtotal: 4000,
+      serviceFee: 320,
+      tax: 520,
+      total: 4840,
     });
     return "booking pricing helpers";
   },
