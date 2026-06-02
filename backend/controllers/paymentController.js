@@ -342,9 +342,11 @@ exports.verifyKhaltiPayment = async (req, res) => {
     await booking.save();
 
     if (receiptEmailContext) {
-      sendPaymentReceipt(receiptEmailContext).catch((emailError) => {
+      try {
+        await sendPaymentReceipt(receiptEmailContext);
+      } catch (emailError) {
         console.error("Payment succeeded, but receipt email sending failed:", emailError);
-      });
+      }
     }
 
     return res.json({
