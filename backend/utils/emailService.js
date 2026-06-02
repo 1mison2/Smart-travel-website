@@ -1,14 +1,18 @@
 const nodemailer = require("nodemailer");
 
+const getEmailUser = () => String(process.env.EMAIL_USER || "").trim();
+
+const getEmailPass = () => String(process.env.EMAIL_PASS || "").replace(/\s+/g, "");
+
 const hasGmailCredentials = () =>
-  Boolean(process.env.EMAIL_USER && process.env.EMAIL_PASS);
+  Boolean(getEmailUser() && getEmailPass());
 
 const createTransporter = () => {
   return nodemailer.createTransport({
     service: "gmail",
     auth: {
-      user: process.env.EMAIL_USER,
-      pass: process.env.EMAIL_PASS,
+      user: getEmailUser(),
+      pass: getEmailPass(),
     },
   });
 };
@@ -41,8 +45,8 @@ const getMailer = async () => {
 };
 
 const resolveFromAddress = () =>
-  process.env.EMAIL_USER
-    ? `"Smart Travel" <${process.env.EMAIL_USER}>`
+  getEmailUser()
+    ? `"Smart Travel" <${getEmailUser()}>`
     : '"Smart Travel" <noreply@smarttravel.com>';
 
 const formatDateTime = (value) => {

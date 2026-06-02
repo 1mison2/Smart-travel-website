@@ -32,7 +32,10 @@ const sendPaymentReceipt = async ({ payment, booking, bookingName }) => {
   }
 
   const user = await User.findById(booking.userId).select("name email notifications");
-  if (!canSendEmail(user)) return null;
+  if (!canSendEmail(user)) {
+    console.warn(`Payment receipt email skipped for booking ${booking._id}: recipient email is missing or disabled.`);
+    return null;
+  }
 
   const emailResult = await sendPaymentSuccessEmail({
     email: user.email,
