@@ -26,44 +26,37 @@ const resolveKhaltiInitiateUrl = () => `${resolveKhaltiBaseUrl()}epayment/initia
 
 const resolveKhaltiLookupUrl = () => `${resolveKhaltiBaseUrl()}epayment/lookup/`;
 
-const sendPaymentReceiptAsync = ({ paymentId, bookingId, bookingName }) => {
-  setImmediate(async () => {
-    try {
-      const [payment, booking] = await Promise.all([
-        Payment.findById(paymentId),
-        Booking.findById(bookingId),
-      ]);
-      if (!payment || !booking || payment.receiptEmailSentAt || booking.paymentStatus !== "paid") return;
+const sendPaymentReceipt = async ({ payment, booking, bookingName }) => {
+  if (!payment || !booking || payment.receiptEmailSentAt || booking.paymentStatus !== "paid") {
+    return null;
+  }
 
-      const user = await User.findById(booking.userId).select("name email notifications");
-      if (!canSendEmail(user)) return;
+  const user = await User.findById(booking.userId).select("name email notifications");
+  if (!canSendEmail(user)) return null;
 
-      const emailResult = await sendPaymentSuccessEmail({
-        email: user.email,
-        customerName: user.name,
-        bookingName,
-        bookingId: String(booking._id),
-        paymentId: String(payment._id),
-        transactionId: booking.transactionId,
-        amount: booking.amount,
-        currency: booking.currency || "NPR",
-        paymentProvider: "Khalti",
-        bookingDate: booking.date,
-        paidAt: booking.paidAt,
-        packageSnapshot: booking.packageSnapshot,
-      });
-
-      await Payment.updateOne(
-        { _id: payment._id, receiptEmailSentAt: null },
-        { $set: { receiptEmailSentAt: new Date() } }
-      );
-      if (emailResult?.previewURL) {
-        console.log("Payment success email preview URL:", emailResult.previewURL);
-      }
-    } catch (emailError) {
-      console.error("Payment succeeded, but receipt email sending failed:", emailError);
-    }
+  const emailResult = await sendPaymentSuccessEmail({
+    email: user.email,
+    customerName: user.name,
+    bookingName,
+    bookingId: String(booking._id),
+    paymentId: String(payment._id),
+    transactionId: booking.transactionId,
+    amount: booking.amount,
+    currency: booking.currency || "NPR",
+    paymentProvider: "Khalti",
+    bookingDate: booking.date,
+    paidAt: booking.paidAt,
+    packageSnapshot: booking.packageSnapshot,
   });
+
+  payment.receiptEmailSentAt = new Date();
+  await payment.save();
+
+  if (emailResult?.previewURL) {
+    console.log("Payment success email preview URL:", emailResult.previewURL);
+  }
+
+  return emailResult;
 };
 
 exports.getMyPayments = async (req, res) => {
@@ -276,7 +269,7 @@ exports.verifyKhaltiPayment = async (req, res) => {
     payment.verifiedAt = new Date();
     const wasAlreadyPaid = booking.paymentStatus === "paid" && booking.bookingStatus === "confirmed";
 
-    let receiptEmailJob = null;
+    let receiptEmailContext = null;
     const normalized = status.toLowerCase();
     if (normalized === "completed") {
       payment.status = "success";
@@ -313,9 +306,9 @@ exports.verifyKhaltiPayment = async (req, res) => {
       }
 
       if (!payment.receiptEmailSentAt) {
-        receiptEmailJob = {
-          paymentId: payment._id,
-          bookingId: booking._id,
+        receiptEmailContext = {
+          payment,
+          booking,
           bookingName,
         };
       }
@@ -345,8 +338,12 @@ exports.verifyKhaltiPayment = async (req, res) => {
     await payment.save();
     await booking.save();
 
-    if (receiptEmailJob) {
-      sendPaymentReceiptAsync(receiptEmailJob);
+    if (receiptEmailContext) {
+      try {
+        await sendPaymentReceipt(receiptEmailContext);
+      } catch (emailError) {
+        console.error("Payment succeeded, but receipt email sending failed:", emailError);
+      }
     }
 
     return res.json({
