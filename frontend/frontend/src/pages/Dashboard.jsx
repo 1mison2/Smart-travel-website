@@ -124,6 +124,7 @@ export default function Dashboard() {
   const { user, logout } = useAuth();
   const navigate = useNavigate();
   const location = useLocation();
+  const profileMenuRef = useRef(null);
   const [showProfileMenu, setShowProfileMenu] = useState(false);
   const [unreadCount, setUnreadCount] = useState(0);
   const [notifPulse, setNotifPulse] = useState(false);
@@ -606,6 +607,23 @@ export default function Dashboard() {
       ? mapFallbackAttractions
       : [heroDestination?.name, heroDestination?.district, "Nearby viewpoints"].filter(Boolean).slice(0, 3);
 
+  useEffect(() => {
+    if (!showProfileMenu) return undefined;
+
+    const closeOnOutsideClick = (event) => {
+      if (!profileMenuRef.current?.contains(event.target)) {
+        setShowProfileMenu(false);
+      }
+    };
+
+    document.addEventListener("mousedown", closeOnOutsideClick);
+    document.addEventListener("touchstart", closeOnOutsideClick);
+    return () => {
+      document.removeEventListener("mousedown", closeOnOutsideClick);
+      document.removeEventListener("touchstart", closeOnOutsideClick);
+    };
+  }, [showProfileMenu]);
+
   const goToDestinationHub = (locationId) => {
     if (locationId) {
       navigate(`/locations/${locationId}`);
@@ -614,15 +632,7 @@ export default function Dashboard() {
     navigate("/explore");
   };
 
-  const openHotelStay = (hotelStay) => {
-    if (hotelStay?.listingId) {
-      navigate(`/places/${hotelStay.listingId}`);
-      return;
-    }
-    if (hotelStay?.locationId) {
-      navigate(`/locations/${hotelStay.locationId}`);
-      return;
-    }
+  const openHotelStay = () => {
     navigate("/bookings");
   };
 
@@ -756,7 +766,7 @@ export default function Dashboard() {
               {unreadCount > 0 && <span className="travel-icon-btn__badge">{unreadCount > 99 ? "99+" : unreadCount}</span>}
             </button>
 
-            <div className="travel-profile">
+            <div className="travel-profile" ref={profileMenuRef}>
               <button type="button" className="travel-profile__trigger" onClick={() => setShowProfileMenu((prev) => !prev)}>
                 <span className="travel-profile__avatar">{initialsFromName(displayName)}</span>
                 <span className="travel-profile__text">
@@ -774,8 +784,8 @@ export default function Dashboard() {
                       <small>{user?.email || "traveler@smarttravel.com"}</small>
                     </div>
                   </div>
-                  <button type="button" className="travel-profile__item" onClick={() => navigate("/profile")}><User size={16} />Profile</button>
-                  <button type="button" className="travel-profile__item" onClick={() => navigate("/settings")}><Settings size={16} />Settings</button>
+                  <button type="button" className="travel-profile__item" onClick={() => { setShowProfileMenu(false); navigate("/profile"); }}><User size={16} />Profile</button>
+                  <button type="button" className="travel-profile__item" onClick={() => { setShowProfileMenu(false); navigate("/settings"); }}><Settings size={16} />Settings</button>
                   <button type="button" className="travel-profile__item travel-profile__item--danger" onClick={handleLogout}><LogOut size={16} />Logout</button>
                 </div>
               )}

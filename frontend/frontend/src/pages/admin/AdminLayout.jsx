@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useEffect, useMemo, useRef, useState } from "react";
 import { Link, Outlet, useLocation, useNavigate } from "react-router-dom";
 import {
   Bell,
@@ -32,6 +32,7 @@ export default function AdminLayout() {
   const { user, logout } = useAuth();
   const navigate = useNavigate();
   const location = useLocation();
+  const profileMenuRef = useRef(null);
   const [searchTerm, setSearchTerm] = useState("");
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const [mobileNavOpen, setMobileNavOpen] = useState(false);
@@ -48,6 +49,23 @@ export default function AdminLayout() {
     window.addEventListener("keydown", onKeyDown);
     return () => window.removeEventListener("keydown", onKeyDown);
   }, []);
+
+  useEffect(() => {
+    if (!profileOpen) return undefined;
+
+    const closeOnOutsideClick = (event) => {
+      if (!profileMenuRef.current?.contains(event.target)) {
+        setProfileOpen(false);
+      }
+    };
+
+    document.addEventListener("mousedown", closeOnOutsideClick);
+    document.addEventListener("touchstart", closeOnOutsideClick);
+    return () => {
+      document.removeEventListener("mousedown", closeOnOutsideClick);
+      document.removeEventListener("touchstart", closeOnOutsideClick);
+    };
+  }, [profileOpen]);
 
   const currentPage = useMemo(() => {
     const match = [...adminSearchTargets].reverse().find((item) => location.pathname === item.to || location.pathname.startsWith(`${item.to}/`));
@@ -156,7 +174,7 @@ export default function AdminLayout() {
                     <NotificationCountBadge className="admin-notification-badge" />
                   </button>
 
-                  <div className="relative">
+                  <div className="relative" ref={profileMenuRef}>
                     <button
                       type="button"
                       onClick={() => setProfileOpen((value) => !value)}
