@@ -89,3 +89,34 @@ test("createItineraryAlternatives returns three distinct planner options", () =>
   assert.equal(saver.summary.pace, "Relaxed");
   assert.equal(explorer.summary.pace, "Fast");
 });
+
+test("createItineraryAlternatives keeps low-budget plans within budget", () => {
+  const alternatives = createItineraryAlternatives({
+    locationCandidates: [
+      {
+        _id: "expensive-stupa",
+        name: "Ramagrama Stupa",
+        category: "stupa heritage",
+        description: "Major heritage stop",
+        district: "Nawalparasi West",
+        province: "Lumbini",
+        averageCost: 3000,
+      },
+    ],
+    destination: "Ramagrama",
+    budget: 1000,
+    durationDays: 1,
+    interests: ["stupa", "nawalparasi west"],
+    startDate: "2026-06-02",
+    pace: "balanced",
+    tripStyle: "adventure",
+    companionType: "solo",
+  });
+
+  const recommended = alternatives.find((item) => item.key === "recommended");
+  assert.ok(recommended.totalEstimatedCost <= 1000);
+  assert.ok(recommended.summary.budgetGap >= 0);
+  assert.ok(
+    recommended.days.every((day) => day.places.every((place) => place.name !== "Ramagrama Stupa"))
+  );
+});

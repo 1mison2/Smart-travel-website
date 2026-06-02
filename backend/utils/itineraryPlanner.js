@@ -137,21 +137,25 @@ const scorePlace = ({ place, destination, interests, budgetPerDay, tripStyle, co
   return score;
 };
 
-const pickDiversePlaces = ({ scoredPlaces, desiredCount, usedPlaceIds, pace }) => {
+const pickDiversePlaces = ({ scoredPlaces, desiredCount, usedPlaceIds, pace, budgetPerDay }) => {
   const targetCount = pace === "relaxed" ? Math.min(2, desiredCount) : pace === "fast" ? Math.min(4, desiredCount + 1) : desiredCount;
   const picked = [];
   const usedCategories = new Set();
+  let remainingBudget = Math.max(0, Number(budgetPerDay || 0));
 
   for (const place of scoredPlaces) {
     const placeKey = String(place._id || place.name || "");
     const categoryKey = String(place.category || "").toLowerCase();
+    const estimatedCost = Number(place.averageCost || 0);
     if (!placeKey || usedPlaceIds.has(placeKey)) continue;
+    if (estimatedCost > remainingBudget) continue;
 
     if (picked.length < targetCount) {
       if (!usedCategories.has(categoryKey) || picked.length >= Math.max(1, targetCount - 1)) {
         picked.push(place);
         usedPlaceIds.add(placeKey);
         if (categoryKey) usedCategories.add(categoryKey);
+        remainingBudget -= estimatedCost;
       }
     }
 
@@ -161,9 +165,12 @@ const pickDiversePlaces = ({ scoredPlaces, desiredCount, usedPlaceIds, pace }) =
   if (picked.length < targetCount) {
     for (const place of scoredPlaces) {
       const placeKey = String(place._id || place.name || "");
+      const estimatedCost = Number(place.averageCost || 0);
       if (!placeKey || usedPlaceIds.has(placeKey)) continue;
+      if (estimatedCost > remainingBudget) continue;
       picked.push(place);
       usedPlaceIds.add(placeKey);
+      remainingBudget -= estimatedCost;
       if (picked.length >= targetCount) break;
     }
   }
@@ -337,6 +344,7 @@ const createItineraryOption = ({
       desiredCount: 3,
       usedPlaceIds,
       pace: variant.pace,
+      budgetPerDay,
     });
 
     days.push(

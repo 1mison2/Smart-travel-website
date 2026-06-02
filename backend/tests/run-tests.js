@@ -87,6 +87,37 @@ const tests = [
     return "three itinerary alternatives";
   },
   () => {
+    const alternatives = createItineraryAlternatives({
+      locationCandidates: [
+        {
+          _id: "expensive-stupa",
+          name: "Ramagrama Stupa",
+          category: "stupa heritage",
+          description: "Major heritage stop",
+          district: "Nawalparasi West",
+          province: "Lumbini",
+          averageCost: 3000,
+        },
+      ],
+      destination: "Ramagrama",
+      budget: 1000,
+      durationDays: 1,
+      interests: ["stupa", "nawalparasi west"],
+      startDate: "2026-06-02",
+      pace: "balanced",
+      tripStyle: "adventure",
+      companionType: "solo",
+    });
+
+    const recommended = alternatives.find((item) => item.key === "recommended");
+    assert.ok(recommended.totalEstimatedCost <= 1000);
+    assert.ok(recommended.summary.budgetGap >= 0);
+    assert.ok(
+      recommended.days.every((day) => day.places.every((place) => place.name !== "Ramagrama Stupa"))
+    );
+    return "low budget itinerary cap";
+  },
+  () => {
     const post = new Post({
       userId: new mongoose.Types.ObjectId(),
       content: "Testing a moderation-ready post",
