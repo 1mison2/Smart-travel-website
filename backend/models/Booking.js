@@ -71,6 +71,7 @@ const BookingSchema = new mongoose.Schema(
     pricingSnapshot: {
       unitPrice: { type: Number, default: 0, min: 0 },
       nights: { type: Number, default: 1, min: 1 },
+      guests: { type: Number, default: 1, min: 1 },
       subtotal: { type: Number, default: 0, min: 0 },
       serviceFee: { type: Number, default: 0, min: 0 },
       tax: { type: Number, default: 0, min: 0 },

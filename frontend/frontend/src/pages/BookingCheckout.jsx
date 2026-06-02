@@ -208,6 +208,10 @@ export default function BookingCheckout() {
                 <span>{pricing.nights}</span>
               </div>
               <div className="flex justify-between">
+                <span>Guests</span>
+                <span>{pricing.guests || quote.guests || form.guests || 1}</span>
+              </div>
+              <div className="flex justify-between">
                 <span>Subtotal</span>
                 <span>NPR {pricing.subtotal}</span>
               </div>

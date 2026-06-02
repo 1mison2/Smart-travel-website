@@ -68,7 +68,7 @@ exports.quoteBooking = async (req, res) => {
 
     const nights = isSingleSession || listing.pricing?.model === "fixed" ? 1 : calculateNights(inDate, outDate);
     const unitPrice = Number(listing.pricePerUnit || listing.pricing?.price || 0);
-    const pricing = buildPriceBreakdown({ unitPrice, nights });
+    const pricing = buildPriceBreakdown({ unitPrice, nights, guests: numericGuests });
 
     return res.json({
       quote: {
@@ -137,7 +137,7 @@ exports.createBooking = async (req, res) => {
 
       const nights = isSingleSession || listing.pricing?.model === "fixed" ? 1 : calculateNights(inDate, outDate);
       const unitPrice = Number(listing.pricePerUnit || listing.pricing?.price || 0);
-      const pricing = buildPriceBreakdown({ unitPrice, nights });
+      const pricing = buildPriceBreakdown({ unitPrice, nights, guests: numericGuests });
 
       const booking = await Booking.create({
         userId: req.user._id,
