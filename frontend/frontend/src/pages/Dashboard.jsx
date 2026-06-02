@@ -1019,7 +1019,7 @@ export default function Dashboard() {
             <section className="premium-card">
               <div className="section-head">
                 <div><p className="section-head__eyebrow">Hotel Stays</p><h2>Comfortable places to stay</h2></div>
-                <button type="button" className="section-head__link" onClick={() => navigate("/bookings")}>View bookings</button>
+                <button type="button" className="section-head__link" onClick={() => navigate("/destination-search")}>Browse stays</button>
               </div>
               <div className="hotel-grid">
                 {displayedHotels.map((hotelStay) => {

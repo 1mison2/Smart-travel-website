@@ -20,7 +20,7 @@ import {
 } from "lucide-react";
 import { Link, useLocation } from "react-router-dom";
 import TravelMapCanvas from "../components/map/TravelMapCanvas";
-import api from "../utils/api";
+import api, { resolveImageUrl } from "../utils/api";
 import {
   fetchOpenRouteServiceRoute,
   formatDistance,
@@ -161,7 +161,7 @@ function normalizeDestination(item) {
     category: item.category || "destination",
     categoryLabel,
     description: item.description || "",
-    image: item.image || "",
+    image: resolveImageUrl(item.image || item.images?.[0] || ""),
     averageCost: item.averageCost || 0,
     rating: buildRating(item.id || item.name),
     visitTime: estimateVisitTime(item.category),

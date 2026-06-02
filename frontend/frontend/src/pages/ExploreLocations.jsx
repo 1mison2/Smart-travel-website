@@ -136,6 +136,17 @@ function getLocationImage(location, fallback) {
   return image ? resolveImageUrl(image) : fallback;
 }
 
+function applyLiveLocationImages(cards, locationLookup) {
+  return cards.map((card) => {
+    const location = locationLookup.get(normalize(card.name));
+    if (!location) return card;
+    return {
+      ...card,
+      image: getLocationImage(location, card.image),
+    };
+  });
+}
+
 function getSearchText(card) {
   return normalize(
     [
@@ -262,8 +273,8 @@ export default function ExploreLocations() {
   }, [locations, parentLookup]);
 
   const keyword = normalize(query);
-  const allHubCards = [...hubCards, ...liveCards.hubs];
-  const allPlaceCards = [...placeCards, ...liveCards.places];
+  const allHubCards = [...applyLiveLocationImages(hubCards, locationLookup), ...liveCards.hubs];
+  const allPlaceCards = [...applyLiveLocationImages(placeCards, locationLookup), ...liveCards.places];
   const shownHubs = allHubCards.filter((card) => {
     const matchesText = !keyword || getSearchText(card).includes(keyword);
     return matchesText && matchesActiveFilter(card, activeFilter);

@@ -596,7 +596,7 @@ function PlaceCard({ item }) {
         </div>
         {item.mapUri && (
           <a href={item.mapUri} target="_blank" rel="noreferrer" className="travel-btn travel-btn-soft hub-place__link">
-            View on map
+            Open details
           </a>
         )}
       </div>
@@ -640,7 +640,7 @@ function ListingSelectionCard({ listing, selected, onSelect }) {
           className="travel-btn travel-btn-soft"
           onClick={(e) => e.stopPropagation()}
         >
-          View details
+          Open place
         </Link>
         {isSelectable && (
           <button
