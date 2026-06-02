@@ -632,8 +632,16 @@ export default function Dashboard() {
     navigate("/explore");
   };
 
-  const openHotelStay = () => {
-    navigate("/bookings");
+  const openHotelStay = (hotelStay) => {
+    if (hotelStay?.listingId) {
+      navigate(`/places/${hotelStay.listingId}`);
+      return;
+    }
+    if (hotelStay?.destination) {
+      navigate(`/destination-search?query=${encodeURIComponent(hotelStay.destination)}&type=hotel`);
+      return;
+    }
+    navigate("/destination-search");
   };
 
   const onDashboardSearch = (event) => {
